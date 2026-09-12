@@ -45,9 +45,9 @@ without HTTPS. (Or open it from the Claude desktop app's Browser pane via
 The camera only works over **HTTPS**, so host the folder somewhere with a
 certificate. GitHub Pages is free and enough:
 
-1. Push this folder to a GitHub repository (this one lives at github.com/4TacocaT4/wakeup).
+1. Push this folder to a GitHub repository (this one lives at github.com/mauricestuder/wakeup).
 2. Repo → Settings → Pages → Source: `main` branch, folder `/ (root)`.
-3. Open `https://4tacocat4.github.io/wakeup/` on your phone.
+3. Open `https://mauricestuder.github.io/wakeup/` on your phone.
 4. Browser menu → **Add to Home Screen**. Launch it from there – it opens
    full-screen like an app.
 
