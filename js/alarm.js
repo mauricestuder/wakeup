@@ -40,12 +40,43 @@ function ensureContext() {
   return ctx;
 }
 
+// iOS mutes Web Audio when the silent switch is on, but not "media" playback.
+// Two ways to be treated as media: the Audio Session API (Safari 17+), and
+// keeping a silent <audio> element looping, which older Safari also honours.
+let silentLoop = null;
+
+function silentWavUrl() {
+  // 0.5 s of 8-bit mono silence at 8 kHz.
+  const samples = 4000;
+  const buf = new ArrayBuffer(44 + samples);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  str(36, 'data'); v.setUint32(40, samples, true);
+  new Uint8Array(buf, 44).fill(128);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+function becomeMediaSession() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* unsupported */ }
+  if (!silentLoop) {
+    silentLoop = new Audio(silentWavUrl());
+    silentLoop.loop = true;
+    silentLoop.setAttribute('playsinline', '');
+    silentLoop.volume = 0.01;
+  }
+  silentLoop.play().catch(() => { /* needs a gesture; we are inside one */ });
+}
+
 /**
  * Must be called from a user gesture (the "Arm" click). iOS/Safari refuse to
  * play anything later unless the context was resumed inside a gesture.
  */
 export async function unlockAudio() {
   const c = ensureContext();
+  becomeMediaSession();
   if (c.state === 'suspended') await c.resume();
   // Play a short silent buffer to fully unlock on iOS.
   const buf = c.createBuffer(1, 1, c.sampleRate);
@@ -63,6 +94,7 @@ export async function unlockAudio() {
 export function startSiren({ volume = 0.2, rampSeconds = 30 } = {}) {
   stopSiren();
   const c = ensureContext();
+  becomeMediaSession();
   if (c.state === 'suspended') c.resume();
 
   const now = c.currentTime;
