@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#0b0d12">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050608">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
@@ -15,43 +15,67 @@
 </head>
 <body>
 
+<!-- Inline SVG icon sprite (Lucide-style, 24px, 1.75 stroke) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></symbol>
+</svg>
+
 <!-- ───────── HOME (IDLE) ───────── -->
 <section id="screen-home" class="screen">
   <header class="topbar">
-    <h1>WakeUp</h1>
-    <button class="icon-btn" data-action="settings" aria-label="Settings">⚙</button>
+    <span class="brand">WakeUp</span>
+    <button class="icon-btn" data-action="settings" aria-label="Settings"><svg><use href="#i-settings"/></svg></button>
   </header>
-  <div class="center">
-    <div class="clock" data-clock></div>
-    <p class="muted" id="home-notice" hidden></p>
-    <label class="field">
-      <span>Alarm time</span>
-      <input type="time" id="home-time" required>
-    </label>
-    <p class="muted">Chain: <span id="home-chain"></span></p>
+  <div class="hero">
+    <div class="clock clock-xl" data-clock></div>
+    <p class="notice" id="home-notice" hidden></p>
+  </div>
+  <div class="dock">
+    <div class="alarm-row">
+      <svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>
+      <label class="alarm-time">
+        <span class="sr-only">Alarm time</span>
+        <input type="time" id="home-time" required>
+      </label>
+      <span class="chain-label" id="home-chain"></span>
+    </div>
     <button class="btn primary big" data-action="arm">Arm alarm</button>
-    <p class="hint">Plug the phone in and leave this app open overnight.</p>
+    <p class="hint">Plug in, leave the app open, sleep.</p>
   </div>
 </section>
 
 <!-- ───────── ARMED (dim mode) ───────── -->
 <section id="screen-armed" class="screen dim" hidden>
-  <div class="center">
-    <div class="clock dim-clock" data-clock></div>
-    <p class="dim-text">alarm <span id="armed-time"></span></p>
+  <div class="hero">
+    <div class="clock clock-xl dim-clock" data-clock></div>
+    <p class="dim-text"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg> <span id="armed-time"></span></p>
   </div>
-  <div id="armed-controls" class="armed-controls" hidden>
+  <div id="armed-controls" class="sheet" hidden>
     <p class="muted">Alarm set for <strong id="armed-time-2"></strong></p>
     <button class="btn danger" data-action="disarm">Disarm</button>
+    <p class="hint">Hold for 3 seconds</p>
   </div>
 </section>
 
 <!-- ───────── RINGING ───────── -->
 <section id="screen-ringing" class="screen ringing" hidden>
-  <div class="center">
-    <div class="clock" data-clock></div>
-    <h2 class="shout">WAKE UP</h2>
+  <div class="glow" aria-hidden="true"></div>
+  <div class="hero">
+    <div class="clock clock-lg" data-clock></div>
+    <h2 class="shout">Wake up</h2>
     <p class="muted" id="ringing-note"></p>
+  </div>
+  <div class="dock">
     <button class="btn primary big" data-action="start-challenges">Start challenges</button>
   </div>
 </section>
@@ -60,36 +84,47 @@
 <section id="screen-challenge" class="screen" hidden>
   <header class="topbar">
     <span id="challenge-step" class="pill"></span>
-    <span id="challenge-abandon" class="pill warn" title="Time until the alarm resumes"></span>
-    <button id="challenge-exit" class="icon-btn" data-action="practice-exit" aria-label="Exit practice" hidden>✕</button>
+    <span id="challenge-abandon" class="pill warn" title="Time until the alarm resumes">
+      <svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg><span data-countdown>1:00</span>
+    </span>
+    <button id="challenge-exit" class="icon-btn" data-action="practice-exit" aria-label="Exit practice" hidden><svg><use href="#i-close"/></svg></button>
   </header>
   <div id="challenge-container" class="challenge-container"></div>
 </section>
 
 <!-- ───────── RE-CHECK WAIT ───────── -->
 <section id="screen-recheck-wait" class="screen" hidden>
-  <div class="center">
-    <h2>Alarm off ✔</h2>
+  <div class="hero">
+    <div class="status-icon ok"><svg><use href="#i-check"/></svg></div>
+    <h2>Alarm off</h2>
     <p class="muted">Re-check in</p>
-    <div class="clock" id="recheck-countdown">5:00</div>
+    <div class="clock clock-lg" id="recheck-countdown">5:00</div>
+  </div>
+  <div class="dock">
     <p class="hint">Stay up. If you don't answer the re-check, the alarm comes back.</p>
   </div>
 </section>
 
 <!-- ───────── RE-CHECK PROMPT ───────── -->
 <section id="screen-recheck-prompt" class="screen ringing" hidden>
+  <div class="glow" aria-hidden="true"></div>
   <header class="topbar">
     <span class="pill">Still awake?</span>
-    <span id="recheck-deadline" class="pill warn"></span>
+    <span id="recheck-deadline" class="pill warn">
+      <svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg><span data-countdown>1:00</span>
+    </span>
   </header>
   <div id="recheck-container" class="challenge-container"></div>
 </section>
 
 <!-- ───────── DONE ───────── -->
 <section id="screen-done" class="screen" hidden>
-  <div class="center">
-    <h2>Good morning ☀</h2>
+  <div class="hero">
+    <div class="status-icon ok"><svg><use href="#i-sun"/></svg></div>
+    <h2>Good morning</h2>
     <p class="muted" id="done-note"></p>
+  </div>
+  <div class="dock">
     <button class="btn primary big" data-action="done-ok">OK</button>
   </div>
 </section>
@@ -97,76 +132,88 @@
 <!-- ───────── SETTINGS ───────── -->
 <section id="screen-settings" class="screen scroll" hidden>
   <header class="topbar">
-    <button class="icon-btn" data-action="back" aria-label="Back">←</button>
+    <button class="icon-btn" data-action="back" aria-label="Back"><svg><use href="#i-back"/></svg></button>
     <h1>Settings</h1>
-    <span></span>
+    <span class="icon-btn" aria-hidden="true"></span>
   </header>
   <form id="settings-form" class="settings">
 
     <h3>Challenge chain</h3>
-    <p class="hint">Runs top to bottom. Leave a slot empty to skip it.</p>
-    <div class="chain-editor">
-      <select name="chain0"></select>
-      <select name="chain1"></select>
-      <select name="chain2"></select>
+    <div class="group">
+      <div class="chain-editor">
+        <select name="chain0" aria-label="Step 1"></select>
+        <select name="chain1" aria-label="Step 2"></select>
+        <select name="chain2" aria-label="Step 3"></select>
+      </div>
     </div>
+    <p class="hint">Runs top to bottom. Leave a slot empty to skip it.</p>
 
     <h3>Math</h3>
-    <label class="field row"><span>Problems</span><input type="number" name="mathCount" min="1" max="10"></label>
-    <label class="field row"><span>Difficulty</span>
-      <select name="mathDifficulty"><option value="1">1 · easy</option><option value="2">2 · medium</option><option value="3">3 · hard</option></select>
-    </label>
-
-    <h3>Typing</h3>
-    <label class="field row"><span>Difficulty</span>
-      <select name="typingDifficulty"><option value="1">1 · short sentence</option><option value="2">2 · long sentence</option><option value="3">3 · random characters</option></select>
-    </label>
-
-    <h3>QR code</h3>
-    <button type="button" class="btn" data-action="qr-setup">Set up / print QR code</button>
-
-    <h3>Anti-cheat</h3>
-    <label class="field row"><span>Alarm resumes after idle (s)</span><input type="number" name="abandonTimeout" min="10" max="600"></label>
-    <label class="field row"><span>Re-check enabled</span><input type="checkbox" name="recheckEnabled"></label>
-    <label class="field row"><span>Re-check after (min)</span><input type="number" name="recheckDelay" min="1" max="60"></label>
-
-    <h3>Sound</h3>
-    <label class="field row"><span>Start volume</span><input type="range" name="startVolume" min="0.05" max="1" step="0.05"></label>
-    <label class="field row"><span>Ramp to full (s)</span><input type="number" name="rampSeconds" min="0" max="300"></label>
-    <label class="field row"><span>Repeat daily (auto re-arm)</span><input type="checkbox" name="repeatDaily"></label>
-
-    <h3>Try it out</h3>
-    <div class="btn-row">
-      <button type="button" class="btn" data-action="test-alarm">Test alarm in 10 s</button>
-      <button type="button" class="btn" data-action="try" data-challenge="math">Try math</button>
-      <button type="button" class="btn" data-action="try" data-challenge="typing">Try typing</button>
-      <button type="button" class="btn" data-action="try" data-challenge="qr">Try QR</button>
+    <div class="group">
+      <label class="row"><span>Problems</span><input type="number" name="mathCount" min="1" max="10"></label>
+      <label class="row"><span>Difficulty</span>
+        <select name="mathDifficulty"><option value="1">Easy</option><option value="2">Medium</option><option value="3">Hard</option></select>
+      </label>
     </div>
 
-    <p class="hint">Settings save automatically.</p>
+    <h3>Typing</h3>
+    <div class="group">
+      <label class="row"><span>Difficulty</span>
+        <select name="typingDifficulty"><option value="1">Short sentence</option><option value="2">Long sentence</option><option value="3">Random characters</option></select>
+      </label>
+    </div>
+
+    <h3>QR code</h3>
+    <div class="group">
+      <button type="button" class="row link" data-action="qr-setup"><span>Set up / print QR code</span><svg class="ic chev" aria-hidden="true"><use href="#i-back"/></svg></button>
+    </div>
+
+    <h3>Anti-cheat</h3>
+    <div class="group">
+      <label class="row"><span>Alarm resumes after idle</span><span class="unit"><input type="number" name="abandonTimeout" min="10" max="600"> s</span></label>
+      <label class="row"><span>Re-check</span><input type="checkbox" name="recheckEnabled" class="switch"></label>
+      <label class="row"><span>Re-check after</span><span class="unit"><input type="number" name="recheckDelay" min="1" max="60"> min</span></label>
+    </div>
+
+    <h3>Sound</h3>
+    <div class="group">
+      <label class="row"><span>Start volume</span><input type="range" name="startVolume" min="0.05" max="1" step="0.05"></label>
+      <label class="row"><span>Ramp to full</span><span class="unit"><input type="number" name="rampSeconds" min="0" max="300"> s</span></label>
+      <label class="row"><span>Repeat daily</span><input type="checkbox" name="repeatDaily" class="switch"></label>
+    </div>
+
+    <h3>Try it out</h3>
+    <div class="group">
+      <button type="button" class="row link" data-action="test-alarm"><span>Test alarm in 10 s</span><svg class="ic chev" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <button type="button" class="row link" data-action="try" data-challenge="math"><span>Try math</span><svg class="ic chev" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <button type="button" class="row link" data-action="try" data-challenge="typing"><span>Try typing</span><svg class="ic chev" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <button type="button" class="row link" data-action="try" data-challenge="qr"><span>Try QR scan</span><svg class="ic chev" aria-hidden="true"><use href="#i-back"/></svg></button>
+    </div>
+
+    <p class="hint center-text">Settings save automatically.</p>
   </form>
 </section>
 
 <!-- ───────── QR SETUP ───────── -->
 <section id="screen-qr-setup" class="screen scroll" hidden>
   <header class="topbar">
-    <button class="icon-btn" data-action="settings" aria-label="Back">←</button>
+    <button class="icon-btn" data-action="settings" aria-label="Back"><svg><use href="#i-back"/></svg></button>
     <h1>Your QR code</h1>
-    <span></span>
+    <span class="icon-btn" aria-hidden="true"></span>
   </header>
-  <div class="center qr-setup">
-    <p class="hint">Print this and stick it somewhere you have to get up for – the bathroom mirror, the kitchen, the front door.</p>
+  <div class="qr-setup">
     <div id="qr-holder" class="qr-holder"></div>
     <p class="muted mono" id="qr-secret"></p>
+    <p class="hint center-text">Print it and stick it somewhere you have to get up for – bathroom mirror, kitchen, front door.</p>
     <div class="btn-row">
-      <button class="btn primary" data-action="qr-print">Print</button>
-      <button class="btn" data-action="qr-save">Save image</button>
-      <button class="btn danger" data-action="qr-regenerate">New code</button>
+      <button class="btn primary" data-action="qr-print"><svg class="ic" aria-hidden="true"><use href="#i-print"/></svg>Print</button>
+      <button class="btn" data-action="qr-save"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Save image</button>
     </div>
+    <button class="btn ghost danger-text" data-action="qr-regenerate"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Generate a new code</button>
   </div>
 </section>
 
-<div id="toast" class="toast" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="js/vendor/jsQR.js"></script>
 <script src="js/vendor/qrcode.js"></script>

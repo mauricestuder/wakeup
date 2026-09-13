@@ -103,7 +103,7 @@ export const qr = {
           const value = await detect(video);
           if (value) {
             if (value === QR_PREFIX + secret) {
-              status.textContent = 'Code accepted ✔';
+              status.textContent = 'Code accepted';
               stopCamera();
               onPass();
               return;

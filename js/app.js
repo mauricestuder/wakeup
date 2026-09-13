@@ -47,7 +47,14 @@ let promptDeadline = null;
 function showScreen(name) {
   screen = name;
   for (const [key, id] of Object.entries(SCREENS)) {
-    document.getElementById(id).hidden = key !== name;
+    const el = document.getElementById(id);
+    const show = key === name;
+    if (show && el.hidden) {
+      el.classList.remove('enter');
+      void el.offsetWidth; // restart the enter animation
+      el.classList.add('enter');
+    }
+    el.hidden = !show;
   }
 }
 
@@ -133,6 +140,7 @@ function ring({ escalate = false, note = '' } = {}) {
 }
 
 function startChallenges() {
+  if (state !== 'RINGING') return;
   alarm.stopSiren();
   lastActivity = Date.now(); // before setState, which ticks immediately
   setState('CHALLENGE');
@@ -158,7 +166,7 @@ function challengePassed() {
   unmountActive();
   if (practiceId) {
     practiceId = null;
-    toast('Passed ✔');
+    toast('Passed');
     showScreen('SETTINGS');
     return;
   }
@@ -235,9 +243,25 @@ function tryChallenge(id) {
 
 // ── tick ────────────────────────────────────────────────────────────────
 
+const clockFmt = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
 function updateClocks(now) {
-  const text = alarm.formatTime(now);
-  for (const el of $$('[data-clock]')) if (el.textContent !== text) el.textContent = text;
+  // Digits large, any AM/PM marker small.
+  let digits = '', period = '';
+  for (const p of clockFmt.formatToParts(now)) {
+    if (p.type === 'dayPeriod') period = p.value;
+    else if (p.type !== 'literal' || p.value.trim()) digits += p.value;
+  }
+  const text = digits + period;
+  for (const el of $$('[data-clock]')) {
+    if (el.dataset.rendered === text) continue;
+    el.dataset.rendered = text;
+    el.textContent = digits;
+    if (period) {
+      const s = document.createElement('small');
+      s.textContent = period;
+      el.appendChild(s);
+    }
+  }
 }
 
 function tick() {
@@ -253,7 +277,7 @@ function tick() {
       if (practiceId) break;
       const left = settings.abandonTimeout * 1000 - (now - lastActivity);
       const pill = $('#challenge-abandon');
-      pill.textContent = `⏱ ${alarm.formatCountdown(left)}`;
+      pill.querySelector('[data-countdown]').textContent = alarm.formatCountdown(left);
       pill.classList.toggle('urgent', left < 10_000);
       if (left <= 0) ring({ escalate: true, note: 'You stopped. Alarm resumed at full volume.' });
       break;
@@ -267,7 +291,7 @@ function tick() {
     case 'RECHECK_PROMPT': {
       const left = promptDeadline - now;
       const pill = $('#recheck-deadline');
-      pill.textContent = `⏱ ${alarm.formatCountdown(left)}`;
+      pill.querySelector('[data-countdown]').textContent = alarm.formatCountdown(left);
       pill.classList.toggle('urgent', left < 10_000);
       if (left <= 0) {
         chainIndex = 0;

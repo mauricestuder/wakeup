@@ -2,7 +2,7 @@
 // fallback, so updates show up immediately when online and the cached copy
 // serves when offline. Bump CACHE_VERSION on every release to drop old files.
 
-const CACHE_VERSION = 'wakeup-v2';
+const CACHE_VERSION = 'wakeup-v3';
 const PRECACHE = [
   './',
   './index.html',
