@@ -13,8 +13,9 @@ export function canvasTex(canvas, repeatX = 1, repeatY = 1) {
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeatX, repeatY);
-  t.magFilter = t.minFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
+  // Blocky up close, but mipmapped far away so signs stay readable.
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
   return t;
 }
 
@@ -200,9 +201,9 @@ export function wallBuyTex(name, price, kind) {
     }
     g.stroke();
     g.shadowBlur = 0;
-    g.fillStyle = '#f2e8c9'; g.font = 'bold 34px Impact, sans-serif'; g.textAlign = 'center';
-    g.fillText(name.toUpperCase(), w / 2, 205);
-    g.fillStyle = '#f5d76e'; g.fillText('$' + price, w / 2, 242);
+    g.fillStyle = '#f2e8c9'; g.font = 'bold 40px Impact, sans-serif'; g.textAlign = 'center';
+    g.fillText(name.toUpperCase(), w / 2, 206);
+    g.fillStyle = '#f5d76e'; g.font = 'bold 44px Impact, sans-serif'; g.fillText('$' + price, w / 2, 248);
   });
 }
 

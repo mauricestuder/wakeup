@@ -2,7 +2,7 @@
 // color, film grain, scanlines and a dark vignette.
 import * as THREE from '../vendor/three.module.min.js';
 
-export const PS1_HEIGHT = 216; // internal render height in pixels
+export const PS1_HEIGHT = 320; // internal render height in pixels
 
 // Snap every vertex to a coarse screen grid, like the PlayStation's
 // integer-only GPU. Patching the prototype covers materials made later too.
