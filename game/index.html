@@ -5,75 +5,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cash Out</title>
   <style>
-    :root { --gold: #c9b98a; --cream: #d8d0bc; --red: #8a0f0f; --green: #21ff7a; }
+    @font-face { font-family: 'Term'; src: url('vendor/fonts/vt323.woff2') format('woff2'); font-display: block; }
+    :root { --gold: #c9b98a; --cream: #d8d0bc; --red: #a51515; --green: #3fd16a; --ink: #050505; --line: #5a1010; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: #050505; color: var(--cream); overflow: hidden;
-      font-family: Georgia, 'Times New Roman', serif; user-select: none; }
-    canvas#game { image-rendering: pixelated; }
-    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    html, body { margin: 0; height: 100%; background: var(--ink); color: var(--cream); overflow: hidden;
+      font-family: 'Term', 'Courier New', monospace; user-select: none;
+      -webkit-font-smoothing: none; font-smooth: never; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+
+    /* Scanlines over the HUD and menus, matching the game filter. */
+    #hud::after, .screen::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 2px, transparent 2px 4px); }
 
     #hud { position: fixed; inset: 0; pointer-events: none; }
     #hud[hidden] { display: none; }
-    .shadow { text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,.8); }
-    #cashBox { position: absolute; left: 24px; top: 20px; }
-    #cash { font-size: 42px; color: var(--gold); }
+    .shadow { text-shadow: 3px 3px 0 #000; }
+    #cashBox { position: absolute; left: 24px; top: 14px; }
+    #cash { font-size: 52px; color: var(--gold); line-height: 1; }
     #cashPops { position: relative; height: 0; }
-    .pop { position: absolute; top: 0; font-size: 22px; color: var(--green); animation: rise .9s ease-out forwards; }
+    .pop { position: absolute; top: 0; font-size: 30px; color: var(--green); animation: rise .9s steps(6) forwards; }
     @keyframes rise { to { transform: translateY(-46px); opacity: 0; } }
     #perks { display: flex; gap: 6px; margin-top: 10px; }
-    .perk { width: 34px; height: 34px; border-radius: 6px; border: 2px solid var(--cream); display: grid; place-items: center; font-size: 15px; }
-    #roundBox { position: absolute; left: 24px; bottom: 16px; }
-    #round { font-size: 96px; color: var(--red); line-height: 1; text-shadow: 0 0 18px #300; }
-    #left { font-size: 16px; color: #999; font-style: italic; }
-    #gunBox { position: absolute; right: 26px; bottom: 20px; text-align: right; }
-    #weapon { font-size: 22px; letter-spacing: .5px; }
-    #weapon.gold { color: var(--gold); }
-    #ammo { font-size: 40px; }
-    #ammo.low { color: #ff5252; }
-    #grenades { font-size: 22px; margin-top: 4px; }
-    #powerups { position: absolute; top: 20px; right: 26px; font-size: 24px; color: var(--gold); }
+    .perk { width: 34px; height: 34px; border: 3px solid #000; outline: 2px solid var(--cream); display: grid; place-items: center;
+      font-size: 22px; color: #fff; }
+    #roundBox { position: absolute; left: 24px; bottom: 10px; }
+    #round { font-size: 130px; color: var(--red); line-height: .9; text-shadow: 4px 4px 0 #000, 0 0 20px #300; }
+    #left { font-size: 22px; color: #8d8573; }
+    #gunBox { position: absolute; right: 26px; bottom: 16px; text-align: right; }
+    #weapon { font-size: 30px; line-height: 1; }
+    #weapon.gold { color: #f0c84a; }
+    #ammo { font-size: 54px; line-height: 1; }
+    #ammo.low { color: #ff4a4a; }
+    #grenades { display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; min-height: 24px; }
+    .bag { width: 24px; height: 24px; image-rendering: pixelated; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23000' d='M2 0h4v1H2zM1 2h6v1H1zM0 3h8v5H0z'/%3E%3Cpath fill='%23b08a3c' d='M3 1h2v1H3zM2 2h4v1H2zM1 3h6v4H1z'/%3E%3Cpath fill='%233fd16a' d='M2 4h4v1H2zM3 5h2v1H3z'/%3E%3C/svg%3E") center/contain no-repeat; filter: drop-shadow(2px 2px 0 #000); }
+    #powerups { position: absolute; top: 16px; right: 26px; font-size: 32px; color: var(--green); }
     #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
-    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,246,200,.85); }
-    #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
-    #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: var(--cream); box-shadow: 2px 2px 0 #000; }
+    #crosshair::before { left: 10px; top: 0; width: 2px; height: 8px; box-shadow: 0 14px 0 var(--cream); }
+    #crosshair::after { top: 10px; left: 0; height: 2px; width: 8px; box-shadow: 14px 0 0 var(--cream); }
     #hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
     #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #fff; }
-    #hitmarker::before { left: 14px; top: 0; width: 2px; height: 30px; }
-    #hitmarker::after { top: 14px; left: 0; height: 2px; width: 30px; }
-    #hitmarker.head::before, #hitmarker.head::after { background: #ff4040; }
-    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-family: system-ui, sans-serif; font-weight: 700;
-      font-size: 18px; background: rgba(0,0,0,.55); padding: 8px 16px; border-radius: 6px; display: none; white-space: nowrap; }
-    #announce { position: absolute; left: 0; right: 0; top: 22%; text-align: center; transition: opacity .5s; opacity: 0; }
-    #announce .title { font-size: 64px; color: #a51515; letter-spacing: 8px; text-shadow: 0 0 24px #400; }
-    #announce .title.small { font-size: 46px; color: var(--green); letter-spacing: 4px; }
-    #announce .sub { font-size: 22px; color: #aaa; font-style: italic; }
-    #toast { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); font-family: system-ui, sans-serif; font-weight: 700;
-      color: #ffb3b3; transition: opacity .3s; opacity: 0; }
+    #hitmarker::before { left: 13px; top: 0; width: 4px; height: 30px; }
+    #hitmarker::after { top: 13px; left: 0; height: 4px; width: 30px; }
+    #hitmarker.head::before, #hitmarker.head::after { background: #ff3030; }
+    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 28px; line-height: 1;
+      background: #0a0a0a; border: 2px solid var(--gold); box-shadow: 4px 4px 0 #000; padding: 6px 14px 8px; display: none; white-space: nowrap; }
+    #announce { position: absolute; left: 0; right: 0; top: 18%; text-align: center; transition: opacity .5s steps(5); opacity: 0; }
+    #announce .title { font-size: 104px; line-height: 1; color: var(--red); letter-spacing: 10px;
+      text-shadow: 4px 4px 0 #000, 0 0 30px #400; }
+    #announce .title.small { font-size: 72px; color: var(--green); }
+    #announce .sub { font-size: 30px; color: #a8a090; }
+    #toast { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); font-size: 26px; color: #ff9a9a;
+      transition: opacity .3s steps(3); opacity: 0; }
     #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(160,0,0,.85) 100%); }
     #hurt { position: absolute; inset: 0; opacity: 0; background: rgba(200,0,0,.35); }
 
-    .screen { position: fixed; inset: 0; display: grid; place-items: center; overflow-y: auto; background: rgba(5,5,5,.82); padding: 16px; }
+    .screen { position: fixed; inset: 0; display: grid; place-items: center; overflow-y: auto; background: rgba(3,2,2,.84); padding: 16px; }
     .screen[hidden] { display: none; }
-    .panel { max-width: 640px; width: 100%; text-align: center; }
-    h1 { font-size: clamp(56px, 13vw, 110px); margin: 0; color: #a51515; letter-spacing: 10px; line-height: .95; font-weight: normal;
-      text-shadow: 0 0 30px rgba(160,0,0,.6), 0 3px 0 #000; }
-    .tag { font-style: italic; color: #9a927e; margin: 10px 0 24px; }
-    .controls { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; text-align: left; font-family: system-ui, sans-serif;
-      font-size: 15px; background: rgba(255,255,255,.05); border: 1px solid rgba(245,215,110,.25); border-radius: 10px; padding: 14px 18px; margin: 0 auto 24px; max-width: 460px; }
-    .controls b { color: var(--gold); letter-spacing: .5px; }
-    button { font-family: Georgia, serif; font-size: 26px; letter-spacing: 6px; color: #d8d0bc; background: #3a0606; border: 1px solid #7a1010;
-      border-radius: 2px; padding: 12px 40px; cursor: pointer; box-shadow: 0 0 24px rgba(140,0,0,.35); }
-    button:hover { background: #520909; }
-    button:active { transform: translateY(2px); }
-    .note { font-family: system-ui, sans-serif; font-size: 13px; color: #8d876f; margin-top: 18px; }
+    .panel { position: relative; z-index: 1; max-width: 640px; width: 100%; text-align: center; }
+    h1 { font-weight: normal; font-size: clamp(72px, 16vw, 160px); margin: 0; color: var(--red);
+      letter-spacing: 12px; line-height: .9; text-shadow: 5px 5px 0 #000, 0 0 40px rgba(160,0,0,.5); }
+    .tag { font-size: 26px; color: #9a927e; margin: 10px 0 22px; }
+    .controls { display: grid; grid-template-columns: auto 1fr; gap: 2px 18px; text-align: left; font-size: 23px; line-height: 1.1;
+      background: #0a0808; border: 2px solid var(--line); box-shadow: 6px 6px 0 #000; padding: 12px 18px; margin: 0 auto 26px; max-width: 480px; }
+    .controls b { color: var(--gold); font-weight: normal; }
+    button { font-family: 'Term', monospace; font-size: 38px; line-height: 1; letter-spacing: 4px; color: var(--cream);
+      background: #3a0606; border: 2px solid #8a1414; box-shadow: 5px 5px 0 #000; padding: 8px 36px 10px; cursor: pointer; }
+    button:hover { background: #5a0a0a; color: #fff; }
+    button:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #000; }
+    .note { font-size: 20px; color: #7d766a; margin-top: 18px; }
     @media (max-height: 620px) {
-      h1 { font-size: 54px; }
-      .tag { margin: 6px 0 12px; }
-      .controls { padding: 8px 14px; margin-bottom: 12px; font-size: 13px; gap: 2px 12px; }
+      h1 { font-size: 72px; }
+      .tag { margin: 4px 0 10px; font-size: 22px; }
+      .controls { padding: 6px 14px; margin-bottom: 12px; font-size: 19px; }
       .note { display: none; }
     }
-    #overStats { font-family: system-ui, sans-serif; font-size: 18px; line-height: 1.7; margin: 14px 0 26px; }
-    #overStats b { color: var(--gold); }
+    #overStats { font-size: 28px; line-height: 1.3; margin: 14px 0 26px; }
+    #overStats b { color: var(--gold); font-weight: normal; }
   </style>
 </head>
 <body>
@@ -96,7 +104,7 @@
   <div class="screen" id="menu">
     <div class="panel">
       <h1>CASH OUT</h1>
-      <p class="tag">The bank is closed. The Debt Bots are coming. Survive as many rounds as you can.</p>
+      <p class="tag">The bank is closed. The staff never left. Survive as many rounds as you can.</p>
       <div class="controls">
         <b>WASD</b><span>Move · <b>Shift</b> sprint · <b>Space</b> jump</span>
         <b>Mouse</b><span>Look · <b>Left</b> shoot · <b>Right</b> aim</span>
@@ -107,14 +115,14 @@
         <b>Esc</b><span>Pause</span>
       </div>
       <button id="play">START</button>
-      <p class="note">Earn cash by hitting bots. Unlock the Trading Floor and the Vault. Find the Gold Plater. Needs a keyboard and mouse.</p>
+      <p class="note">Earn cash by hitting the undead salesmen, tax auditors and the Bank President. Unlock the Trading Floor and the Vault. Find the Gold Plater. Needs a keyboard and mouse.</p>
     </div>
   </div>
 
   <div class="screen" id="paused" hidden>
     <div class="panel">
       <h1>PAUSED</h1>
-      <p class="tag">Take a breather. The bots will wait.</p>
+      <p class="tag">Take a breather. They'll wait. They always do.</p>
       <button id="resume">RESUME</button>
     </div>
   </div>

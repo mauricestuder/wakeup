@@ -205,3 +205,79 @@ export function wallBuyTex(name, price, kind) {
     g.fillStyle = '#f5d76e'; g.fillText('$' + price, w / 2, 242);
   });
 }
+
+// Zombie faces for the enemies. The glowing eyes are separate meshes, so
+// only sockets are drawn here.
+export function npcFace(kind) {
+  return tex(128, 128, (g, w, h) => {
+    const skin = { debt: '#8fa07a', tax: '#a3a594', shark: '#b49a8a' }[kind];
+    g.fillStyle = skin; g.fillRect(0, 0, w, h);
+    // rotten blotches
+    g.fillStyle = 'rgba(60,80,40,.35)';
+    g.fillRect(14, 70, 18, 12); g.fillRect(100, 92, 14, 18);
+    if (kind === 'debt') { // slicked-back hair with a side part
+      g.fillStyle = '#17120e'; g.fillRect(0, 0, w, 26); g.fillRect(0, 26, 10, 22); g.fillRect(118, 26, 10, 22);
+      g.fillStyle = skin; g.fillRect(40, 18, 4, 8);
+    } else if (kind === 'tax') { // bald top, grey sides
+      g.fillStyle = '#8c8c86'; g.fillRect(0, 22, 12, 34); g.fillRect(116, 22, 12, 34);
+    } else { // white hair
+      g.fillStyle = '#e6e2d8'; g.fillRect(0, 0, w, 16); g.fillRect(0, 16, 14, 40); g.fillRect(114, 16, 14, 40);
+    }
+    // sunken eye sockets
+    g.fillStyle = '#1e2218';
+    g.fillRect(22, 40, 26, 18); g.fillRect(80, 40, 26, 18);
+    if (kind === 'tax') { // thick glasses
+      g.strokeStyle = '#0b0b0b'; g.lineWidth = 6;
+      g.strokeRect(18, 36, 34, 26); g.strokeRect(76, 36, 34, 26);
+      g.beginPath(); g.moveTo(52, 46); g.lineTo(76, 46); g.stroke();
+    }
+    if (kind === 'shark') { // monocle and walrus mustache
+      g.strokeStyle = '#d4a017'; g.lineWidth = 5;
+      g.beginPath(); g.arc(93, 49, 17, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(93, 66); g.lineTo(100, 110); g.stroke();
+      g.fillStyle = '#f0ece2'; g.fillRect(28, 80, 72, 14); g.fillRect(20, 88, 16, 12); g.fillRect(92, 88, 16, 12);
+      g.fillStyle = '#2a0c0c'; g.fillRect(44, 98, 40, 8);
+    } else if (kind === 'debt') { // too-wide salesman grin
+      g.fillStyle = '#2a0c0c'; g.fillRect(24, 84, 80, 22);
+      g.fillStyle = '#e8e0c0'; g.fillRect(28, 86, 72, 8);
+      g.fillStyle = '#2a0c0c'; for (let x = 36; x < 100; x += 10) g.fillRect(x, 86, 3, 8);
+      g.fillStyle = '#7a1c1c'; g.fillRect(60, 106, 6, 14); // drool of blood
+    } else { // tight frown
+      g.fillStyle = '#2a0c0c'; g.fillRect(40, 92, 48, 8); g.fillRect(34, 98, 8, 6); g.fillRect(86, 98, 8, 6);
+    }
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(58, 56, 12, 24); // nose shadow
+  });
+}
+
+// Front of the enemy's torso: suit, shirt and tie.
+export function npcSuit(kind) {
+  return tex(128, 128, (g, w, h) => {
+    const suit = { debt: '#6b4a2b', tax: '#d8d4c4', shark: '#1d2238' }[kind];
+    g.fillStyle = suit; g.fillRect(0, 0, w, h);
+    if (kind === 'debt') {
+      g.strokeStyle = 'rgba(240,200,120,.25)'; g.lineWidth = 3; // cheap plaid
+      for (let i = 8; i < w; i += 24) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); }
+      g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(40, 0); g.lineTo(88, 0); g.lineTo(64, 70); g.fill();
+      g.fillStyle = '#c62828'; g.beginPath(); g.moveTo(58, 4); g.lineTo(70, 4); g.lineTo(74, 80); g.lineTo(64, 92); g.lineTo(54, 80); g.fill();
+      g.fillStyle = '#4a311b'; g.beginPath(); g.moveTo(30, 0); g.lineTo(40, 0); g.lineTo(64, 70); g.lineTo(52, 74); g.fill();
+      g.beginPath(); g.moveTo(98, 0); g.lineTo(88, 0); g.lineTo(64, 70); g.lineTo(76, 74); g.fill();
+      g.fillStyle = '#f4f0e4'; g.fillRect(84, 30, 30, 18); g.fillStyle = '#c62828'; g.fillRect(84, 30, 30, 6); // name tag
+    } else if (kind === 'tax') {
+      g.fillStyle = '#7d7a6e'; g.fillRect(16, 0, 10, h); g.fillRect(102, 0, 10, h); // suspenders
+      g.fillStyle = '#2b2f3a'; g.beginPath(); g.moveTo(60, 0); g.lineTo(68, 0); g.lineTo(70, 76); g.lineTo(64, 84); g.lineTo(58, 76); g.fill();
+      g.fillStyle = '#e9ecef'; g.fillRect(80, 24, 24, 26); // pocket protector
+      g.fillStyle = '#1d4ed8'; g.fillRect(84, 14, 4, 16); g.fillStyle = '#c62828'; g.fillRect(92, 12, 4, 18); g.fillStyle = '#111'; g.fillRect(98, 16, 3, 14);
+      g.fillStyle = '#d4a017'; g.fillRect(28, 30, 22, 16); // badge
+    } else {
+      g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(44, 0); g.lineTo(84, 0); g.lineTo(64, 50); g.fill();
+      g.fillStyle = '#5a1020'; g.fillRect(40, 30, 48, h); // waistcoat
+      g.fillStyle = '#d4a017'; for (let y = 50; y < h; y += 18) g.fillRect(61, y, 6, 6);
+      g.strokeStyle = '#d4a017'; g.lineWidth = 3; g.beginPath(); g.moveTo(64, 80); g.quadraticCurveTo(76, 96, 86, 82); g.stroke(); // watch chain
+      g.fillStyle = '#b3121b'; g.beginPath(); g.moveTo(0, 6); g.lineTo(20, 0); g.lineTo(128, 110); g.lineTo(128, 128); g.lineTo(108, 128); g.fill(); // sash
+      g.fillStyle = '#d4a017'; g.fillRect(60, 56, 10, 10);
+      g.fillStyle = '#e53935'; g.fillRect(14, 20, 10, 10); // carnation
+    }
+    g.fillStyle = 'rgba(90,10,10,.55)'; // blood stains
+    g.fillRect(20, 92, 14, 10); g.fillRect(30, 100, 6, 16); g.fillRect(96, 60, 8, 8);
+  });
+}

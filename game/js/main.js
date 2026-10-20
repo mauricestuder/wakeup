@@ -67,7 +67,7 @@ game.gameOver = () => {
   firing(false);
   document.getElementById('overStats').innerHTML =
     `You survived <b>${s.round}</b> round${s.round === 1 ? '' : 's'}<br>` +
-    `Bots scrapped: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
+    `Undead put down: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
     `Cash earned: <b>$${Math.floor(s.earned).toLocaleString('en-US')}</b>`;
   show('over');
   sfx.roundEnd();

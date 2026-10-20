@@ -43,8 +43,8 @@ export class Hud {
     });
   }
 
-  setGrenades(n) { this.set('gren', this.el.grenades, '💰'.repeat(n) || '–'); }
-  setLeft(n) { this.set('left', this.el.left, n > 0 ? `${n} bots left` : ''); }
+  setGrenades(n) { this.set('gren', this.el.grenades, n, (el, v) => { el.innerHTML = '<i class="bag"></i>'.repeat(v); }); }
+  setLeft(n) { this.set('left', this.el.left, n > 0 ? `${n} remaining` : ''); }
 
   setHealth(frac) {
     this.set('hp', this.el.vignette, Math.round((1 - frac) * 20), (el, v) => { el.style.opacity = Math.min(1, v / 14); });

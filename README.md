@@ -124,17 +124,19 @@ with it. Play it at `https://mauricestuder.github.io/wakeup/game/`, or locally
 at <http://localhost:8080/game/> with the server above. It needs a keyboard
 and mouse.
 
-- Fight off rounds of **Debt Bots**, **Tax Collectors** (fast, from round 4)
-  and **Loan Sharks** (tanky, every 5th round). Hits and kills earn cash.
+- Fight off rounds of the bank's undead staff: **Salesmen**, **Tax Auditors**
+  (fast, from round 4) and the **Bank President** (tanky boss, every 5th
+  round). Hits and kills earn cash.
 - Guns shoot money: Penny Pistol (coins), Bill Blaster (banknotes), Gold Bar
   Shotgun, plus the Coin Minigun, Diamond Rifle and Piggy Launcher from the
   **Slot Machine** ($950).
 - Spend cash on wall-buys, the doors to the Trading Floor and Vault, perk
   machines (Health Insurance, Fast Cash, Compound Interest) and the
   **Gold Plater** in the Vault, which upgrades a gun to 24K.
-- **G** throws a Money Bag grenade. Killed bots sometimes drop Max Ammo,
+- **G** throws a Money Bag grenade. Killed enemies sometimes drop Max Ammo,
   Double Cash, Insta-Kill or Market Crash.
 
 Built with plain JS modules and [Three.js](https://threejs.org) r160
-(vendored in `game/vendor/`, MIT). Graphics and sounds are generated in code,
-so there are no asset files.
+(vendored in `game/vendor/`, MIT), with a PS1-style low-res filter. Graphics
+and sounds are generated in code. The only asset file is the pixel font
+VT323 in `game/vendor/fonts/` (SIL Open Font License).

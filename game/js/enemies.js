@@ -1,12 +1,14 @@
-// Debt Bots and friends: building, AI, damage, and the round system.
+// The undead staff of the bank: building, AI, damage, and the round system.
 import * as THREE from '../vendor/three.module.min.js';
 import { sfx } from './audio.js';
 import * as T from './textures.js';
 
+// Type keys stay short internally: debt = Salesman, tax = Tax Auditor,
+// shark = Bank President (boss).
 const TYPES = {
-  debt:  { name: 'Debt Bot',      color: 0x5d6670, eye: 0xff3b30, hpMul: 1,   scale: 1,    dmg: 40, label: 'DEBT', reward: 60 },
-  tax:   { name: 'Tax Collector', color: 0x8b1e1e, eye: 0xffeb3b, hpMul: 0.6, scale: 0.85, dmg: 30, label: 'TAX',  reward: 70, speed: 4.6 },
-  shark: { name: 'Loan Shark',    color: 0x1f3b57, eye: 0x00e5ff, hpMul: 8,   scale: 1.6,  dmg: 70, label: 'LOAN', reward: 500, speed: 1.7 },
+  debt:  { name: 'Salesman',       suit: 0x6b4a2b, pants: 0x3b2a1a, skin: 0x8fa07a, eye: 0xff3b30, hpMul: 1,   scale: 1,    dmg: 40, reward: 60 },
+  tax:   { name: 'Tax Auditor',    suit: 0xd8d4c4, pants: 0x3a3d45, skin: 0xa3a594, eye: 0xffeb3b, hpMul: 0.6, scale: 0.9,  dmg: 30, reward: 70, speed: 4.6 },
+  shark: { name: 'Bank President', suit: 0x1d2238, pants: 0x14172a, skin: 0xb49a8a, eye: 0x00e5ff, hpMul: 8,   scale: 1.6,  dmg: 70, reward: 500, speed: 1.7 },
 };
 
 const MAX_ALIVE = 24;
@@ -25,28 +27,43 @@ export class Enemies {
     this.sharksLeft = 0;
 
     this.geo = {
-      body: new THREE.BoxGeometry(0.7, 0.8, 0.45),
-      head: new THREE.BoxGeometry(0.42, 0.36, 0.4),
-      eye: new THREE.BoxGeometry(0.09, 0.05, 0.02),
-      limb: new THREE.BoxGeometry(0.16, 0.65, 0.16),
-      leg: new THREE.BoxGeometry(0.2, 0.7, 0.2),
-      antenna: new THREE.CylinderGeometry(0.015, 0.015, 0.25, 6),
-      dollar: new THREE.PlaneGeometry(0.16, 0.16),
-      hat: new THREE.CylinderGeometry(0.17, 0.17, 0.32, 14),
-      brim: new THREE.CylinderGeometry(0.28, 0.28, 0.03, 16),
-      fin: new THREE.ConeGeometry(0.18, 0.5, 4),
-      label: new THREE.PlaneGeometry(0.5, 0.2),
+      body: new THREE.BoxGeometry(0.62, 0.8, 0.36),
+      head: new THREE.BoxGeometry(0.4, 0.42, 0.38),
+      eye: new THREE.BoxGeometry(0.07, 0.045, 0.02),
+      sleeve: new THREE.BoxGeometry(0.17, 0.6, 0.17),
+      hand: new THREE.BoxGeometry(0.13, 0.15, 0.13),
+      leg: new THREE.BoxGeometry(0.21, 0.66, 0.22),
+      shoe: new THREE.BoxGeometry(0.22, 0.09, 0.32),
+      hat: new THREE.CylinderGeometry(0.17, 0.17, 0.34, 12),
+      brim: new THREE.CylinderGeometry(0.28, 0.28, 0.03, 12),
+      band: new THREE.CylinderGeometry(0.175, 0.175, 0.06, 12),
+      visor: new THREE.BoxGeometry(0.44, 0.02, 0.24),
+      case: new THREE.BoxGeometry(0.1, 0.32, 0.42),
+      board: new THREE.BoxGeometry(0.03, 0.4, 0.3),
+      cigar: new THREE.BoxGeometry(0.035, 0.035, 0.16),
     };
+    const lambert = (color, extra) => new THREE.MeshLambertMaterial({ color, ...extra });
     this.shared = {
-      dark: new THREE.MeshLambertMaterial({ color: 0x2a2d31 }),
-      black: new THREE.MeshLambertMaterial({ color: 0x111111 }),
+      black: lambert(0x111111),
+      leather: lambert(0x4a2c14),
+      paper: lambert(0xe9e4d4),
+      gold: lambert(0xd4a017),
+      red: lambert(0xb3121b),
+      visor: lambert(0x1e9e4a, { transparent: true, opacity: 0.75 }),
+      ember: new THREE.MeshBasicMaterial({ color: 0xff7a1a }),
+      // kept for items.js, which reuses the green dollar sign
       dollar: new THREE.MeshBasicMaterial({ map: T.labelTex('$', { w: 64, h: 64, bg: null, fg: '#21ff7a', font: 'bold 56px sans-serif' }), transparent: true }),
-      labels: {},
-      eyes: {},
+      kinds: {},
     };
+    const hair = { debt: 0x17120e, tax: 0xa3a594, shark: 0xe6e2d8 };
     for (const [k, t] of Object.entries(TYPES)) {
-      this.shared.labels[k] = new THREE.MeshBasicMaterial({ map: T.labelTex(t.label, { w: 256, h: 100, bg: '#151515', fg: '#ff4040', font: 'bold 70px Impact, sans-serif' }) });
-      this.shared.eyes[k] = new THREE.MeshBasicMaterial({ color: t.eye });
+      this.shared.kinds[k] = {
+        skin: lambert(t.skin, { emissive: 0x161616 }), pants: lambert(t.pants), hair: lambert(hair[k]),
+        // a faint self-glow keeps the faces readable in the dark
+        face: (() => { const m = T.npcFace(k); return lambert(0xffffff, { map: m, emissive: 0x3a3a3a, emissiveMap: m }); })(),
+        front: T.npcSuit(k),
+        eye: new THREE.MeshBasicMaterial({ color: t.eye }),
+      };
     }
   }
 
@@ -59,7 +76,7 @@ export class Enemies {
     this.spawnT = 1;
     this.dropsThisRound = 0;
     this.game.hud.setRound(r);
-    if (r > 1) this.game.hud.announce('ROUND ' + r, r % 5 === 0 ? 'The Loan Sharks are coming…' : '', 3);
+    if (r > 1) this.game.hud.announce('ROUND ' + r, r % 5 === 0 ? 'The Bank President wants a word…' : '', 3);
     else this.game.hud.announce('ROUND 1', 'Cash is king. Survive.', 3.5);
     sfx.roundStart();
     if (r > 1) state.grenades = Math.min(4, state.grenades + 2);
@@ -120,44 +137,55 @@ export class Enemies {
 
   build(type) {
     const t = TYPES[type];
-    const s = this.shared;
+    const s = this.shared, k = s.kinds[type];
     const g = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: t.color, emissive: 0x000000 });
-    const mesh = (geo, mat, x, y, z, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+    // Per-enemy suit materials so a hit can flash just this one.
+    const suitMat = new THREE.MeshLambertMaterial({ color: t.suit });
+    const frontMat = new THREE.MeshLambertMaterial({ map: k.front });
+    const mesh = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
 
     const inner = new THREE.Group();
     g.add(inner);
-    const body = mesh(this.geo.body, bodyMat, 0, 1.15, 0, inner);
-    const label = mesh(this.geo.label, s.labels[type], 0, 1.25, 0.231, inner);
-    mesh(this.geo.dollar, s.dollar, 0, 0.98, 0.231, inner);
-    const head = mesh(this.geo.head, bodyMat, 0, 1.75, 0, inner);
-    mesh(this.geo.eye, s.eyes[type], -0.1, 1.78, 0.205, inner);
-    mesh(this.geo.eye, s.eyes[type], 0.1, 1.78, 0.205, inner);
+    // Box faces: +x, -x, +y, -y, +z (front), -z
+    const body = mesh(this.geo.body, [suitMat, suitMat, suitMat, suitMat, frontMat, suitMat], 0, 1.15, 0, inner);
+    const head = mesh(this.geo.head, [k.skin, k.skin, type === 'tax' ? k.skin : k.hair, k.skin, k.face, type === 'tax' ? k.skin : k.hair], 0, 1.76, 0, inner);
+    mesh(this.geo.eye, k.eye, -0.09, 1.8, 0.195, inner);
+    mesh(this.geo.eye, k.eye, 0.09, 1.8, 0.195, inner);
 
-    const armL = new THREE.Group(); armL.position.set(-0.45, 1.45, 0); inner.add(armL);
-    const armR = new THREE.Group(); armR.position.set(0.45, 1.45, 0); inner.add(armR);
-    mesh(this.geo.limb, s.dark, 0, -0.3, 0, armL);
-    mesh(this.geo.limb, s.dark, 0, -0.3, 0, armR);
+    const arm = (x) => {
+      const a = new THREE.Group(); a.position.set(x, 1.48, 0); inner.add(a);
+      mesh(this.geo.sleeve, type === 'tax' ? k.skin : suitMat, 0, -0.28, 0, a); // auditors wear short sleeves
+      mesh(this.geo.hand, k.skin, 0, -0.62, 0, a);
+      return a;
+    };
+    const armL = arm(-0.4), armR = arm(0.4);
     armL.rotation.x = armR.rotation.x = -1.35; // zombie arms reaching forward
-    const legL = new THREE.Group(); legL.position.set(-0.18, 0.75, 0); inner.add(legL);
-    const legR = new THREE.Group(); legR.position.set(0.18, 0.75, 0); inner.add(legR);
-    mesh(this.geo.leg, s.dark, 0, -0.35, 0, legL);
-    mesh(this.geo.leg, s.dark, 0, -0.35, 0, legR);
+    const leg = (x) => {
+      const l = new THREE.Group(); l.position.set(x, 0.75, 0); inner.add(l);
+      mesh(this.geo.leg, k.pants, 0, -0.33, 0, l);
+      mesh(this.geo.shoe, s.black, 0, -0.7, 0.05, l);
+      return l;
+    };
+    const legL = leg(-0.16), legR = leg(0.16);
 
     if (type === 'debt') {
-      mesh(this.geo.antenna, s.dark, 0, 2.05, 0, inner);
-      const tip = mesh(new THREE.SphereGeometry(0.04, 8, 6), s.eyes.debt, 0, 2.18, 0, inner);
-      tip.scale.setScalar(1);
+      const bc = mesh(this.geo.case, s.leather, 0.02, -0.72, 0, armR); // briefcase
+      mesh(new THREE.BoxGeometry(0.04, 0.06, 0.12), s.gold, 0.06, 0.12, 0, bc);
     } else if (type === 'tax') {
-      mesh(this.geo.brim, s.black, 0, 1.94, 0, inner);
-      mesh(this.geo.hat, s.black, 0, 2.1, 0, inner);
+      mesh(this.geo.visor, s.visor, 0, 1.93, 0.14, inner);
+      const cb = mesh(this.geo.board, s.leather, 0, -0.72, 0, armL); // clipboard
+      mesh(new THREE.BoxGeometry(0.01, 0.34, 0.26), s.paper, 0.02, -0.01, 0, cb);
     } else {
-      const fin = mesh(this.geo.fin, bodyMat, 0, 2.15, -0.05, inner);
-      fin.scale.set(0.3, 1, 1.4);
+      mesh(this.geo.brim, s.black, 0, 1.98, 0, inner);
+      mesh(this.geo.hat, s.black, 0, 2.15, 0, inner);
+      mesh(this.geo.band, s.red, 0, 2.03, 0, inner);
+      mesh(this.geo.cigar, s.leather, 0.07, 1.66, 0.26, inner);
+      mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), s.ember, 0.07, 1.66, 0.345, inner);
     }
     inner.scale.setScalar(t.scale);
+    if (type === 'shark') inner.scale.x *= 1.15; // portly
     this.game.scene.add(g);
-    return { group: g, inner, body, head, label, armL, armR, legL, legR, bodyMat };
+    return { group: g, inner, body, head, armL, armR, legL, legR, flashMats: [suitMat, frontMat] };
   }
 
   // ---------- AI ----------
@@ -167,7 +195,10 @@ export class Enemies {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i];
       e.t += dt;
-      if (e.flashT > 0) { e.flashT -= dt; e.bodyMat.emissive.setHex(e.flashT > 0 ? 0x553333 : 0x000000); }
+      if (e.flashT > 0) {
+        e.flashT -= dt;
+        for (const m of e.flashMats) m.emissive.setHex(e.flashT > 0 ? 0x553333 : 0x000000);
+      }
 
       if (e.state === 'dying') {
         e.inner.rotation.x = Math.max(-Math.PI / 2, e.inner.rotation.x - dt * 5);
@@ -227,7 +258,7 @@ export class Enemies {
         dx = dx * 0.3 + sx; dz = dz * 0.3 + sz;
         const n = Math.hypot(dx, dz); dx /= n; dz /= n;
       }
-      // Keep a little space from other bots.
+      // Keep a little space from each other.
       for (const o of this.list) {
         if (o === e || o.state === 'dying') continue;
         const ox = e.pos.x - o.pos.x, oz = e.pos.z - o.pos.z;
