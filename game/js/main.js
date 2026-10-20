@@ -7,15 +7,16 @@ import { Arsenal, weaponName } from './weapons.js';
 import { Enemies } from './enemies.js';
 import { Items } from './items.js';
 import { Hud } from './hud.js';
+import { PS1Pass } from './ps1.js';
 
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(1);
 renderer.autoClear = false;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050505);
-scene.fog = new THREE.Fog(0x050505, 18, 55);
+scene.background = new THREE.Color(0x020203);
+scene.fog = new THREE.Fog(0x020203, 3, 20);
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 200);
 scene.add(camera);
 
@@ -23,8 +24,8 @@ scene.add(camera);
 const vmScene = new THREE.Scene();
 const vmCamera = new THREE.PerspectiveCamera(65, 1, 0.01, 10);
 vmScene.add(vmCamera);
-vmScene.add(new THREE.HemisphereLight(0xffffff, 0x444433, 2.2));
-const vmSun = new THREE.DirectionalLight(0xfff2d0, 1.6);
+vmScene.add(new THREE.HemisphereLight(0xffffff, 0x444433, 1.4));
+const vmSun = new THREE.DirectionalLight(0xfff2d0, 1.2);
 vmSun.position.set(1, 2, 1);
 vmScene.add(vmSun);
 
@@ -37,6 +38,7 @@ const game = {
   },
 };
 window.__game = game; // handy for debugging in the console
+const ps1 = new PS1Pass(renderer);
 
 game.hud = new Hud();
 game.world = buildWorld(scene);
@@ -149,6 +151,7 @@ addEventListener('contextmenu', (e) => e.preventDefault());
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
+  ps1.setSize(w, h);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
   vmCamera.updateProjectionMatrix();
@@ -163,10 +166,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   step(dt);
-  renderer.clear();
-  renderer.render(scene, camera);
-  renderer.clearDepth();
-  renderer.render(vmScene, vmCamera);
+  ps1.render(scene, camera, vmScene, vmCamera);
 }
 
 function step(dt) {

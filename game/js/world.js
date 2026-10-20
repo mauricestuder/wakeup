@@ -229,13 +229,13 @@ export function buildWorld(scene) {
   }
 
   // ---------- lights ----------
-  scene.add(new THREE.HemisphereLight(0xbfc8ff, 0x3a2a18, 1.1));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  scene.add(new THREE.HemisphereLight(0xbfc8ff, 0x3a2a18, 0.35));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.05));
   for (const [x, z, c, i] of [
     [0, 0, 0xffd9a0, 40], [-8, -25, 0x9effc4, 30], [8, -25, 0x9effc4, 30],
     [0, -36, 0x9effc4, 20], [22.5, -27, 0xffd56a, 35],
   ]) {
-    const p = new THREE.PointLight(c, i, 30, 1.2);
+    const p = new THREE.PointLight(c, i * 0.8, 30, 1.2);
     p.position.set(x, WALL_H - 0.6, z);
     scene.add(p);
   }

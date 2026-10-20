@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cash Out</title>
   <style>
-    :root { --gold: #f5d76e; --cream: #fff6c8; --red: #c62828; --green: #21ff7a; }
+    :root { --gold: #c9b98a; --cream: #d8d0bc; --red: #8a0f0f; --green: #21ff7a; }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: #050505; color: var(--cream); overflow: hidden;
-      font-family: Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif; user-select: none; }
+      font-family: Georgia, 'Times New Roman', serif; user-select: none; }
+    canvas#game { image-rendering: pixelated; }
     canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
     #hud { position: fixed; inset: 0; pointer-events: none; }
@@ -22,8 +23,8 @@
     #perks { display: flex; gap: 6px; margin-top: 10px; }
     .perk { width: 34px; height: 34px; border-radius: 6px; border: 2px solid var(--cream); display: grid; place-items: center; font-size: 15px; }
     #roundBox { position: absolute; left: 24px; bottom: 16px; }
-    #round { font-size: 86px; color: var(--red); line-height: 1; }
-    #left { font-size: 16px; color: #bbb; font-family: system-ui, sans-serif; font-weight: 700; }
+    #round { font-size: 96px; color: var(--red); line-height: 1; text-shadow: 0 0 18px #300; }
+    #left { font-size: 16px; color: #999; font-style: italic; }
     #gunBox { position: absolute; right: 26px; bottom: 20px; text-align: right; }
     #weapon { font-size: 22px; letter-spacing: .5px; }
     #weapon.gold { color: var(--gold); }
@@ -43,9 +44,9 @@
     #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-family: system-ui, sans-serif; font-weight: 700;
       font-size: 18px; background: rgba(0,0,0,.55); padding: 8px 16px; border-radius: 6px; display: none; white-space: nowrap; }
     #announce { position: absolute; left: 0; right: 0; top: 22%; text-align: center; transition: opacity .5s; opacity: 0; }
-    #announce .title { font-size: 64px; color: var(--gold); }
-    #announce .title.small { font-size: 46px; color: var(--green); }
-    #announce .sub { font-size: 22px; font-family: system-ui, sans-serif; font-weight: 700; }
+    #announce .title { font-size: 64px; color: #a51515; letter-spacing: 8px; text-shadow: 0 0 24px #400; }
+    #announce .title.small { font-size: 46px; color: var(--green); letter-spacing: 4px; }
+    #announce .sub { font-size: 22px; color: #aaa; font-style: italic; }
     #toast { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); font-family: system-ui, sans-serif; font-weight: 700;
       color: #ffb3b3; transition: opacity .3s; opacity: 0; }
     #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(160,0,0,.85) 100%); }
@@ -54,15 +55,16 @@
     .screen { position: fixed; inset: 0; display: grid; place-items: center; overflow-y: auto; background: rgba(5,5,5,.82); padding: 16px; }
     .screen[hidden] { display: none; }
     .panel { max-width: 640px; width: 100%; text-align: center; }
-    h1 { font-size: clamp(56px, 13vw, 110px); margin: 0; color: var(--gold); letter-spacing: 2px; line-height: .95;
-      text-shadow: 0 4px 0 #6b4f00, 0 0 40px rgba(245,215,110,.35); }
-    .tag { font-family: system-ui, sans-serif; font-weight: 700; color: #cfc6a4; margin: 10px 0 24px; }
+    h1 { font-size: clamp(56px, 13vw, 110px); margin: 0; color: #a51515; letter-spacing: 10px; line-height: .95; font-weight: normal;
+      text-shadow: 0 0 30px rgba(160,0,0,.6), 0 3px 0 #000; }
+    .tag { font-style: italic; color: #9a927e; margin: 10px 0 24px; }
     .controls { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; text-align: left; font-family: system-ui, sans-serif;
       font-size: 15px; background: rgba(255,255,255,.05); border: 1px solid rgba(245,215,110,.25); border-radius: 10px; padding: 14px 18px; margin: 0 auto 24px; max-width: 460px; }
-    .controls b { color: var(--gold); font-family: Impact, sans-serif; font-weight: normal; letter-spacing: .5px; }
-    button { font-family: Impact, sans-serif; font-size: 28px; letter-spacing: 1px; color: #1a1300; background: var(--gold); border: 0;
-      border-radius: 10px; padding: 12px 40px; cursor: pointer; box-shadow: 0 4px 0 #8a6a00; }
-    button:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a6a00; }
+    .controls b { color: var(--gold); letter-spacing: .5px; }
+    button { font-family: Georgia, serif; font-size: 26px; letter-spacing: 6px; color: #d8d0bc; background: #3a0606; border: 1px solid #7a1010;
+      border-radius: 2px; padding: 12px 40px; cursor: pointer; box-shadow: 0 0 24px rgba(140,0,0,.35); }
+    button:hover { background: #520909; }
+    button:active { transform: translateY(2px); }
     .note { font-family: system-ui, sans-serif; font-size: 13px; color: #8d876f; margin-top: 18px; }
     @media (max-height: 620px) {
       h1 { font-size: 54px; }

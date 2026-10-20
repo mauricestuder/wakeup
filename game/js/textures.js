@@ -13,12 +13,17 @@ export function canvasTex(canvas, repeatX = 1, repeatY = 1) {
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeatX, repeatY);
-  t.anisotropy = 4;
+  t.magFilter = t.minFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
   return t;
 }
 
+// Textures are drawn at full size, then shrunk 4x for chunky PS1 texels.
 export function tex(w, h, draw, repeatX = 1, repeatY = 1) {
-  return canvasTex(makeCanvas(w, h, draw), repeatX, repeatY);
+  const full = makeCanvas(w, h, draw);
+  const small = makeCanvas(Math.max(16, Math.round(w / 4)), Math.max(8, Math.round(h / 4)),
+    (g, sw, sh) => g.drawImage(full, 0, 0, sw, sh));
+  return canvasTex(small, repeatX, repeatY);
 }
 
 // Small deterministic RNG so textures look the same every load.
