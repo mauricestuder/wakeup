@@ -18,6 +18,66 @@ const GOLD = 0xffcc33;
 
 export function weaponName(w) { return (w.gold ? '24K ' : '') + WEAPONS[w.id].name; }
 
+// Build a gun model. Used for the gun in your hands and for the vending machines.
+export function gunModel(id, gold = false) {
+  const d = WEAPONS[id];
+  const body = new THREE.MeshLambertMaterial({ color: gold ? GOLD : d.color, emissive: gold ? 0x5a3c00 : 0x000000 });
+  const dark = new THREE.MeshLambertMaterial({ color: gold ? 0xb8860b : 0x222428 });
+  const accent = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x3a2a00 });
+  const g = new THREE.Group();
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m;
+  };
+  const B = (w, h, l) => new THREE.BoxGeometry(w, h, l);
+  const C = (r, l, seg = 12) => new THREE.CylinderGeometry(r, r, l, seg);
+  let muzzleZ = -0.35;
+  switch (d.kind) {
+    case 'pistol':
+      add(B(0.07, 0.09, 0.3), body, 0, 0, -0.12);
+      add(B(0.06, 0.16, 0.08), dark, 0, -0.1, -0.02, 0.25);
+      add(C(0.035, 0.012), accent, 0, 0.06, -0.12, 0, 0, Math.PI / 2); // coin on top
+      muzzleZ = -0.29;
+      break;
+    case 'smg':
+      add(B(0.09, 0.12, 0.42), body, 0, 0, -0.18);
+      add(B(0.06, 0.18, 0.07), dark, 0, -0.13, -0.05, 0.2);
+      add(B(0.05, 0.22, 0.1), new THREE.MeshLambertMaterial({ map: T.bill() }), 0, -0.14, -0.22); // bill magazine
+      add(C(0.025, 0.12), dark, 0, 0.01, -0.44, Math.PI / 2);
+      muzzleZ = -0.5;
+      break;
+    case 'shotgun':
+      add(B(0.11, 0.1, 0.55), body, 0, 0, -0.22);
+      add(B(0.12, 0.06, 0.2), dark, 0, -0.07, -0.3);
+      add(B(0.08, 0.15, 0.2), dark, 0, -0.08, 0.06, 0.3);
+      muzzleZ = -0.5;
+      break;
+    case 'minigun':
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        add(C(0.018, 0.55, 8), body, Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.3, Math.PI / 2);
+      }
+      add(C(0.09, 0.2, 16), dark, 0, 0, -0.02, Math.PI / 2);
+      add(B(0.12, 0.12, 0.12), accent, 0.1, -0.08, 0.02);
+      muzzleZ = -0.6;
+      break;
+    case 'rifle':
+      add(B(0.07, 0.09, 0.7), body, 0, 0, -0.28);
+      add(C(0.035, 0.18), dark, 0, 0.09, -0.15, Math.PI / 2);
+      add(new THREE.OctahedronGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0xb8f6ff }), 0, 0.02, -0.66);
+      add(B(0.06, 0.14, 0.18), dark, 0, -0.08, 0.06, 0.3);
+      muzzleZ = -0.7;
+      break;
+    case 'launcher': {
+      add(C(0.08, 0.5, 16), body, 0, 0, -0.2, Math.PI / 2);
+      add(C(0.04, 0.05, 10), new THREE.MeshLambertMaterial({ color: 0xff8fb8 }), 0, 0, -0.47, Math.PI / 2);
+      add(B(0.06, 0.15, 0.08), dark, 0, -0.12, -0.05, 0.2);
+      muzzleZ = -0.5;
+      break;
+    }
+  }
+  return { group: g, muzzleZ };
+}
+
 export class Arsenal {
   constructor(game) {
     this.game = game;
@@ -255,61 +315,7 @@ export class Arsenal {
   buildViewmodel() {
     if (this.vm) this.vmRoot.remove(this.vm);
     const w = this.weapon;
-    const d = WEAPONS[w.id];
-    const body = new THREE.MeshLambertMaterial({ color: w.gold ? GOLD : d.color, emissive: w.gold ? 0x5a3c00 : 0x000000 });
-    const dark = new THREE.MeshLambertMaterial({ color: w.gold ? 0xb8860b : 0x222428 });
-    const accent = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x3a2a00 });
-    const g = new THREE.Group();
-    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
-      const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m;
-    };
-    const B = (w, h, l) => new THREE.BoxGeometry(w, h, l);
-    const C = (r, l, seg = 12) => new THREE.CylinderGeometry(r, r, l, seg);
-    let muzzleZ = -0.35;
-    switch (d.kind) {
-      case 'pistol':
-        add(B(0.07, 0.09, 0.3), body, 0, 0, -0.12);
-        add(B(0.06, 0.16, 0.08), dark, 0, -0.1, -0.02, 0.25);
-        add(C(0.035, 0.012), accent, 0, 0.06, -0.12, 0, 0, Math.PI / 2); // coin on top
-        muzzleZ = -0.29;
-        break;
-      case 'smg':
-        add(B(0.09, 0.12, 0.42), body, 0, 0, -0.18);
-        add(B(0.06, 0.18, 0.07), dark, 0, -0.13, -0.05, 0.2);
-        add(B(0.05, 0.22, 0.1), new THREE.MeshLambertMaterial({ map: T.bill() }), 0, -0.14, -0.22); // bill magazine
-        add(C(0.025, 0.12), dark, 0, 0.01, -0.44, Math.PI / 2);
-        muzzleZ = -0.5;
-        break;
-      case 'shotgun':
-        add(B(0.11, 0.1, 0.55), body, 0, 0, -0.22);
-        add(B(0.12, 0.06, 0.2), dark, 0, -0.07, -0.3);
-        add(B(0.08, 0.15, 0.2), dark, 0, -0.08, 0.06, 0.3);
-        muzzleZ = -0.5;
-        break;
-      case 'minigun':
-        for (let i = 0; i < 6; i++) {
-          const a = i * Math.PI / 3;
-          add(C(0.018, 0.55, 8), body, Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.3, Math.PI / 2);
-        }
-        add(C(0.09, 0.2, 16), dark, 0, 0, -0.02, Math.PI / 2);
-        add(B(0.12, 0.12, 0.12), accent, 0.1, -0.08, 0.02);
-        muzzleZ = -0.6;
-        break;
-      case 'rifle':
-        add(B(0.07, 0.09, 0.7), body, 0, 0, -0.28);
-        add(C(0.035, 0.18), dark, 0, 0.09, -0.15, Math.PI / 2);
-        add(new THREE.OctahedronGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0xb8f6ff }), 0, 0.02, -0.66);
-        add(B(0.06, 0.14, 0.18), dark, 0, -0.08, 0.06, 0.3);
-        muzzleZ = -0.7;
-        break;
-      case 'launcher': {
-        add(C(0.08, 0.5, 16), body, 0, 0, -0.2, Math.PI / 2);
-        add(C(0.04, 0.05, 10), new THREE.MeshLambertMaterial({ color: 0xff8fb8 }), 0, 0, -0.47, Math.PI / 2);
-        add(B(0.06, 0.15, 0.08), dark, 0, -0.12, -0.05, 0.2);
-        muzzleZ = -0.5;
-        break;
-      }
-    }
+    const { group: g, muzzleZ } = gunModel(w.id, w.gold);
     this.flash.position.set(0, 0.01, muzzleZ - 0.06);
     g.add(this.flash);
     g.scale.setScalar(0.6);

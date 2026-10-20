@@ -3,7 +3,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { sfx } from './audio.js';
 import * as T from './textures.js';
-import { WEAPONS, BOX_POOL, weaponName } from './weapons.js';
+import { WEAPONS, BOX_POOL, weaponName, gunModel } from './weapons.js';
 
 const POWERUPS = {
   maxammo: { name: 'MAX AMMO',     color: '#2e7d32', short: 'AMMO' },
@@ -269,29 +269,6 @@ export class Items {
       return true;
     };
 
-    // Wall-buys: chalk outline on the wall.
-    const wallBuy = (id, cost, x, z, ry, ix, iz, label, kind) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2),
-        new THREE.MeshBasicMaterial({ map: T.wallBuyTex(label, cost, kind), transparent: true }));
-      m.position.set(x, 1.7, z); m.rotation.y = ry;
-      scene.add(m);
-      this.addInteractable(ix, iz, 1.8, () => {
-        if (id === 'grenade') return state.grenades >= 4 ? null : `Press E to buy Money Bags [$${cost}]`;
-        const own = arsenal.has(id);
-        if (own) return `Press E to buy ammo for ${weaponName(own)} [$${own.gold ? 2500 : cost / 2}]`;
-        return `Press E to buy ${WEAPONS[id].name} [$${cost}]`;
-      }, () => {
-        if (id === 'grenade') { if (state.grenades < 4 && buy(cost)) state.grenades = 4; return; }
-        const own = arsenal.has(id);
-        const price = own ? (own.gold ? 2500 : cost / 2) : cost;
-        if (buy(price)) arsenal.give(id, own ? own.gold : false);
-      });
-    };
-    wallBuy('penny', 500, 5, 9.68, Math.PI, 5, 9, 'Penny Pistol', 'pistol');
-    wallBuy('bill', 1000, 14.68, 2, -Math.PI / 2, 14, 2, 'Bill Blaster', 'smg');
-    wallBuy('grenade', 250, -5, -9.68, 0, -5, -9, 'Money Bags', 'grenade');
-    wallBuy('goldbar', 1500, -14.68, -22, Math.PI / 2, -14, -22, 'Gold Bar Shotgun', 'shotgun');
-
     // Doors
     for (const door of world.doors) {
       this.addInteractable(door.x, door.z, 2.6, () => door.opened ? null : `Press E to open ${door.name} [$${door.cost}]`, () => {
@@ -318,6 +295,65 @@ export class Items {
       return g;
     };
     const front = (x, z, ry, dist) => [x + Math.sin(ry) * dist, z + Math.cos(ry) * dist];
+
+    // Gun vending machines: the gun floats in a lit glass case, with a
+    // price display, coin slot and dispenser tray. (x, z) is the wall spot.
+    this.displays = [];
+    const vending = (id, cost, x, z, ry, label, glow) => {
+      const [cx, cz] = front(x, z, ry, 0.42);
+      const g = machine(cx, cz, ry, 1.3, 2.5, 0.8, 0x24262b, label.toUpperCase(), glow);
+      const lit = new THREE.MeshBasicMaterial({ color: glow });
+      const part = (geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); g.add(m); return m; };
+      // Display case
+      part(new THREE.PlaneGeometry(1.0, 0.85), new THREE.MeshBasicMaterial({ color: 0x3a3630 }), 0, 1.45, 0.401);
+      part(new THREE.BoxGeometry(1.0, 0.85, 0.36), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.08, depthWrite: false }), 0, 1.45, 0.58);
+      for (const [w, h, px, py] of [[1.06, 0.04, 0, 1.89], [1.06, 0.04, 0, 1.01], [0.04, 0.92, -0.51, 1.45], [0.04, 0.92, 0.51, 1.45]]) {
+        part(new THREE.BoxGeometry(w, h, 0.03), lit, px, py, 0.77);
+      }
+      let item;
+      if (id === 'grenade') {
+        item = new THREE.Group();
+        const bag = this.mat.bag.clone();
+        item.add(new THREE.Mesh(this.geo.bag, bag));
+        const k = new THREE.Mesh(this.geo.knot, bag); k.position.y = 0.17; item.add(k);
+        const dollar = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), this.game.enemies.shared.dollar);
+        dollar.position.z = 0.165; item.add(dollar);
+        item.scale.setScalar(1.6);
+      } else {
+        item = gunModel(id).group;
+        item.scale.setScalar(1.25);
+      }
+      item.position.set(0, 1.42, 0.58);
+      // Lit from inside the case, so it stands out in the dark bank.
+      item.traverse(o => { if (o.material?.emissive) o.material.emissive.copy(o.material.color).multiplyScalar(0.45); });
+      g.add(item);
+      this.displays.push({ item, baseY: 1.42, baseRy: id === 'grenade' ? 0 : Math.PI / 2 });
+      // Price display, coin slot, dispenser tray
+      part(new THREE.PlaneGeometry(0.62, 0.2), new THREE.MeshBasicMaterial({ map: T.labelTex('$' + cost, { w: 256, h: 80, bg: '#031a08', fg: '#3fff7a', font: 'bold 64px "Courier New", monospace' }) }), -0.2, 0.75, 0.401);
+      part(new THREE.BoxGeometry(0.22, 0.3, 0.06), new THREE.MeshLambertMaterial({ color: 0x8a8f99 }), 0.4, 0.75, 0.42);
+      part(new THREE.BoxGeometry(0.03, 0.14, 0.02), lit, 0.4, 0.77, 0.46);
+      part(new THREE.BoxGeometry(0.9, 0.32, 0.04), new THREE.MeshBasicMaterial({ color: 0x050505 }), 0, 0.32, 0.4);
+      part(new THREE.BoxGeometry(0.92, 0.05, 0.12), new THREE.MeshLambertMaterial({ color: 0x8a8f99 }), 0, 0.15, 0.44);
+      // Light strips down the sides
+      for (const px of [-0.66, 0.66]) part(new THREE.BoxGeometry(0.04, 2.3, 0.04), lit, px, 1.2, 0.4);
+
+      const [ix, iz] = front(cx, cz, ry, 1.2);
+      this.addInteractable(ix, iz, 1.7, () => {
+        if (id === 'grenade') return state.grenades >= 4 ? null : `Press E to buy Money Bags [$${cost}]`;
+        const own = arsenal.has(id);
+        if (own) return `Press E to buy ammo for ${weaponName(own)} [$${own.gold ? 2500 : cost / 2}]`;
+        return `Press E to buy ${WEAPONS[id].name} [$${cost}]`;
+      }, () => {
+        if (id === 'grenade') { if (state.grenades < 4 && buy(cost)) state.grenades = 4; return; }
+        const own = arsenal.has(id);
+        const price = own ? (own.gold ? 2500 : cost / 2) : cost;
+        if (buy(price)) arsenal.give(id, own ? own.gold : false);
+      });
+    };
+    vending('penny', 500, 5, 9.68, Math.PI, 'Penny Pistol', '#ff9a4d');
+    vending('bill', 1000, 14.68, 2, -Math.PI / 2, 'Bill Blaster', '#3fd16a');
+    vending('grenade', 250, -5, -9.68, 0, 'Money Bags', '#ffd34d');
+    vending('goldbar', 1500, -14.68, -22, Math.PI / 2, 'Gold Bar Shotgun', '#ffd34d');
 
     // Investments (perks)
     const perk = (id, x, z, ry) => {
@@ -423,6 +459,11 @@ export class Items {
   }
 
   update(dt) {
+    this.displayT = (this.displayT || 0) + dt;
+    this.displays.forEach((d, i) => {
+      d.item.rotation.y = d.baseRy + Math.sin(this.displayT * 0.9 + i) * 0.6;
+      d.item.position.y = d.baseY + Math.sin(this.displayT * 2 + i) * 0.03;
+    });
     this.updateProjectiles(dt);
     this.updateParticles(dt);
     this.updatePowerups(dt);

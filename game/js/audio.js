@@ -3,6 +3,12 @@
 let ac = null;
 let master = null;
 let noiseBuf = null;
+let volume = 0.5;
+
+export function setVolume(v) {
+  volume = v;
+  if (master) master.gain.value = v * 0.9;
+}
 
 export function initAudio() {
   if (ac) { ac.resume(); return; }
@@ -10,7 +16,7 @@ export function initAudio() {
   if (!AC) return;
   ac = new AC();
   master = ac.createGain();
-  master.gain.value = 0.45;
+  master.gain.value = volume * 0.9;
   master.connect(ac.destination);
   noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);

@@ -1,6 +1,6 @@
 // Cash Out: boot, input, game loop and game state.
 import * as THREE from '../vendor/three.module.min.js';
-import { initAudio, sfx } from './audio.js';
+import { initAudio, setVolume, sfx } from './audio.js';
 import { buildWorld } from './world.js';
 import { Player } from './player.js';
 import { Arsenal, weaponName } from './weapons.js';
@@ -9,6 +9,7 @@ import { Items } from './items.js';
 import { Hud } from './hud.js';
 import { PS1Pass } from './ps1.js';
 import { isTouch, initTouch } from './touch.js';
+import { settings, initSettingsUI } from './settings.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
@@ -31,7 +32,7 @@ vmSun.position.set(1, 2, 1);
 vmScene.add(vmSun);
 
 const game = {
-  scene, camera, vmScene, vmCamera, renderer,
+  scene, camera, vmScene, vmCamera, renderer, settings,
   aiming: false,
   state: {
     mode: 'menu', cash: 500, round: 0, kills: 0, headshots: 0, earned: 0,
@@ -78,8 +79,23 @@ game.gameOver = () => {
 // ---------- screens ----------
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.hidden = el.id !== id;
-  document.getElementById('hud').hidden = id === 'menu';
+  document.getElementById('hud').hidden = game.state.mode === 'menu';
 }
+
+// Settings open from the menu or the pause screen and go back there.
+function applySettings() {
+  ps1.configure(settings.quality, settings.effects);
+  setVolume(settings.volume);
+  camera.fov = settings.fov;
+  camera.updateProjectionMatrix();
+}
+initSettingsUI(document.getElementById('setList'), applySettings);
+applySettings();
+let settingsFrom = 'menu';
+for (const btn of document.querySelectorAll('.openSettings')) {
+  btn.addEventListener('click', () => { settingsFrom = btn.closest('.screen').id; show('settings'); });
+}
+document.getElementById('setBack').addEventListener('click', () => show(settingsFrom));
 
 function start() {
   initAudio();
@@ -112,6 +128,7 @@ function pause() {
   game.state.mode = 'paused';
   firing(false);
   touch?.reset();
+  game.hud.prompt('');
   show('paused');
 }
 
@@ -188,7 +205,8 @@ function step(dt) {
   game.enemies.updateRounds(dt);
   game.items.update(dt);
 
-  const targetFov = game.aiming ? 55 : player.sprinting ? 82 : 75;
+  const fov = settings.fov;
+  const targetFov = game.aiming ? fov - 20 : player.sprinting ? fov + 7 : fov;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 12);
     camera.updateProjectionMatrix();

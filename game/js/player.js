@@ -24,7 +24,7 @@ export class Player {
   }
 
   look(dx, dy) {
-    const sens = this.game.aiming ? 0.0013 : 0.0022;
+    const sens = (this.game.aiming ? 0.0013 : 0.0022) * this.game.settings.sens;
     this.yaw -= dx * sens;
     this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * sens));
   }

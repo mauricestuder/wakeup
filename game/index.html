@@ -77,11 +77,21 @@
     button:hover { background: #5a0a0a; color: #fff; }
     button:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #000; }
     .note { font-size: 20px; color: #7d766a; margin-top: 18px; }
+    button.alt { font-size: 26px; padding: 6px 22px 8px; margin-left: 14px; background: #120c0c; border-color: var(--line); vertical-align: bottom; }
+    h1.mid { font-size: clamp(56px, 11vw, 110px); }
+    #setList { display: grid; grid-template-columns: 1fr auto 9ch auto; gap: 8px 10px; align-items: center; font-size: 26px; text-align: left;
+      background: #0a0808; border: 2px solid var(--line); box-shadow: 6px 6px 0 #000; padding: 14px 18px; margin: 18px auto 24px; max-width: 520px; }
+    .setRow { display: contents; }
+    .setRow b { color: var(--gold); font-weight: normal; text-align: center; }
+    #setList .arrow { font-size: 30px; padding: 0 14px 4px; letter-spacing: 0; background: #1a0e0e; border-color: var(--line); box-shadow: 3px 3px 0 #000; }
     @media (max-height: 620px) {
       h1 { font-size: 72px; }
       .tag { margin: 4px 0 10px; font-size: 22px; }
       .controls { padding: 6px 14px; margin-bottom: 12px; font-size: 19px; }
       .note { display: none; }
+      h1.mid { font-size: 44px; }
+      #setList { font-size: 22px; gap: 4px 10px; padding: 8px 14px; margin: 8px auto 12px; }
+      #setList .arrow { font-size: 24px; }
     }
     /* ---------- touch ---------- */
     body.touch { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; }
@@ -198,6 +208,7 @@
         <b>Esc</b><span>Pause</span>
       </div>
       <button id="play">START</button>
+      <button class="openSettings alt">SETTINGS</button>
       <p class="note">Earn cash by hitting the undead salesmen, tax auditors and the Bank President. Unlock the Trading Floor and the Vault. Find the Gold Plater.<span class="kb"> Needs a keyboard and mouse.</span></p>
     </div>
   </div>
@@ -207,6 +218,15 @@
       <h1>PAUSED</h1>
       <p class="tag">Take a breather. They'll wait. They always do.</p>
       <button id="resume">RESUME</button>
+      <button class="openSettings alt">SETTINGS</button>
+    </div>
+  </div>
+
+  <div class="screen" id="settings" hidden>
+    <div class="panel">
+      <h1 class="mid">SETTINGS</h1>
+      <div id="setList"></div>
+      <button id="setBack">BACK</button>
     </div>
   </div>
 

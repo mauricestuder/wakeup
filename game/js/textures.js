@@ -183,30 +183,6 @@ export function labelTex(text, { w = 512, h = 128, bg = '#111', fg = '#f5d76e', 
   });
 }
 
-// Chalk-outline wall-buy sign, like the outlines on BO walls.
-export function wallBuyTex(name, price, kind) {
-  return tex(512, 256, (g, w, h) => {
-    g.fillStyle = 'rgba(10,10,10,.55)'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#f2e8c9'; g.lineWidth = 6; g.lineJoin = 'round';
-    g.shadowColor = '#f2e8c9'; g.shadowBlur = 6;
-    g.beginPath();
-    if (kind === 'grenade') {
-      g.ellipse(w / 2, 110, 60, 55, 0, 0, Math.PI * 2);
-      g.moveTo(w / 2 - 25, 55); g.lineTo(w / 2, 40); g.lineTo(w / 2 + 25, 55);
-    } else if (kind === 'shotgun') {
-      g.rect(80, 80, 300, 26); g.rect(380, 70, 70, 50); g.moveTo(300, 106); g.lineTo(300, 150);
-    } else {
-      g.rect(150, 70, 220, 40); g.moveTo(200, 110); g.lineTo(185, 180); g.lineTo(225, 180); g.lineTo(235, 110);
-      if (kind === 'smg') { g.moveTo(290, 110); g.lineTo(290, 170); g.lineTo(315, 170); g.lineTo(315, 110); }
-    }
-    g.stroke();
-    g.shadowBlur = 0;
-    g.fillStyle = '#f2e8c9'; g.font = 'bold 40px Impact, sans-serif'; g.textAlign = 'center';
-    g.fillText(name.toUpperCase(), w / 2, 206);
-    g.fillStyle = '#f5d76e'; g.font = 'bold 44px Impact, sans-serif'; g.fillText('$' + price, w / 2, 248);
-  });
-}
-
 // Zombie faces for the enemies. The glowing eyes are separate meshes, so
 // only sockets are drawn here.
 export function npcFace(kind) {
