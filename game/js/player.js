@@ -36,12 +36,15 @@ export class Player {
     if (keys.KeyS || keys.ArrowDown) fz += 1;
     if (keys.KeyA || keys.ArrowLeft) fx -= 1;
     if (keys.KeyD || keys.ArrowRight) fx += 1;
+    const tm = this.game.touchMove;
+    if (tm) { fx += tm.x; fz += tm.y; }
     const len = Math.hypot(fx, fz);
-    this.moving = len > 0;
-    this.sprinting = this.moving && keys.ShiftLeft && fz < 0 && !this.game.aiming;
-    if (len > 0) {
+    this.moving = len > 0.05;
+    this.sprinting = this.moving && (keys.ShiftLeft || tm?.sprint) && fz < 0 && !this.game.aiming;
+    if (this.moving) {
+      const push = Math.min(1, len); // a half-pushed stick walks slower
       fx /= len; fz /= len;
-      let speed = this.sprinting ? 7.6 : 5;
+      let speed = (this.sprinting ? 7.6 : 5) * push;
       if (this.game.aiming) speed *= 0.6;
       speed *= this.game.arsenal.moveMul();
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);

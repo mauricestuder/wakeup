@@ -121,8 +121,8 @@ Call `onActivity()` on every user interaction (resets the idle timer) and
 `game/` holds **Cash Out**, a money-themed wave-survival shooter in the style
 of Black Ops Zombies. It's separate from the alarm app and shares no code
 with it. Play it at `https://mauricestuder.github.io/wakeup/game/`, or locally
-at <http://localhost:8080/game/> with the server above. It needs a keyboard
-and mouse.
+at <http://localhost:8080/game/> with the server above. It works with keyboard
+and mouse, or with touch controls on phones and tablets (play in landscape).
 
 - Fight off rounds of the bank's undead staff: **Salesmen**, **Tax Auditors**
   (fast, from round 4) and the **Bank President** (tanky boss, every 5th

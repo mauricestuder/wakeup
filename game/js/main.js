@@ -8,6 +8,7 @@ import { Enemies } from './enemies.js';
 import { Items } from './items.js';
 import { Hud } from './hud.js';
 import { PS1Pass } from './ps1.js';
+import { isTouch, initTouch } from './touch.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
@@ -65,6 +66,7 @@ game.gameOver = () => {
   s.mode = 'over';
   document.exitPointerLock?.();
   firing(false);
+  touch?.reset();
   document.getElementById('overStats').innerHTML =
     `You survived <b>${s.round}</b> round${s.round === 1 ? '' : 's'}<br>` +
     `Undead put down: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
@@ -81,7 +83,11 @@ function show(id) {
 
 function start() {
   initAudio();
-  lock();
+  if (isTouch) {
+    // Fullscreen works on Android and iPad; iPhone just ignores it.
+    const el = document.documentElement, fs = el.requestFullscreen || el.webkitRequestFullscreen;
+    try { fs?.call(el)?.catch?.(() => {}); } catch { /* not allowed here */ }
+  } else lock();
   if (game.state.mode === 'menu') {
     game.state.mode = 'playing';
     game.enemies.startRound(1);
@@ -105,6 +111,7 @@ document.addEventListener('pointerlockchange', () => {
 function pause() {
   game.state.mode = 'paused';
   firing(false);
+  touch?.reset();
   show('paused');
 }
 
@@ -146,6 +153,7 @@ addEventListener('mousemove', (e) => {
 });
 addEventListener('wheel', () => { if (game.state.mode === 'playing') game.arsenal.cycle(); });
 addEventListener('contextmenu', (e) => e.preventDefault());
+const touch = isTouch ? initTouch(game, { keys, firing, pause }) : null;
 
 // ---------- loop ----------
 function resize() {
@@ -202,7 +210,7 @@ function step(dt) {
   hud.setPowerups(state);
   hud.setLeft(game.enemies.breakT > 0 ? 0 : game.enemies.aliveCount());
   const near = game.items.nearest();
-  hud.prompt(near ? near.text : '');
+  hud.prompt(near ? (isTouch ? near.text.replace('Press E', 'Tap USE') : near.text) : '');
   hud.update(dt);
 }
 
