@@ -171,6 +171,25 @@ export function monitorTex(seed) {
   });
 }
 
+// Shredder floor grate: dark steel with slots and yellow-black hazard edges.
+export function grateTex() {
+  return tex(128, 128, (g, w, h) => {
+    g.fillStyle = '#2a2c30'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#050505';
+    for (let y = 18; y < h - 12; y += 14) g.fillRect(14, y, w - 28, 6);
+    g.fillStyle = '#4a4d55';
+    for (let y = 18; y < h - 12; y += 14) g.fillRect(14, y + 6, w - 28, 2);
+    for (let i = -h; i < w + h; i += 16) {
+      g.fillStyle = '#e0b000';
+      for (const [x0, y0, ww, hh] of [[0, 0, w, 10], [0, h - 10, w, 10], [0, 0, 8, h], [w - 8, 0, 8, h]]) {
+        g.save(); g.beginPath(); g.rect(x0, y0, ww, hh); g.clip();
+        g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 8, 0); g.lineTo(i + 8 - h, h); g.lineTo(i - h, h); g.fill();
+        g.restore();
+      }
+    }
+  });
+}
+
 // Text label on a solid or transparent background.
 export function labelTex(text, { w = 512, h = 128, bg = '#111', fg = '#f5d76e', font = 'bold 64px Impact, sans-serif', border = null } = {}) {
   return tex(w, h, (g) => {
@@ -178,6 +197,9 @@ export function labelTex(text, { w = 512, h = 128, bg = '#111', fg = '#f5d76e', 
     if (border) { g.strokeStyle = border; g.lineWidth = 8; g.strokeRect(6, 6, w - 12, h - 12); }
     g.fillStyle = fg; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
     const lines = text.split('\n');
+    // Shrink the font so the widest line fits.
+    const widest = Math.max(...lines.map(l => g.measureText(l).width));
+    if (widest > w * 0.9) g.font = font.replace(/(\d+)px/, (_, n) => Math.floor(n * w * 0.9 / widest) + 'px');
     const lh = h / (lines.length + 0.4);
     lines.forEach((l, i) => g.fillText(l, w / 2, h / 2 + (i - (lines.length - 1) / 2) * lh));
   });
@@ -187,7 +209,7 @@ export function labelTex(text, { w = 512, h = 128, bg = '#111', fg = '#f5d76e', 
 // only sockets are drawn here.
 export function npcFace(kind) {
   return tex(128, 128, (g, w, h) => {
-    const skin = { debt: '#8fa07a', tax: '#a3a594', shark: '#b49a8a' }[kind];
+    const skin = { debt: '#8fa07a', tax: '#a3a594', shark: '#b49a8a', collector: '#7f8f6f' }[kind];
     g.fillStyle = skin; g.fillRect(0, 0, w, h);
     // rotten blotches
     g.fillStyle = 'rgba(60,80,40,.35)';
@@ -197,12 +219,19 @@ export function npcFace(kind) {
       g.fillStyle = skin; g.fillRect(40, 18, 4, 8);
     } else if (kind === 'tax') { // bald top, grey sides
       g.fillStyle = '#8c8c86'; g.fillRect(0, 22, 12, 34); g.fillRect(116, 22, 12, 34);
+    } else if (kind === 'collector') { // buzz cut and a scar
+      g.fillStyle = '#1a1a1a'; g.fillRect(0, 0, w, 12);
+      g.fillStyle = '#5a1a1a'; g.fillRect(96, 20, 4, 40); g.fillRect(90, 30, 16, 3); g.fillRect(90, 44, 16, 3);
     } else { // white hair
       g.fillStyle = '#e6e2d8'; g.fillRect(0, 0, w, 16); g.fillRect(0, 16, 14, 40); g.fillRect(114, 16, 14, 40);
     }
     // sunken eye sockets
     g.fillStyle = '#1e2218';
     g.fillRect(22, 40, 26, 18); g.fillRect(80, 40, 26, 18);
+    if (kind === 'collector') { // dark shades
+      g.fillStyle = '#050505'; g.fillRect(16, 38, 96, 22);
+      g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(24, 42, 14, 4); g.fillRect(84, 42, 14, 4);
+    }
     if (kind === 'tax') { // thick glasses
       g.strokeStyle = '#0b0b0b'; g.lineWidth = 6;
       g.strokeRect(18, 36, 34, 26); g.strokeRect(76, 36, 34, 26);
@@ -219,6 +248,9 @@ export function npcFace(kind) {
       g.fillStyle = '#e8e0c0'; g.fillRect(28, 86, 72, 8);
       g.fillStyle = '#2a0c0c'; for (let x = 36; x < 100; x += 10) g.fillRect(x, 86, 3, 8);
       g.fillStyle = '#7a1c1c'; g.fillRect(60, 106, 6, 14); // drool of blood
+    } else if (kind === 'collector') { // gold-toothed sneer
+      g.fillStyle = '#2a0c0c'; g.fillRect(36, 90, 56, 10); g.fillRect(84, 84, 8, 8);
+      g.fillStyle = '#d4a017'; g.fillRect(70, 90, 8, 6);
     } else { // tight frown
       g.fillStyle = '#2a0c0c'; g.fillRect(40, 92, 48, 8); g.fillRect(34, 98, 8, 6); g.fillRect(86, 98, 8, 6);
     }
@@ -229,7 +261,7 @@ export function npcFace(kind) {
 // Front of the enemy's torso: suit, shirt and tie.
 export function npcSuit(kind) {
   return tex(128, 128, (g, w, h) => {
-    const suit = { debt: '#6b4a2b', tax: '#d8d4c4', shark: '#1d2238' }[kind];
+    const suit = { debt: '#6b4a2b', tax: '#d8d4c4', shark: '#1d2238', collector: '#5a0f12' }[kind];
     g.fillStyle = suit; g.fillRect(0, 0, w, h);
     if (kind === 'debt') {
       g.strokeStyle = 'rgba(240,200,120,.25)'; g.lineWidth = 3; // cheap plaid
@@ -245,6 +277,15 @@ export function npcSuit(kind) {
       g.fillStyle = '#e9ecef'; g.fillRect(80, 24, 24, 26); // pocket protector
       g.fillStyle = '#1d4ed8'; g.fillRect(84, 14, 4, 16); g.fillStyle = '#c62828'; g.fillRect(92, 12, 4, 18); g.fillStyle = '#111'; g.fillRect(98, 16, 3, 14);
       g.fillStyle = '#d4a017'; g.fillRect(28, 30, 22, 16); // badge
+    } else if (kind === 'collector') {
+      g.fillStyle = '#3a0709'; g.fillRect(58, 0, 12, h); // jacket zip
+      g.fillStyle = '#111'; g.fillRect(40, 0, 48, 20); // black tee
+      g.strokeStyle = '#c0c0c0'; g.lineWidth = 4; // heavy chain
+      g.beginPath(); g.moveTo(40, 4); g.quadraticCurveTo(64, 44, 88, 4); g.stroke();
+      g.save(); g.translate(64, 84); g.rotate(-0.2); // PAST DUE stamp
+      g.strokeStyle = '#ff3b30'; g.lineWidth = 3; g.strokeRect(-46, -14, 92, 28);
+      g.fillStyle = '#ff3b30'; g.font = 'bold 20px Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('PAST DUE', 0, 1); g.restore();
     } else {
       g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(44, 0); g.lineTo(84, 0); g.lineTo(64, 50); g.fill();
       g.fillStyle = '#5a1020'; g.fillRect(40, 30, 48, h); // waistcoat

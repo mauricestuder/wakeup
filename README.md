@@ -125,16 +125,23 @@ at <http://localhost:8080/game/> with the server above. It works with keyboard
 and mouse, or with touch controls on phones and tablets (play in landscape).
 
 - Fight off rounds of the bank's undead staff: **Salesmen**, **Tax Auditors**
-  (fast, from round 4) and the **Bank President** (tanky boss, every 5th
-  round). Hits and kills earn cash.
+  (fast, from round 4), **Debt Collectors** (throw invoices from range, from
+  round 6) and the **Bank President** (tanky boss, every 5th round). Hits and
+  kills earn cash, and quick kills in a row build a cash combo.
 - Guns shoot money: Penny Pistol (coins), Bill Blaster (banknotes), Gold Bar
   Shotgun, plus the Coin Minigun, Diamond Rifle and Piggy Launcher from the
   **Slot Machine** ($950).
-- Spend cash on wall-buys, the doors to the Trading Floor and Vault, perk
-  machines (Health Insurance, Fast Cash, Compound Interest) and the
-  **Gold Plater** in the Vault, which upgrades a gun to 24K.
+- Spend cash on gun vending machines, the doors to the Trading Floor and
+  Vault, perk machines (Health Insurance, Fast Cash, Compound Interest, Day
+  Trader, Diversified Portfolio), the **Paper Shredder** trap in the Trading
+  Floor doorway and the **Gold Plater** in the Vault, which upgrades a gun to
+  24K.
 - **G** throws a Money Bag grenade. Killed enemies sometimes drop Max Ammo,
-  Double Cash, Insta-Kill or Market Crash.
+  Double Cash, Insta-Kill, Market Crash, Bailout or Fire Sale.
+- Three golden piggy banks are hidden around the bank. Shoot them all for a
+  jackpot.
+- Settings (picture quality, retro effects, field of view, look speed,
+  volume) and your best run are saved in the browser.
 
 Built with plain JS modules and [Three.js](https://threejs.org) r160
 (vendored in `game/vendor/`, MIT), with a PS1-style low-res filter. Graphics

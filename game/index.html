@@ -126,6 +126,8 @@
     body.touch #powerups { top: 56px; }
     /* Phones in landscape: shrink the HUD so the buttons fit. */
     @media (max-height: 500px) {
+      #combo { font-size: 24px; top: 30%; }
+      #combo span { font-size: 18px; }
       #cash { font-size: 34px; }
       #round { font-size: 70px; }
       #left { font-size: 18px; }
@@ -152,6 +154,15 @@
     }
     #overStats { font-size: 28px; line-height: 1.3; margin: 14px 0 26px; }
     #overStats b { color: var(--gold); font-weight: normal; }
+    #overStats .record { color: var(--green); font-size: 36px; letter-spacing: 4px; }
+    #overStats .prev { color: #7d766a; font-size: 22px; }
+    #best { font-size: 22px; color: #8d8573; margin: -12px 0 16px; }
+    #best b { color: var(--gold); font-weight: normal; }
+    #combo { position: absolute; left: 50%; top: 36%; transform: translateX(-50%); font-size: 34px; color: var(--gold);
+      opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    #combo span { color: var(--green); font-size: 26px; }
+    #combo.pop { animation: comboPop .25s steps(3); }
+    @keyframes comboPop { from { transform: translateX(-50%) scale(1.5); } to { transform: translateX(-50%) scale(1); } }
   </style>
 </head>
 <body>
@@ -169,6 +180,7 @@
     <div id="prompt"></div>
     <div id="announce"></div>
     <div id="toast"></div>
+    <div id="combo"></div>
   </div>
 
   <div id="touchUI">
@@ -189,6 +201,7 @@
     <div class="panel">
       <h1>CASH OUT</h1>
       <p class="tag">The bank is closed. The staff never left. Survive as many rounds as you can.</p>
+      <p id="best" hidden></p>
       <div class="controls tc">
         <b>Left side</b><span>Drag to move · push all the way up to sprint</span>
         <b>Right side</b><span>Drag to look</span>
@@ -202,7 +215,7 @@
         <b>WASD</b><span>Move · <b>Shift</b> sprint · <b>Space</b> jump</span>
         <b>Mouse</b><span>Look · <b>Left</b> shoot · <b>Right</b> aim</span>
         <b>R</b><span>Reload</span>
-        <b>1 / 2 / Q</b><span>Switch gun (or mouse wheel)</span>
+        <b>1 / 2 / 3 / Q</b><span>Switch gun (or mouse wheel)</span>
         <b>G</b><span>Throw a Money Bag grenade</span>
         <b>E</b><span>Buy guns, open doors, spin the Slot Machine</span>
         <b>Esc</b><span>Pause</span>

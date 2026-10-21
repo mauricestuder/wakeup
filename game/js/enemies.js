@@ -4,11 +4,12 @@ import { sfx } from './audio.js';
 import * as T from './textures.js';
 
 // Type keys stay short internally: debt = Salesman, tax = Tax Auditor,
-// shark = Bank President (boss).
+// shark = Bank President (boss), collector = Debt Collector (throws invoices).
 const TYPES = {
   debt:  { name: 'Salesman',       suit: 0x6b4a2b, pants: 0x3b2a1a, skin: 0x8fa07a, eye: 0xff3b30, hpMul: 1,   scale: 1,    dmg: 40, reward: 60 },
   tax:   { name: 'Tax Auditor',    suit: 0xd8d4c4, pants: 0x3a3d45, skin: 0xa3a594, eye: 0xffeb3b, hpMul: 0.6, scale: 0.9,  dmg: 30, reward: 70, speed: 4.6 },
   shark: { name: 'Bank President', suit: 0x1d2238, pants: 0x14172a, skin: 0xb49a8a, eye: 0x00e5ff, hpMul: 8,   scale: 1.6,  dmg: 70, reward: 500, speed: 1.7 },
+  collector: { name: 'Debt Collector', suit: 0x5a0f12, pants: 0x1a1a1a, skin: 0x7f8f6f, eye: 0xff7a00, hpMul: 1.4, scale: 1.05, dmg: 35, reward: 100, speed: 1.5, ranged: true },
 };
 
 const MAX_ALIVE = 24;
@@ -25,6 +26,8 @@ export class Enemies {
     this.breakT = 0;
     this.dropsThisRound = 0;
     this.sharksLeft = 0;
+    this.comboN = 0;
+    this.comboT = 0;
 
     this.geo = {
       body: new THREE.BoxGeometry(0.62, 0.8, 0.36),
@@ -49,13 +52,14 @@ export class Enemies {
       paper: lambert(0xe9e4d4),
       gold: lambert(0xd4a017),
       red: lambert(0xb3121b),
+      invoice: lambert(0xff5a4a, { emissive: 0x401010 }),
       visor: lambert(0x1e9e4a, { transparent: true, opacity: 0.75 }),
       ember: new THREE.MeshBasicMaterial({ color: 0xff7a1a }),
       // kept for items.js, which reuses the green dollar sign
       dollar: new THREE.MeshBasicMaterial({ map: T.labelTex('$', { w: 64, h: 64, bg: null, fg: '#21ff7a', font: 'bold 56px sans-serif' }), transparent: true }),
       kinds: {},
     };
-    const hair = { debt: 0x17120e, tax: 0xa3a594, shark: 0xe6e2d8 };
+    const hair = { debt: 0x17120e, tax: 0xa3a594, shark: 0xe6e2d8, collector: 0x1a1a1a };
     for (const [k, t] of Object.entries(TYPES)) {
       this.shared.kinds[k] = {
         skin: lambert(t.skin, { emissive: 0x161616 }), pants: lambert(t.pants), hair: lambert(hair[k]),
@@ -109,6 +113,7 @@ export class Enemies {
     const r = state.round;
     let type = 'debt';
     if (this.sharksLeft > 0 && (this.toSpawn <= this.sharksLeft || Math.random() < 0.25)) { type = 'shark'; this.sharksLeft--; }
+    else if (r >= 6 && Math.random() < Math.min(0.25, 0.08 + (r - 6) * 0.02)) type = 'collector';
     else if (r >= 4 && Math.random() < Math.min(0.35, 0.1 + r * 0.02)) type = 'tax';
 
     const points = world.spawnPoints.filter(s => world.isUnlocked(s.area))
@@ -130,6 +135,7 @@ export class Enemies {
       type, def: t, hp, maxHp: hp, speed, state: 'rising', t: 0, attackT: 0, attackCd: 0,
       phase: Math.random() * 6, groanT: 1 + Math.random() * 5, stuckT: 0, detourT: 0, detourSide: 1,
       flashT: 0, pos: e.group.position, radius: 0.38 * t.scale,
+      throwCd: 1.5 + Math.random() * 2, throwT: 0,
     });
     this.list.push(e);
     this.toSpawn--;
@@ -175,6 +181,10 @@ export class Enemies {
       mesh(this.geo.visor, s.visor, 0, 1.93, 0.14, inner);
       const cb = mesh(this.geo.board, s.leather, 0, -0.72, 0, armL); // clipboard
       mesh(new THREE.BoxGeometry(0.01, 0.34, 0.26), s.paper, 0.02, -0.01, 0, cb);
+    } else if (type === 'collector') {
+      mesh(new THREE.BoxGeometry(0.43, 0.1, 0.41), s.black, 0, 2.0, 0, inner); // beanie
+      const pad = mesh(new THREE.BoxGeometry(0.05, 0.28, 0.22), s.invoice, 0, -0.74, 0, armR); // invoice pad
+      pad.rotation.x = 0.3;
     } else {
       mesh(this.geo.brim, s.black, 0, 1.98, 0, inner);
       mesh(this.geo.hat, s.black, 0, 2.15, 0, inner);
@@ -191,6 +201,7 @@ export class Enemies {
   // ---------- AI ----------
   update(dt) {
     const { player, world } = this.game;
+    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.comboN = 0; }
     const pArea = world.areaAt(player.pos.x, player.pos.z);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i];
@@ -242,6 +253,8 @@ export class Enemies {
       }
       e.attackT = 0;
       e.attackCd = Math.max(0, e.attackCd - dt);
+
+      if (e.def.ranged && this.rangedAttack(e, dt, distP, eArea === pArea)) continue;
       e.armL.rotation.x = e.armR.rotation.x = -1.35 + Math.sin(e.t * 3) * 0.1;
 
       let tx = player.pos.x, tz = player.pos.z;
@@ -284,6 +297,36 @@ export class Enemies {
     }
   }
 
+  // Debt Collectors stop at range and throw invoices. Returns true while busy throwing.
+  rangedAttack(e, dt, distP, sameArea) {
+    const { player, world, items } = this.game;
+    if (e.throwT > 0) {
+      e.throwT -= dt;
+      this.facePlayer(e, dt);
+      e.armR.rotation.x = -1.35 - Math.min(1, (0.6 - e.throwT) / 0.6) * 1.6;
+      e.legL.rotation.x = e.legR.rotation.x = 0;
+      if (e.throwT <= 0) {
+        const s = e.def.scale;
+        const from = new THREE.Vector3(e.pos.x, e.pos.y + 1.7 * s, e.pos.z);
+        items.throwInvoice(from, player.pos.clone().setY(player.pos.y + 1.3), e.def.dmg * 0.6);
+        sfx.toss();
+        e.throwCd = 2.2 + Math.random() * 1.8;
+      }
+      return true;
+    }
+    e.throwCd -= dt;
+    if (e.throwCd > 0 || !sameArea || distP < 3.5 || distP > 16) return false;
+    // Only throw with a clear line of sight.
+    const from = new THREE.Vector3(e.pos.x, e.pos.y + 1.7 * e.def.scale, e.pos.z);
+    const to = player.pos.clone().setY(player.pos.y + 1.4);
+    const dir = to.clone().sub(from);
+    const dist = dir.length();
+    dir.divideScalar(dist);
+    if (world.raycast(from, dir, dist) < dist - 0.3) { e.throwCd = 0.4; return false; }
+    e.throwT = 0.6;
+    return true;
+  }
+
   facePlayer(e, dt) {
     const p = this.game.player.pos;
     e.group.rotation.y = lerpAngle(e.group.rotation.y, Math.atan2(p.x - e.pos.x, p.z - e.pos.z), Math.min(1, dt * 8));
@@ -317,7 +360,8 @@ export class Enemies {
     if (e.hp <= 0) this.kill(e, head, explosive);
   }
 
-  kill(e, head, silent = false) {
+  // `combo` is false for mass kills (Market Crash, the shredder) so they don't pay combo bonuses.
+  kill(e, head, silent = false, combo = true) {
     const game = this.game;
     e.state = 'dying';
     e.t = 0;
@@ -326,6 +370,23 @@ export class Enemies {
     const reward = e.def.reward + (head ? 40 : 0);
     game.addCash(reward, e.pos.clone().setY(1.6));
     if (!silent) sfx.kaching(0.06);
+    if (!combo) return this.drop(e);
+    // Kills less than 2.5 s apart build a combo; from 3 kills it pays a bonus.
+    this.comboN = this.comboT > 0 ? this.comboN + 1 : 1;
+    this.comboT = 2.5;
+    game.state.bestCombo = Math.max(game.state.bestCombo, this.comboN);
+    if (this.comboN >= 3) {
+      const bonus = 25 * (this.comboN - 2);
+      game.addCash(bonus);
+      game.hud.combo(this.comboN, bonus);
+      sfx.combo(this.comboN);
+    }
+    this.drop(e);
+  }
+
+  // Cash burst and maybe a power-up where an enemy died.
+  drop(e) {
+    const game = this.game;
     game.items.burst(e.pos.clone().setY(1.2), e.type === 'shark' ? 40 : 14, 'money');
     if (e.type === 'shark') game.items.dropPowerup(e.pos.clone(), 'maxammo');
     else if (this.dropsThisRound < 4 && Math.random() < 0.035) {
@@ -335,7 +396,7 @@ export class Enemies {
   }
 
   killAll() {
-    for (const e of this.list) if (e.state !== 'dying') this.kill(e, false, true);
+    for (const e of this.list) if (e.state !== 'dying') this.kill(e, false, true, false);
   }
 
   aliveCount() { return this.list.filter(e => e.state !== 'dying').length + this.toSpawn; }

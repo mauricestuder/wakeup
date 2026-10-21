@@ -140,6 +140,27 @@ export const sfx = {
   spin() {
     for (let i = 0; i < 18; i++) tone({ type: 'square', freq: 700 + (i % 3) * 200, dur: 0.05, vol: 0.04, delay: i * 0.13 });
   },
+  // Paper Shredder trap: grinding motor plus ripping paper.
+  shred(vol = 0.25) {
+    noise({ dur: 0.5, vol, type: 'bandpass', f1: 900, f2: 1400, q: 2 });
+    tone({ type: 'sawtooth', freq: 55, freq2: 62, dur: 0.5, vol: vol * 0.4 });
+  },
+  // Debt Collector throwing an invoice.
+  toss() {
+    noise({ dur: 0.15, vol: 0.18, type: 'highpass', f1: 2500, f2: 5000 });
+    tone({ type: 'triangle', freq: 500, freq2: 300, dur: 0.12, vol: 0.05 });
+  },
+  // Rising chime for kill combos; higher with each kill.
+  combo(n) {
+    const f = 660 * Math.pow(1.122, Math.min(n, 12));
+    tone({ type: 'triangle', freq: f, dur: 0.12, vol: 0.08 });
+    tone({ type: 'triangle', freq: f * 1.5, dur: 0.16, vol: 0.06, delay: 0.06 });
+  },
+  // Secret piggy bank found.
+  secret() {
+    [784, 988, 1175, 1568].forEach((f, i) => tone({ type: 'sine', freq: f, dur: 0.4, vol: 0.1, delay: i * 0.12 }));
+    noise({ dur: 0.2, vol: 0.15, type: 'bandpass', f1: 5000, q: 2, delay: 0.1 });
+  },
   door() {
     noise({ dur: 1.0, vol: 0.3, type: 'lowpass', f1: 400, f2: 120 });
     tone({ type: 'sawtooth', freq: 60, freq2: 45, dur: 1.0, vol: 0.08 });

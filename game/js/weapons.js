@@ -124,6 +124,7 @@ export class Arsenal {
   def(w = this.weapon) { return WEAPONS[w.id]; }
   has(id) { return this.slots.find(w => w.id === id); }
   moveMul() { return this.weapon ? (this.def().moveMul || 1) : 1; }
+  maxSlots() { return this.game.state.perks.has('portfolio') ? 3 : 2; }
 
   stats(w) {
     const d = WEAPONS[w.id];
@@ -132,7 +133,7 @@ export class Arsenal {
       dmg: d.dmg * (g ? 2.2 : 1),
       mag: Math.round(d.mag * (g ? 1.5 : 1)),
       reserve: Math.round(d.reserve * (g ? 1.6 : 1)),
-      rate: d.rate * (g ? 0.85 : 1),
+      rate: d.rate * (g ? 0.85 : 1) * (this.game.state.perks.has('daytrader') ? 0.75 : 1),
       radius: (d.radius || 0) * (g ? 1.3 : 1),
     };
   }
@@ -142,7 +143,7 @@ export class Arsenal {
     if (existing) { this.refill(existing); this.cur = this.slots.indexOf(existing); this.buildViewmodel(); return; }
     const w = { id, gold, mag: 0, reserve: 0 };
     this.refill(w);
-    if (this.slots.length < 2) { this.slots.push(w); this.cur = this.slots.length - 1; }
+    if (this.slots.length < this.maxSlots()) { this.slots.push(w); this.cur = this.slots.length - 1; }
     else this.slots[this.cur] = w;
     this.reloadT = 0;
     this.switchT = 0.35;
@@ -250,6 +251,7 @@ export class Arsenal {
         dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r).normalize();
       }
       const wallDist = game.world.raycast(origin, dir, 120);
+      game.items.shootSecrets(origin, dir, wallDist);
       const hits = game.enemies.raycast(origin, dir, wallDist);
       let endDist = wallDist;
       const pierce = d.pierce || 1;

@@ -36,7 +36,7 @@ const game = {
   aiming: false,
   state: {
     mode: 'menu', cash: 500, round: 0, kills: 0, headshots: 0, earned: 0,
-    grenades: 2, doubleT: 0, instaT: 0, perks: new Set(),
+    grenades: 2, doubleT: 0, instaT: 0, saleT: 0, perks: new Set(), bestCombo: 0,
   },
 };
 window.__game = game; // handy for debugging in the console
@@ -62,16 +62,37 @@ game.addCash = (base, worldPos, quiet) => {
   else if (Math.random() < 0.5) game.hud.popCash(amount);
 };
 
+// ---------- high scores ----------
+const BEST_KEY = 'cashout.best';
+function loadBest() {
+  try { return JSON.parse(localStorage.getItem(BEST_KEY)) || null; } catch { return null; }
+}
+function showBest() {
+  const b = loadBest();
+  const el = document.getElementById('best');
+  el.hidden = !b;
+  if (b) el.innerHTML = `Best: <b>round ${b.round}</b> · ${b.kills} kills · $${b.earned.toLocaleString('en-US')} earned`;
+}
+showBest();
+
 game.gameOver = () => {
   const s = game.state;
   s.mode = 'over';
   document.exitPointerLock?.();
   firing(false);
   touch?.reset();
+  game.hud.clear();
+  const run = { round: s.round, kills: s.kills, earned: Math.floor(s.earned) };
+  const best = loadBest();
+  const record = !best || run.round > best.round || (run.round === best.round && run.kills > best.kills);
+  if (record) { try { localStorage.setItem(BEST_KEY, JSON.stringify(run)); } catch { /* not saved */ } }
   document.getElementById('overStats').innerHTML =
+    (record && best ? '<span class="record">NEW RECORD!</span><br>' : '') +
     `You survived <b>${s.round}</b> round${s.round === 1 ? '' : 's'}<br>` +
     `Undead put down: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
-    `Cash earned: <b>$${Math.floor(s.earned).toLocaleString('en-US')}</b>`;
+    `Best combo: <b>${s.bestCombo}x</b><br>` +
+    `Cash earned: <b>$${run.earned.toLocaleString('en-US')}</b>` +
+    (!record ? `<br><span class="prev">Your best: round ${best.round}, ${best.kills} kills</span>` : '');
   show('over');
   sfx.roundEnd();
 };
@@ -128,7 +149,7 @@ function pause() {
   game.state.mode = 'paused';
   firing(false);
   touch?.reset();
-  game.hud.prompt('');
+  game.hud.clear();
   show('paused');
 }
 
@@ -146,6 +167,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') game.arsenal.startReload();
   if (e.code === 'Digit1') game.arsenal.switchTo(0);
   if (e.code === 'Digit2') game.arsenal.switchTo(1);
+  if (e.code === 'Digit3') game.arsenal.switchTo(2);
   if (e.code === 'KeyQ') game.arsenal.cycle();
   if (e.code === 'KeyG') game.items.throwGrenade();
   if (e.code === 'KeyE' || e.code === 'KeyF') { const n = game.items.nearest(); if (n) n.it.use(); }

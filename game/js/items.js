@@ -1,5 +1,6 @@
-// Grenades, piggy rockets, explosions, particles, power-ups and every buyable
-// thing on the map (wall-buys, doors, Investments, Slot Machine, Gold Plater).
+// Grenades, piggy rockets, invoices, explosions, particles, power-ups, the
+// secret piggy banks and every buyable thing on the map (vending machines,
+// doors, Investments, Slot Machine, Gold Plater, Paper Shredder trap).
 import * as THREE from '../vendor/three.module.min.js';
 import { sfx } from './audio.js';
 import * as T from './textures.js';
@@ -10,12 +11,16 @@ const POWERUPS = {
   double:  { name: 'DOUBLE CASH',  color: '#d4af37', short: '2X $' },
   insta:   { name: 'INSTA-KILL',   color: '#b71c1c', short: 'INSTA' },
   crash:   { name: 'MARKET CRASH', color: '#4a148c', short: 'CRASH' },
+  bailout: { name: 'BAILOUT',      color: '#1b5e20', short: '+$1K' },
+  sale:    { name: 'FIRE SALE',    color: '#e65100', short: 'SALE' },
 };
 
 export const PERKS = {
   insurance: { name: 'Health Insurance', cost: 2500, desc: 'Take way more hits', color: 0xc62828 },
   fastcash:  { name: 'Fast Cash',        cost: 3000, desc: 'Reload twice as fast', color: 0x2e7d32 },
   interest:  { name: 'Compound Interest', cost: 2000, desc: '+50% cash from every hit', color: 0x1565c0 },
+  daytrader: { name: 'Day Trader',       cost: 2000, desc: 'Shoot 25% faster', color: 0xef6c00 },
+  portfolio: { name: 'Diversified Portfolio', cost: 4000, desc: 'Carry a third gun', color: 0x6a1b9a },
 };
 
 export class Items {
@@ -74,12 +79,33 @@ export class Items {
     sfx.reload();
   }
 
-  launchPiggy(pos, dir, dmg, radius, gold) {
+  // A Debt Collector's invoice: flies straight at where the player was.
+  throwInvoice(from, to, dmg) {
+    if (!this.invoiceMat) {
+      this.invoiceMat = new THREE.MeshBasicMaterial({
+        map: T.labelTex('PAST\nDUE', { w: 128, h: 96, bg: '#f2e8d0', fg: '#d32f2f', font: 'bold 36px Impact, sans-serif', border: '#d32f2f' }),
+        side: THREE.DoubleSide,
+      });
+      this.invoiceGeo = new THREE.PlaneGeometry(0.34, 0.26);
+    }
+    const m = new THREE.Mesh(this.invoiceGeo, this.invoiceMat);
+    m.position.copy(from);
+    this.game.scene.add(m);
+    const vel = to.sub(from).normalize().multiplyScalar(11);
+    this.projectiles.push({ kind: 'invoice', mesh: m, vel, dmg, life: 3 });
+  }
+
+  pigModel(gold) {
     const g = new THREE.Group();
     const m = gold ? this.mat.goldPig : this.mat.pig;
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), m); body.scale.set(1, 0.9, 1.25); g.add(body);
     const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.06, 10), m); snout.rotation.x = Math.PI / 2; snout.position.z = -0.23; g.add(snout);
     for (const x of [-0.08, 0.08]) { const ear = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), m); ear.position.set(x, 0.17, -0.08); g.add(ear); }
+    return g;
+  }
+
+  launchPiggy(pos, dir, dmg, radius, gold) {
+    const g = this.pigModel(gold);
     g.position.copy(pos);
     g.lookAt(pos.clone().sub(dir));
     this.game.scene.add(g);
@@ -92,6 +118,19 @@ export class Items {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       const m = p.mesh;
+      if (p.kind === 'invoice') {
+        p.life -= dt;
+        m.position.addScaledVector(p.vel, dt);
+        m.rotation.y += dt * 14; m.rotation.x += dt * 5;
+        const pl = this.game.player.pos;
+        const hitPlayer = Math.hypot(m.position.x - pl.x, m.position.z - pl.z) < 0.55 && m.position.y > pl.y && m.position.y < pl.y + 1.9;
+        if (hitPlayer) { this.game.player.hurt(p.dmg); this.burst(m.position.clone(), 4, 'bill', 0.6); }
+        if (hitPlayer || p.life <= 0 || world.pointBlocked(m.position)) {
+          this.game.scene.remove(m);
+          this.projectiles.splice(i, 1);
+        }
+        continue;
+      }
       if (p.kind === 'grenade') {
         p.vel.y -= 20 * dt;
         p.fuse -= dt;
@@ -236,10 +275,13 @@ export class Items {
         if (p.type === 'double') state.doubleT = 30;
         if (p.type === 'insta') state.instaT = 30;
         if (p.type === 'crash') { this.game.enemies.killAll(); this.game.addCash(400); sfx.explosion(0.4); }
+        if (p.type === 'bailout') { this.game.addCash(1000); sfx.kaching(0.15); }
+        if (p.type === 'sale') state.saleT = 30;
       }
     }
     state.doubleT = Math.max(0, state.doubleT - dt);
     state.instaT = Math.max(0, state.instaT - dt);
+    state.saleT = Math.max(0, state.saleT - dt);
   }
 
   // ---------- buyables ----------
@@ -373,6 +415,8 @@ export class Items {
     perk('insurance', -2, 9.2, Math.PI);
     perk('fastcash', 14.3, -15, -Math.PI / 2);
     perk('interest', -14.3, -32, Math.PI / 2);
+    perk('daytrader', -14.3, -27, Math.PI / 2);
+    perk('portfolio', 25.5, -18.75, Math.PI);
 
     // Slot Machine (the mystery box)
     {
@@ -395,22 +439,23 @@ export class Items {
         if (sub) { c.font = 'bold 30px Impact, sans-serif'; c.fillStyle = '#fff6c8'; c.fillText(sub, 256, 120); }
         reelTex.needsUpdate = true;
       };
-      drawReel('$ $ $', '$950 A SPIN');
-      const slot = { state: 'idle', t: 0, result: null, tick: 0 };
+      const cost = () => state.saleT > 0 ? 10 : 950;
+      const idleReel = () => drawReel('$ $ $', state.saleT > 0 ? 'FIRE SALE: $10!' : '$950 A SPIN');
+      idleReel();
+      const slot = { state: 'idle', t: 0, result: null, tick: 0, sale: false };
       this.slot = slot;
-      const COST = 950;
       this.addInteractable(x, z + 1.6, 1.8, () => {
-        if (slot.state === 'idle') return `Press E to spin the Slot Machine [$${COST}]`;
+        if (slot.state === 'idle') return `Press E to spin the Slot Machine [$${cost()}]`;
         if (slot.state === 'ready') return `Press E to take ${WEAPONS[slot.result].name}`;
         return null;
       }, () => {
-        if (slot.state === 'idle' && buy(COST)) {
+        if (slot.state === 'idle' && buy(cost())) {
           slot.state = 'spinning'; slot.t = 0; sfx.spin();
           const pool = BOX_POOL.filter(id => !arsenal.has(id));
           slot.result = pool[Math.floor(Math.random() * pool.length)] || 'minigun';
         } else if (slot.state === 'ready') {
           arsenal.give(slot.result);
-          slot.state = 'idle'; drawReel('$ $ $', '$950 A SPIN');
+          slot.state = 'idle'; idleReel();
         }
       });
       this.effects.push({ t: 0, update: (t, dt) => {
@@ -430,7 +475,10 @@ export class Items {
           }
         } else if (slot.state === 'ready') {
           slot.t += dt;
-          if (slot.t > 9) { slot.state = 'idle'; drawReel('$ $ $', '$950 A SPIN'); }
+          if (slot.t > 9) { slot.state = 'idle'; idleReel(); }
+        } else if (slot.sale !== state.saleT > 0) {
+          slot.sale = state.saleT > 0;
+          idleReel();
         }
         return false;
       } });
@@ -456,9 +504,150 @@ export class Items {
         this.burst(new THREE.Vector3(x - 0.9, 1.4, z), 25, 'coin', 1.2);
       });
     }
+
+    this.buildShredder(buy);
+    this.buildSecrets();
+  }
+
+  // ---------- secret: three hidden golden piggy banks ----------
+  buildSecrets() {
+    this.secrets = [];
+    const spots = [
+      [-11.6, 1.32, -5.3, 0.6],  // on the teller counter, behind the glass
+      [6.4, 4.78, -39.55, 0],    // on top of the stock ticker
+      [18.2, 1.0, -34.3, 2.2],   // on a pile of gold bars in the Vault
+    ];
+    for (const [x, y, z, ry] of spots) {
+      const pig = this.pigModel(true);
+      pig.position.set(x, y, z); pig.rotation.y = ry;
+      pig.scale.setScalar(0.9);
+      this.game.scene.add(pig);
+      this.secrets.push({ pig, found: false, ry });
+    }
+  }
+
+  // Called for every bullet: smash a piggy bank on the ray, if any.
+  shootSecrets(origin, dir, maxDist) {
+    for (const s of this.secrets) {
+      if (s.found) continue;
+      const p = s.pig.position;
+      const ox = origin.x - p.x, oy = origin.y - p.y, oz = origin.z - p.z;
+      const b = ox * dir.x + oy * dir.y + oz * dir.z;
+      const c = ox * ox + oy * oy + oz * oz - 0.3 * 0.3;
+      const disc = b * b - c;
+      if (disc < 0 || -b - Math.sqrt(disc) > maxDist || -b + Math.sqrt(disc) < 0) continue;
+      s.found = true;
+      this.game.scene.remove(s.pig);
+      this.burst(p.clone(), 20, 'coin', 1.2);
+      sfx.secret();
+      const n = this.secrets.filter(x => x.found).length;
+      if (n < this.secrets.length) this.game.hud.toast(`Golden piggy bank ${n} / ${this.secrets.length}`);
+      else this.jackpot();
+      return;
+    }
+  }
+
+  jackpot() {
+    const { arsenal, state } = this.game;
+    state.cash += 5000; state.earned += 5000;
+    this.game.hud.popCash(5000);
+    const pool = BOX_POOL.filter(id => !arsenal.has(id));
+    const id = pool[Math.floor(Math.random() * pool.length)] || 'diamond';
+    arsenal.give(id, true);
+    this.game.hud.announce('JACKPOT!', `All piggy banks smashed: +$5000 and a 24K ${WEAPONS[id].name}`, 4);
+    sfx.kaching(0.2);
+    this.burst(this.game.player.pos.clone().setY(2), 40, 'money', 1.5);
+  }
+
+  // ---------- trap: Paper Shredder in the Trading Floor doorway ----------
+  buildShredder(buy) {
+    const { scene, state } = this.game;
+    const zone = { x1: -2, x2: 2, z1: -11.8, z2: -8.2 };
+    const trap = { activeT: 0, coolT: 0, hurtCd: 0, soundT: 0, paperT: 0 };
+    this.trap = trap;
+    const ACTIVE = 20, COOL = 40, COST = 1000;
+    const cx = (zone.x1 + zone.x2) / 2, cz = (zone.z1 + zone.z2) / 2;
+    const w = zone.x2 - zone.x1, d = zone.z2 - zone.z1;
+
+    const grate = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: T.grateTex() }));
+    grate.rotation.x = -Math.PI / 2; grate.position.set(cx, 0.025, cz);
+    scene.add(grate);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    glow.rotation.x = -Math.PI / 2; glow.position.set(cx, 0.03, cz);
+    scene.add(glow);
+    // Rows of cutting rollers that spin while it runs.
+    const rollers = [];
+    const rollerMat = new THREE.MeshLambertMaterial({ color: 0x9a9fa8 });
+    for (let i = 0; i < 6; i++) {
+      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, w - 0.2, 6), rollerMat);
+      r.rotation.z = Math.PI / 2;
+      r.position.set(cx, 0.06, zone.z1 + 0.3 + i * (d - 0.6) / 5);
+      scene.add(r);
+      rollers.push(r);
+    }
+
+    // Control box on the lobby wall next to the door.
+    const box = new THREE.Group();
+    box.position.set(3.6, 0, -9.62);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.3), new THREE.MeshLambertMaterial({ color: 0x3a3d45 }));
+    body.position.y = 1.3; box.add(body);
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.3), new THREE.MeshBasicMaterial({
+      map: T.labelTex('SHREDDER', { w: 256, h: 80, bg: '#111', fg: '#ff9a4d', font: 'bold 52px Impact, sans-serif' }),
+    }));
+    label.position.set(0, 1.75, 0.16); box.add(label);
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.06), new THREE.MeshBasicMaterial({ color: 0x3fd16a }));
+    lamp.position.set(-0.22, 1.35, 0.17); box.add(lamp);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.4, 0.07), new THREE.MeshLambertMaterial({ color: 0xb3121b }));
+    lever.position.set(0.22, 1.3, 0.2); box.add(lever);
+    scene.add(box);
+
+    this.addInteractable(3.6, -8.6, 1.5, () => {
+      if (trap.activeT > 0) return null;
+      if (trap.coolT > 0) return `Paper Shredder is cooling down (${Math.ceil(trap.coolT)}s)`;
+      return `Press E to start the Paper Shredder [$${COST}]`;
+    }, () => {
+      if (trap.activeT > 0 || trap.coolT > 0 || !buy(COST)) return;
+      trap.activeT = ACTIVE;
+      this.game.hud.toast('Paper Shredder running');
+    });
+
+    trap.update = (dt) => {
+      const { enemies, player } = this.game;
+      if (trap.coolT > 0) trap.coolT -= dt;
+      const on = trap.activeT > 0;
+      lamp.material.color.setHex(on ? 0xff2a1a : trap.coolT > 0 ? 0xffb300 : 0x3fd16a);
+      lever.rotation.x = on ? 0.9 : 0;
+      glow.material.opacity = on ? 0.25 + Math.sin(performance.now() / 60) * 0.1 : 0;
+      if (!on) return;
+      trap.activeT -= dt;
+      if (trap.activeT <= 0) trap.coolT = COOL;
+      for (const r of rollers) r.rotation.x += dt * 25;
+      const inZone = (p) => p.x > zone.x1 && p.x < zone.x2 && p.z > zone.z1 && p.z < zone.z2;
+      for (const e of enemies.list) {
+        if (e.state !== 'chasing' || !inZone(e.pos)) continue;
+        if (e.type === 'shark') { e.hp -= 900 * dt; e.flashT = 0.05; if (e.hp <= 0) enemies.kill(e, false, true, false); }
+        else enemies.kill(e, false, true, false);
+        this.burst(e.pos.clone().setY(0.8), 10, 'bill', 1.2);
+      }
+      trap.hurtCd -= dt;
+      if (inZone(player.pos) && player.pos.y < 0.3 && trap.hurtCd <= 0) { player.hurt(25); trap.hurtCd = 0.5; }
+      trap.soundT -= dt;
+      if (trap.soundT <= 0) {
+        trap.soundT = 0.45;
+        const dist = Math.hypot(player.pos.x - cx, player.pos.z - cz);
+        if (dist < 30) sfx.shred(0.25 * (1 - dist / 30));
+      }
+      trap.paperT -= dt;
+      if (trap.paperT <= 0) {
+        trap.paperT = 0.12;
+        this.burst(new THREE.Vector3(zone.x1 + Math.random() * w, 0.15, zone.z1 + Math.random() * d), 1, 'bill', 0.7);
+      }
+    };
   }
 
   update(dt) {
+    this.trap.update(dt);
+    for (const s of this.secrets) if (!s.found) s.pig.rotation.y = s.ry + Math.sin(this.displayT || 0) * 0.3;
     this.displayT = (this.displayT || 0) + dt;
     this.displays.forEach((d, i) => {
       d.item.rotation.y = d.baseRy + Math.sin(this.displayT * 0.9 + i) * 0.6;
