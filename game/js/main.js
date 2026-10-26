@@ -284,7 +284,8 @@ function aimAssist(dt) {
   // Close a share of the gap each second, capped so it stays subtle.
   const k = Math.min(1, dt * (game.aiming ? 3 : game.arsenal.triggerHeld ? 2 : 1.5)), cap = 0.5 * dt;
   p.yaw += Math.max(-cap, Math.min(cap, dy * k));
-  p.pitch += Math.max(-cap, Math.min(cap, dp * k));
+  // Vertical gets a firmer pull so the crosshair settles on the head, not the chest.
+  p.pitch += Math.max(-2 * cap, Math.min(2 * cap, dp * Math.min(1, 2 * k)));
 }
 
 function step(dt) {
