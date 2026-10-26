@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cash Out">
+  <meta name="theme-color" content="#050505">
+  <meta name="description" content="Cash Out: a money-themed zombie survival shooter with a PS1 horror look. Plays in the browser on PC, iPad and iPhone.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>Cash Out</title>
+  <style>
+    @font-face { font-family: 'Term'; src: url('vendor/fonts/vt323.woff2') format('woff2'); font-display: block; }
+    :root { --gold: #c9b98a; --cream: #d8d0bc; --red: #a51515; --green: #3fd16a; --ink: #050505; --line: #5a1010; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--ink); color: var(--cream); overflow: hidden;
+      font-family: 'Term', 'Courier New', monospace; user-select: none;
+      -webkit-font-smoothing: none; font-smooth: never; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+
+    /* Scanlines over the HUD and menus, matching the game filter. */
+    #hud::after, .screen::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 2px, transparent 2px 4px); }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+    #hud[hidden] { display: none; }
+    .shadow { text-shadow: 3px 3px 0 #000; }
+    #cashBox { position: absolute; left: 24px; top: 14px; }
+    #cash { font-size: 52px; color: var(--gold); line-height: 1; }
+    #cashPops { position: relative; height: 0; }
+    .pop { position: absolute; top: 0; font-size: 30px; color: var(--green); animation: rise .9s steps(6) forwards; }
+    @keyframes rise { to { transform: translateY(-46px); opacity: 0; } }
+    #perks { display: flex; gap: 6px; margin-top: 10px; }
+    .perk { width: 34px; height: 34px; border: 3px solid #000; outline: 2px solid var(--cream); display: grid; place-items: center;
+      font-size: 22px; color: #fff; }
+    #roundBox { position: absolute; left: 24px; bottom: 10px; }
+    #round { font-size: 130px; color: var(--red); line-height: .9; text-shadow: 4px 4px 0 #000, 0 0 20px #300; }
+    #left { font-size: 22px; color: #8d8573; }
+    #gunBox { position: absolute; right: 26px; bottom: 16px; text-align: right; }
+    #weapon { font-size: 30px; line-height: 1; }
+    #weapon.gold { color: #f0c84a; }
+    #ammo { font-size: 54px; line-height: 1; }
+    #ammo.low { color: #ff4a4a; }
+    #grenades { display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; min-height: 24px; }
+    .bag { width: 24px; height: 24px; image-rendering: pixelated; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23000' d='M2 0h4v1H2zM1 2h6v1H1zM0 3h8v5H0z'/%3E%3Cpath fill='%23b08a3c' d='M3 1h2v1H3zM2 2h4v1H2zM1 3h6v4H1z'/%3E%3Cpath fill='%233fd16a' d='M2 4h4v1H2zM3 5h2v1H3z'/%3E%3C/svg%3E") center/contain no-repeat; filter: drop-shadow(2px 2px 0 #000); }
+    #powerups { position: absolute; top: 16px; right: 26px; font-size: 32px; color: var(--green); }
+    #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
+    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: var(--cream); box-shadow: 2px 2px 0 #000; }
+    #crosshair::before { left: 10px; top: 0; width: 2px; height: 8px; box-shadow: 0 14px 0 var(--cream); }
+    #crosshair::after { top: 10px; left: 0; height: 2px; width: 8px; box-shadow: 14px 0 0 var(--cream); }
+    #hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
+    #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #fff; }
+    #hitmarker::before { left: 13px; top: 0; width: 4px; height: 30px; }
+    #hitmarker::after { top: 13px; left: 0; height: 4px; width: 30px; }
+    #hitmarker.head::before, #hitmarker.head::after { background: #ff3030; }
+    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 28px; line-height: 1;
+      background: #0a0a0a; border: 2px solid var(--gold); box-shadow: 4px 4px 0 #000; padding: 6px 14px 8px; display: none; white-space: nowrap; }
+    #announce { position: absolute; left: 0; right: 0; top: 18%; text-align: center; transition: opacity .5s steps(5); opacity: 0; }
+    #announce .title { font-size: 104px; line-height: 1; color: var(--red); letter-spacing: 10px;
+      text-shadow: 4px 4px 0 #000, 0 0 30px #400; }
+    #announce .title.small { font-size: 72px; color: var(--green); }
+    #announce .sub { font-size: 30px; color: #a8a090; }
+    #toast { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); font-size: 26px; color: #ff9a9a;
+      transition: opacity .3s steps(3); opacity: 0; }
+    #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(160,0,0,.85) 100%); }
+    #hurt { position: absolute; inset: 0; opacity: 0; background: rgba(200,0,0,.35); }
+
+    .screen { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; overflow-y: auto; background: rgba(3,2,2,.84); padding: 16px; }
+    .screen[hidden] { display: none; }
+    .panel { position: relative; z-index: 1; max-width: 640px; width: 100%; text-align: center; }
+    h1 { font-weight: normal; font-size: clamp(72px, 16vw, 160px); margin: 0; color: var(--red);
+      letter-spacing: 12px; line-height: .9; text-shadow: 5px 5px 0 #000, 0 0 40px rgba(160,0,0,.5); }
+    .tag { font-size: 26px; color: #9a927e; margin: 10px 0 22px; }
+    .controls { display: grid; grid-template-columns: auto 1fr; gap: 2px 18px; text-align: left; font-size: 23px; line-height: 1.1;
+      background: #0a0808; border: 2px solid var(--line); box-shadow: 6px 6px 0 #000; padding: 12px 18px; margin: 0 auto 26px; max-width: 480px; }
+    .controls b { color: var(--gold); font-weight: normal; }
+    button { font-family: 'Term', monospace; font-size: 38px; line-height: 1; letter-spacing: 4px; color: var(--cream);
+      background: #3a0606; border: 2px solid #8a1414; box-shadow: 5px 5px 0 #000; padding: 8px 36px 10px; cursor: pointer; }
+    button:hover { background: #5a0a0a; color: #fff; }
+    button:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #000; }
+    .note { font-size: 20px; color: #7d766a; margin-top: 18px; }
+    #homeTip:not([hidden]) { display: block !important; color: var(--gold); margin-top: 10px; }
+    #homeTip b { color: var(--cream); font-weight: normal; }
+    button.alt { font-size: 26px; padding: 6px 22px 8px; margin-left: 14px; background: #120c0c; border-color: var(--line); vertical-align: bottom; }
+    h1.mid { font-size: clamp(56px, 11vw, 110px); }
+    #setList { display: grid; grid-template-columns: 1fr auto 9ch auto; gap: 8px 10px; align-items: center; font-size: 26px; text-align: left;
+      background: #0a0808; border: 2px solid var(--line); box-shadow: 6px 6px 0 #000; padding: 14px 18px; margin: 18px auto 24px; max-width: 520px; }
+    .setRow { display: contents; }
+    .setRow b { color: var(--gold); font-weight: normal; text-align: center; }
+    #setList input[type=range] { grid-column: 2 / 4; width: 100%; height: 34px; margin: 0; accent-color: var(--gold); touch-action: pan-x; cursor: pointer; }
+    #setList .arrow { font-size: 30px; padding: 0 14px 4px; letter-spacing: 0; background: #1a0e0e; border-color: var(--line); box-shadow: 3px 3px 0 #000; }
+    @media (max-height: 620px) {
+      h1 { font-size: 72px; }
+      .tag { margin: 4px 0 10px; font-size: 22px; }
+      .controls { padding: 6px 14px; margin-bottom: 12px; font-size: 19px; }
+      .note { display: none; }
+      h1.mid { font-size: 44px; }
+      #setList { font-size: 22px; gap: 4px 10px; padding: 8px 14px; margin: 8px auto 12px; }
+      #setList .arrow { font-size: 24px; }
+    }
+    /* ---------- touch ---------- */
+    body.touch { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; }
+    #touchUI { display: none; }
+    body:not(.touch) .tc, body.touch .kb { display: none !important; }
+    body.touch #hud:not([hidden]) ~ #touchUI { display: block; }
+    #touchUI { position: fixed; inset: 0; z-index: 5; touch-action: none; }
+    #stick { position: absolute; display: none; width: 120px; height: 120px; margin: -60px 0 0 -60px; border: 2px solid rgba(216,208,188,.35);
+      background: rgba(0,0,0,.25); border-radius: 50%; pointer-events: none; }
+    #knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(216,208,188,.4);
+      border: 2px solid #000; }
+    .tbtn { position: absolute; display: grid; place-items: center; font-size: 22px; letter-spacing: 1px; color: var(--cream);
+      background: rgba(10,8,8,.55); border: 2px solid rgba(216,208,188,.45); box-shadow: 3px 3px 0 rgba(0,0,0,.7);
+      text-shadow: 2px 2px 0 #000; width: 64px; height: 64px; }
+    .tbtn.down { background: rgba(165,21,21,.6); transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+    .tbtn.on { border-color: var(--green); color: var(--green); }
+    .tbtn[data-act="fire"] { width: 96px; height: 96px; font-size: 28px; border-color: rgba(200,60,60,.8); background: rgba(90,8,8,.5);
+      right: calc(24px + env(safe-area-inset-right)); bottom: 120px; }
+    .tbtn[data-act="aim"] { right: calc(132px + env(safe-area-inset-right)); bottom: 150px; }
+    .tbtn[data-act="jump"] { right: calc(132px + env(safe-area-inset-right)); bottom: 230px; }
+    .tbtn[data-act="reload"] { right: calc(24px + env(safe-area-inset-right)); bottom: 230px; }
+    .tbtn[data-act="swap"] { right: calc(24px + env(safe-area-inset-right)); bottom: 306px; }
+    .tbtn[data-act="grenade"] { right: calc(100px + env(safe-area-inset-right)); bottom: 306px; }
+    .tbtn[data-act="use"] { left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: 120px; height: 48px; display: none; }
+    .tbtn[data-act="use"].ready { display: grid; border-color: var(--gold); color: var(--gold); }
+    .tbtn[data-act="use"].down { transform: translate(calc(-50% + 2px), 2px); }
+    .tbtn[data-act="pause"] { left: 50%; top: calc(8px + env(safe-area-inset-top)); transform: translateX(-50%); width: 56px; height: 40px; font-size: 20px; }
+    body.touch #prompt { top: auto; bottom: calc(86px + env(safe-area-inset-bottom)); font-size: 22px; white-space: normal; max-width: 90vw; text-align: center; }
+    body.touch #cashBox { left: calc(16px + env(safe-area-inset-left)); }
+    body.touch #roundBox { left: calc(16px + env(safe-area-inset-left)); }
+    body.touch #gunBox { right: calc(20px + env(safe-area-inset-right)); bottom: 10px; }
+    body.touch #powerups { top: 56px; }
+    /* Phones in landscape: shrink the HUD so the buttons fit. */
+    @media (max-height: 500px) {
+      #combo { font-size: 24px; top: 30%; }
+      #combo span { font-size: 18px; }
+      #cash { font-size: 34px; }
+      #round { font-size: 70px; }
+      #left { font-size: 18px; }
+      #weapon { font-size: 20px; }
+      #ammo { font-size: 32px; }
+      #announce .title { font-size: 60px; letter-spacing: 6px; }
+      #announce .title.small { font-size: 44px; }
+      #announce .sub { font-size: 22px; }
+      .perk { width: 26px; height: 26px; font-size: 16px; }
+      .tbtn { width: 52px; height: 52px; font-size: 18px; }
+      .tbtn[data-act="fire"] { width: 80px; height: 80px; bottom: 100px; font-size: 24px; }
+      .tbtn[data-act="aim"] { right: calc(114px + env(safe-area-inset-right)); bottom: 120px; }
+      .tbtn[data-act="jump"] { right: calc(114px + env(safe-area-inset-right)); bottom: 184px; }
+      .tbtn[data-act="reload"] { bottom: 190px; }
+      .tbtn[data-act="swap"] { bottom: 252px; }
+      .tbtn[data-act="grenade"] { right: calc(88px + env(safe-area-inset-right)); bottom: 252px; }
+      .tbtn[data-act="use"] { bottom: calc(12px + env(safe-area-inset-bottom)); height: 42px; }
+      body.touch #prompt { bottom: calc(60px + env(safe-area-inset-bottom)); font-size: 19px; }
+    }
+    #rotate { display: none; }
+    @media (orientation: portrait) {
+      body.touch #rotate { display: grid; position: fixed; inset: 0; z-index: 20; place-items: center; background: var(--ink);
+        font-size: 34px; text-align: center; padding: 24px; color: var(--cream); }
+    }
+    #overStats { font-size: 28px; line-height: 1.3; margin: 14px 0 26px; }
+    #overStats b { color: var(--gold); font-weight: normal; }
+    #overStats .record { color: var(--green); font-size: 36px; letter-spacing: 4px; }
+    #overStats .prev { color: #7d766a; font-size: 22px; }
+    #best { font-size: 22px; color: #8d8573; margin: -12px 0 16px; }
+    #best b { color: var(--gold); font-weight: normal; }
+    #combo { position: absolute; left: 50%; top: 36%; transform: translateX(-50%); font-size: 34px; color: var(--gold);
+      opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    #combo span { color: var(--green); font-size: 26px; }
+    #combo.pop { animation: comboPop .25s steps(3); }
+    #headshot { position: absolute; left: 50%; top: calc(50% + 34px); transform: translateX(-50%); font-size: 22px; color: #ff4a3a;
+      text-shadow: 2px 2px 0 #000; opacity: 0; transition: opacity .25s; white-space: nowrap; pointer-events: none; }
+    #headshot.max { color: var(--gold); }
+    #headshot.pop { animation: comboPop .2s steps(2); }
+    @keyframes comboPop { from { transform: translateX(-50%) scale(1.5); } to { transform: translateX(-50%) scale(1); } }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="shadow" hidden>
+    <div id="vignette"></div>
+    <div id="hurt"></div>
+    <div id="cashBox"><div id="cash">$500</div><div id="cashPops"></div><div id="perks"></div></div>
+    <div id="powerups"></div>
+    <div id="roundBox"><div id="round">1</div><div id="left"></div></div>
+    <div id="gunBox"><div id="weapon"></div><div id="ammo"></div><div id="grenades"></div></div>
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    <div id="prompt"></div>
+    <div id="announce"></div>
+    <div id="toast"></div>
+    <div id="combo"></div>
+    <div id="headshot"></div>
+  </div>
+
+  <div id="touchUI">
+    <div id="stick"><div id="knob"></div></div>
+    <div class="tbtn" data-act="fire">FIRE</div>
+    <div class="tbtn" data-act="aim">AIM</div>
+    <div class="tbtn" data-act="jump">JUMP</div>
+    <div class="tbtn" data-act="reload">RLD</div>
+    <div class="tbtn" data-act="swap">SWAP</div>
+    <div class="tbtn" data-act="grenade">BAG</div>
+    <div class="tbtn" data-act="use">USE</div>
+    <div class="tbtn" data-act="pause">II</div>
+  </div>
+
+  <div id="rotate">Turn your device sideways to play.</div>
+
+  <div class="screen" id="menu">
+    <div class="panel">
+      <h1>CASH OUT</h1>
+      <p class="tag">The bank is closed. The staff never left. Survive as many rounds as you can.</p>
+      <p id="homeTip" class="note" hidden>For fullscreen: tap <b>Share</b>, then <b>Add to Home Screen</b>, and start Cash Out from there.</p>
+      <p id="best" hidden></p>
+      <div class="controls tc">
+        <b>Left side</b><span>Drag to move · push all the way up to sprint</span>
+        <b>Right side</b><span>Drag to look (or arrow keys on a keyboard)</span>
+        <b>FIRE</b><span>Hold to shoot (drag it to aim while shooting)</span>
+        <b>AIM</b><span>Toggle aiming down sights</span>
+        <b>RLD / SWAP</b><span>Reload / switch gun</span>
+        <b>BAG</b><span>Throw a Money Bag grenade</span>
+        <b>USE</b><span>Shows up next to things you can buy</span>
+        <b>Keyboard</b><span>Works too: WASD move, arrows look, X shoot, C aim, E use, Enter start</span>
+      </div>
+      <div class="controls kb">
+        <b>WASD</b><span>Move · <b>Shift</b> sprint · <b>Space</b> jump</span>
+        <b>Mouse</b><span>Look · <b>Left</b> shoot · <b>Right</b> aim</span>
+        <b>Arrow keys</b><span>Look around too</span>
+        <b>X / Enter</b><span>Shoot · <b>C</b> or <b>right Shift</b> aim</span>
+        <b>R</b><span>Reload</span>
+        <b>1 / 2 / 3 / 4 / Q</b><span>Switch gun (or mouse wheel)</span>
+        <b>G</b><span>Throw a Money Bag grenade</span>
+        <b>E</b><span>Buy guns, open doors, spin the Slot Machine</span>
+        <b>Esc / P</b><span>Pause · <b>Enter</b> starts and resumes</span>
+      </div>
+      <button id="play">START</button>
+      <button class="openSettings alt">SETTINGS</button>
+      <p class="note">Earn cash by hitting the undead salesmen, tax auditors and the Bank President. Open up all 10 rooms of the bank. Find the Gold Plater.<span class="kb"> Play with keyboard and mouse, or keyboard only.</span></p>
+    </div>
+  </div>
+
+  <div class="screen" id="paused" hidden>
+    <div class="panel">
+      <h1>PAUSED</h1>
+      <p class="tag">Take a breather. They'll wait. They always do.</p>
+      <button id="resume">RESUME</button>
+      <button class="openSettings alt">SETTINGS</button>
+    </div>
+  </div>
+
+  <div class="screen" id="settings" hidden>
+    <div class="panel">
+      <h1 class="mid">SETTINGS</h1>
+      <div id="setList"></div>
+      <button id="setBack">BACK</button>
+    </div>
+  </div>
+
+  <div class="screen" id="over" hidden>
+    <div class="panel">
+      <h1>BANKRUPT</h1>
+      <div id="overStats"></div>
+      <button id="again">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
