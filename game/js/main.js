@@ -339,6 +339,8 @@ const standalone = navigator.standalone || matchMedia('(display-mode: fullscreen
 let framed = true;
 try { framed = window.top !== window.self; } catch { /* cross-origin frame */ }
 document.getElementById('homeTip').hidden = !(iOS && !standalone && !framed);
+// Fresh files on every launch; skipped where service workers aren't allowed.
+try { navigator.serviceWorker?.register('sw.js').catch(() => {}); } catch { }
 
 show('menu');
 requestAnimationFrame(frame);
