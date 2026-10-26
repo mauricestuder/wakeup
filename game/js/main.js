@@ -275,14 +275,14 @@ function aimAssist(dt) {
   const target = game.enemies.assistTarget(assistPos, assistFwd, 0.16, 26);
   if (!target) return;
   if (target.ang < 0.09) game.assistSlow = 0.55;
-  if (!game.aiming && !game.arsenal.triggerHeld) return;
+  if (!game.aiming && !game.arsenal.triggerHeld && !game.player.moving) return;
   const p = game.player, d = target.dir;
   const wantYaw = Math.atan2(-d.x, -d.z), wantPitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
   let dy = wantYaw - p.yaw;
   dy = Math.atan2(Math.sin(dy), Math.cos(dy));
   const dp = wantPitch - p.pitch;
   // Close a share of the gap each second, capped so it stays subtle.
-  const k = Math.min(1, dt * (game.aiming ? 3 : 2)), cap = 0.5 * dt;
+  const k = Math.min(1, dt * (game.aiming ? 3 : game.arsenal.triggerHeld ? 2 : 1.5)), cap = 0.5 * dt;
   p.yaw += Math.max(-cap, Math.min(cap, dy * k));
   p.pitch += Math.max(-cap, Math.min(cap, dp * k));
 }
