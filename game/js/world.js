@@ -130,7 +130,7 @@ export function buildWorld(scene) {
   function addDoor({ name, cost, x1, x2, z1, z2, a, b, x, z, nx, nz, material }) {
     const { mesh, col } = box(x1, x2, z1, z2, 0, WALL_H, material);
     const door = {
-      name, cost, a, b, x, z, nx, nz, mesh, col, opened: false, t: 0,
+      name, cost, a, b, x, z, nx, nz, x1, x2, z1, z2, mesh, col, opened: false, t: 0,
       open() {
         if (this.opened) return;
         this.opened = true;

@@ -29,7 +29,8 @@
     #hud { position: fixed; inset: 0; pointer-events: none; }
     #hud[hidden] { display: none; }
     .shadow { text-shadow: 3px 3px 0 #000; }
-    #cashBox { position: absolute; left: 24px; top: 14px; }
+    #minimap { position: absolute; left: 24px; top: 14px; width: 150px; height: 150px; }
+    #cashBox { position: absolute; left: 24px; top: 174px; }
     #cash { font-size: 52px; color: var(--gold); line-height: 1; }
     #cashPops { position: relative; height: 0; }
     .pop { position: absolute; top: 0; font-size: 30px; color: var(--green); animation: rise .9s steps(6) forwards; }
@@ -130,12 +131,14 @@
     .tbtn[data-act="use"].down { transform: translate(calc(-50% + 2px), 2px); }
     .tbtn[data-act="pause"] { left: 50%; top: calc(8px + env(safe-area-inset-top)); transform: translateX(-50%); width: 56px; height: 40px; font-size: 20px; }
     body.touch #prompt { top: auto; bottom: calc(86px + env(safe-area-inset-bottom)); font-size: 22px; white-space: normal; max-width: 90vw; text-align: center; }
-    body.touch #cashBox { left: calc(16px + env(safe-area-inset-left)); }
+    body.touch #cashBox, body.touch #minimap { left: calc(16px + env(safe-area-inset-left)); }
     body.touch #roundBox { left: calc(16px + env(safe-area-inset-left)); }
     body.touch #gunBox { right: calc(20px + env(safe-area-inset-right)); bottom: 10px; }
     body.touch #powerups { top: 56px; }
     /* Phones in landscape: shrink the HUD so the buttons fit. */
     @media (max-height: 500px) {
+      #minimap { width: 104px; height: 104px; top: 10px; }
+      #cashBox { top: 120px; }
       #combo { font-size: 24px; top: 30%; }
       #combo span { font-size: 18px; }
       #cash { font-size: 34px; }
@@ -185,6 +188,7 @@
   <div id="hud" class="shadow" hidden>
     <div id="vignette"></div>
     <div id="hurt"></div>
+    <canvas id="minimap"></canvas>
     <div id="cashBox"><div id="cash">$500</div><div id="cashPops"></div><div id="perks"></div></div>
     <div id="powerups"></div>
     <div id="roundBox"><div id="round">1</div><div id="left"></div></div>
@@ -215,7 +219,7 @@
   <div class="screen" id="menu">
     <div class="panel">
       <h1>CASH OUT</h1>
-      <span id="ver">v18</span>
+      <span id="ver">v19</span>
       <p class="tag">The bank is closed. The staff never left. Survive as many rounds as you can.</p>
       <p id="homeTip" class="note" hidden>For fullscreen: tap <b>Share</b>, then <b>Add to Home Screen</b>, and start Cash Out from there.</p>
       <p id="best" hidden></p>

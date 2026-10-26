@@ -7,6 +7,7 @@ import { Arsenal, weaponName } from './weapons.js';
 import { Enemies } from './enemies.js';
 import { Items } from './items.js';
 import { Hud } from './hud.js';
+import { Minimap } from './minimap.js';
 import { PS1Pass } from './ps1.js';
 import { isTouch, initTouch } from './touch.js';
 import { settings, initSettingsUI } from './settings.js';
@@ -45,6 +46,7 @@ const ps1 = new PS1Pass(renderer);
 
 game.hud = new Hud();
 game.world = buildWorld(scene);
+const minimap = new Minimap(game);
 game.player = new Player(game);
 game.arsenal = new Arsenal(game);
 game.enemies = new Enemies(game);
@@ -274,7 +276,7 @@ function aimAssist(dt) {
   assistFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
   const target = game.enemies.assistTarget(assistPos, assistFwd, 0.16, 26);
   if (!target) return;
-  if (target.ang < 0.09) game.assistSlow = 0.55;
+  if (target.ang < 0.09) game.assistSlow = 0.62;
   if (!game.aiming && !game.arsenal.triggerHeld && !game.player.moving) return;
   const p = game.player, d = target.dir;
   const wantYaw = Math.atan2(-d.x, -d.z), wantPitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
@@ -282,7 +284,7 @@ function aimAssist(dt) {
   dy = Math.atan2(Math.sin(dy), Math.cos(dy));
   const dp = wantPitch - p.pitch;
   // Close a share of the gap each second, capped so it stays subtle.
-  const k = Math.min(1, dt * (game.aiming ? 3 : game.arsenal.triggerHeld ? 2 : 1.5)), cap = 0.5 * dt;
+  const k = Math.min(1, dt * (game.aiming ? 2.5 : game.arsenal.triggerHeld ? 1.7 : 1.2)), cap = 0.42 * dt;
   p.yaw += Math.max(-cap, Math.min(cap, dy * k));
   // Vertical gets a firmer pull so the crosshair settles on the head, not the chest.
   p.pitch += Math.max(-2 * cap, Math.min(2 * cap, dp * Math.min(1, 2 * k)));
@@ -331,6 +333,7 @@ function step(dt) {
   const near = game.items.nearest();
   hud.prompt(near ? (isTouch ? near.text.replace('Press E', 'Tap USE') : near.text) : '');
   hud.update(dt);
+  minimap.update();
 }
 
 // iPhone and iPad only go fullscreen as a home screen app, so tell Safari players how.
