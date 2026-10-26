@@ -29,6 +29,9 @@
     #hud { position: fixed; inset: 0; pointer-events: none; }
     #hud[hidden] { display: none; }
     .shadow { text-shadow: 3px 3px 0 #000; }
+    #escapeT { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); font-size: 30px; color: var(--gold); white-space: nowrap; }
+    #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 20; }
+    h1.gold { color: #e6b84a; font-size: clamp(56px, 12vw, 130px); }
     #minimap { position: absolute; left: 24px; top: 14px; width: 150px; height: 150px; }
     #cashBox { position: absolute; left: 24px; top: 174px; }
     #cash { font-size: 52px; color: var(--gold); line-height: 1; }
@@ -137,6 +140,7 @@
     body.touch #powerups { top: 56px; }
     /* Phones in landscape: shrink the HUD so the buttons fit. */
     @media (max-height: 500px) {
+      #escapeT { font-size: 22px; top: 52px; }
       #minimap { width: 104px; height: 104px; top: 10px; }
       #cashBox { top: 120px; }
       #combo { font-size: 24px; top: 30%; }
@@ -165,10 +169,10 @@
       body.touch #rotate { display: grid; position: fixed; inset: 0; z-index: 20; place-items: center; background: var(--ink);
         font-size: 34px; text-align: center; padding: 24px; color: var(--cream); }
     }
-    #overStats { font-size: 28px; line-height: 1.3; margin: 14px 0 26px; }
-    #overStats b { color: var(--gold); font-weight: normal; }
-    #overStats .record { color: var(--green); font-size: 36px; letter-spacing: 4px; }
-    #overStats .prev { color: #7d766a; font-size: 22px; }
+    #overStats, #wonStats { font-size: 28px; line-height: 1.3; margin: 14px 0 26px; }
+    #overStats b, #wonStats b { color: var(--gold); font-weight: normal; }
+    #overStats .record, #wonStats .record { color: var(--green); font-size: 36px; letter-spacing: 4px; }
+    #overStats .prev, #wonStats .prev { color: #7d766a; font-size: 22px; }
     #best { font-size: 22px; color: #8d8573; margin: -12px 0 16px; }
     #best b { color: var(--gold); font-weight: normal; }
     #combo { position: absolute; left: 50%; top: 36%; transform: translateX(-50%); font-size: 34px; color: var(--gold);
@@ -189,6 +193,7 @@
     <div id="vignette"></div>
     <div id="hurt"></div>
     <canvas id="minimap"></canvas>
+    <div id="escapeT" hidden></div>
     <div id="cashBox"><div id="cash">$500</div><div id="cashPops"></div><div id="perks"></div></div>
     <div id="powerups"></div>
     <div id="roundBox"><div id="round">1</div><div id="left"></div></div>
@@ -219,7 +224,7 @@
   <div class="screen" id="menu">
     <div class="panel">
       <h1>CASH OUT</h1>
-      <span id="ver">v20</span>
+      <span id="ver">v21</span>
       <p class="tag">The bank is closed. The staff never left. Survive as many rounds as you can.</p>
       <p id="homeTip" class="note" hidden>For fullscreen: tap <b>Share</b>, then <b>Add to Home Screen</b>, and start Cash Out from there.</p>
       <p id="best" hidden></p>
@@ -246,7 +251,7 @@
       </div>
       <button id="play">START</button>
       <button class="openSettings alt">SETTINGS</button>
-      <p class="note">Earn cash by hitting the undead salesmen, tax auditors and the Bank President. Open up all 10 rooms of the bank. Find the Gold Plater.<span class="kb"> Play with keyboard and mouse, or keyboard only.</span></p>
+      <p class="note">Earn cash by hitting the undead salesmen, tax auditors and the Bank President. Open up all 10 rooms of the bank, then escape in the armored truck. Find the Gold Plater.<span class="kb"> Play with keyboard and mouse, or keyboard only.</span></p>
     </div>
   </div>
 
@@ -274,6 +279,16 @@
       <button id="again">PLAY AGAIN</button>
     </div>
   </div>
+
+  <div class="screen" id="won" hidden>
+    <div class="panel">
+      <h1 class="gold">CASHED OUT</h1>
+      <p class="tag">You loaded the armored truck and drove off with the money.</p>
+      <div id="wonStats"></div>
+      <button id="againWon">PLAY AGAIN</button>
+    </div>
+  </div>
+  <div id="fade"></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

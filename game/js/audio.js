@@ -188,6 +188,13 @@ export const sfx = {
     noise({ dur: 1.0, vol: 0.3, type: 'lowpass', f1: 400, f2: 120 });
     tone({ type: 'sawtooth', freq: 60, freq2: 45, dur: 1.0, vol: 0.08 });
   },
+  // Armored truck starting up and pulling away.
+  engine() {
+    noise({ dur: 0.35, vol: 0.3, type: 'lowpass', f1: 900, f2: 200 });
+    tone({ type: 'sawtooth', freq: 38, freq2: 95, dur: 3.4, vol: 0.16, attack: 0.25, delay: 0.25 });
+    tone({ type: 'square', freq: 28, freq2: 70, dur: 3.4, vol: 0.07, attack: 0.25, delay: 0.25 });
+    for (let i = 0; i < 4; i++) noise({ dur: 0.9, vol: 0.12 + i * 0.03, type: 'lowpass', f1: 250 + i * 150, delay: 0.25 + i * 0.8, attack: 0.1 });
+  },
   plate() {
     for (let i = 0; i < 10; i++) tone({ type: 'sine', freq: 400 + i * 120, dur: 0.2, vol: 0.06, delay: i * 0.12 });
     noise({ dur: 1.4, vol: 0.15, type: 'bandpass', f1: 800, f2: 4000, q: 2 });

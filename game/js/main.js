@@ -8,6 +8,7 @@ import { Enemies } from './enemies.js';
 import { Items } from './items.js';
 import { Hud } from './hud.js';
 import { Minimap } from './minimap.js';
+import { Escape } from './escape.js';
 import { PS1Pass } from './ps1.js';
 import { isTouch, initTouch } from './touch.js';
 import { settings, initSettingsUI } from './settings.js';
@@ -53,6 +54,7 @@ game.enemies = new Enemies(game);
 game.items = new Items(game);
 game.items.buildBuyables();
 game.arsenal.give('penny');
+const escape = game.escape = new Escape(game, { begin: beginEscape, win: () => game.win() });
 game.player.update(0, {});
 
 game.addCash = (base, worldPos, quiet) => {
@@ -74,9 +76,40 @@ function showBest() {
   const b = loadBest();
   const el = document.getElementById('best');
   el.hidden = !b;
-  if (b) el.innerHTML = `Best: <b>round ${b.round}</b> · ${b.kills} kills · $${b.earned.toLocaleString('en-US')} earned`;
+  if (b) el.innerHTML = `Best: <b>${b.escaped ? 'escaped on ' : ''}round ${b.round}</b> · ${b.kills} kills · $${b.earned.toLocaleString('en-US')} earned`;
 }
 showBest();
+
+// The drive-off scene: no HUD, no gun, the camera watches the truck leave.
+function beginEscape() {
+  game.state.mode = 'escape';
+  firing(false);
+  touch?.reset();
+  game.aiming = false;
+  game.hud.clear();
+  document.getElementById('hud').hidden = true;
+  vmScene.visible = false;
+}
+
+game.win = () => {
+  const s = game.state;
+  s.mode = 'won';
+  document.exitPointerLock?.();
+  const run = { round: s.round, kills: s.kills, earned: Math.floor(s.earned), escaped: true };
+  const best = loadBest();
+  const record = !best || !best.escaped || run.round < best.round;
+  if (record) { try { localStorage.setItem(BEST_KEY, JSON.stringify(run)); } catch { /* not saved */ } }
+  document.getElementById('wonStats').innerHTML =
+    (record ? '<span class="record">NEW RECORD!</span><br>' : '') +
+    `You drove off on round <b>${s.round}</b><br>` +
+    `Undead put down: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
+    `Best combo: <b>${s.bestCombo}x</b><br>` +
+    `Cash earned: <b>$${run.earned.toLocaleString('en-US')}</b> · left in your pocket: <b>$${Math.floor(s.cash).toLocaleString('en-US')}</b>` +
+    (!record ? `<br><span class="prev">Your fastest escape: round ${best.round}</span>` : '');
+  show('won');
+  document.getElementById('fade').style.opacity = 0;
+  sfx.plate();
+};
 
 game.gameOver = () => {
   const s = game.state;
@@ -87,7 +120,7 @@ game.gameOver = () => {
   game.hud.clear();
   const run = { round: s.round, kills: s.kills, earned: Math.floor(s.earned) };
   const best = loadBest();
-  const record = !best || run.round > best.round || (run.round === best.round && run.kills > best.kills);
+  const record = !best || (!best.escaped && (run.round > best.round || (run.round === best.round && run.kills > best.kills)));
   if (record) { try { localStorage.setItem(BEST_KEY, JSON.stringify(run)); } catch { /* not saved */ } }
   document.getElementById('overStats').innerHTML =
     (record && best ? '<span class="record">NEW RECORD!</span><br>' : '') +
@@ -95,7 +128,7 @@ game.gameOver = () => {
     `Undead put down: <b>${s.kills}</b> (${s.headshots} headshots)<br>` +
     `Best combo: <b>${s.bestCombo}x</b><br>` +
     `Cash earned: <b>$${run.earned.toLocaleString('en-US')}</b>` +
-    (!record ? `<br><span class="prev">Your best: round ${best.round}, ${best.kills} kills</span>` : '');
+    (!record ? `<br><span class="prev">Your best: ${best.escaped ? 'escaped on' : ''} round ${best.round}, ${best.kills} kills</span>` : '');
   show('over');
   sfx.roundEnd();
 };
@@ -103,7 +136,7 @@ game.gameOver = () => {
 // ---------- screens ----------
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.hidden = el.id !== id;
-  document.getElementById('hud').hidden = game.state.mode === 'menu';
+  document.getElementById('hud').hidden = game.state.mode === 'menu' || game.state.mode === 'won';
 }
 
 // Settings open from the menu or the pause screen and go back there.
@@ -170,6 +203,7 @@ function pause() {
 document.getElementById('play').addEventListener('click', start);
 document.getElementById('resume').addEventListener('click', start);
 document.getElementById('again').addEventListener('click', () => location.reload());
+document.getElementById('againWon').addEventListener('click', () => location.reload());
 
 // ---------- input ----------
 const keys = {};
@@ -190,7 +224,7 @@ addEventListener('keydown', (e) => {
     const onSettings = !document.getElementById('settings').hidden;
     if (e.key === 'Enter' && !e.repeat && !onSettings) {
       e.preventDefault();
-      if (mode === 'over') location.reload(); else start();
+      if (mode === 'over' || mode === 'won') location.reload(); else if (mode !== 'escape') start();
     } else if ((e.code === 'KeyP' || e.code === 'Escape') && mode === 'paused' && !onSettings) start();
     return;
   }
@@ -293,6 +327,7 @@ function aimAssist(dt) {
 function step(dt) {
   const { state, hud, arsenal, player } = game;
   game.world.update(dt);
+  if (state.mode === 'escape') { escape.drive(dt); return; }
   if (state.mode !== 'playing') return;
 
   player.update(dt, keys);
@@ -301,6 +336,7 @@ function step(dt) {
   game.enemies.update(dt);
   game.enemies.updateRounds(dt);
   game.items.update(dt);
+  escape.update(dt);
 
   const fov = settings.fov;
   const targetFov = game.aiming ? fov - 20 : player.sprinting ? fov + 7 : fov;

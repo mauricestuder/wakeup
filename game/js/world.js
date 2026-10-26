@@ -76,7 +76,7 @@ export function buildWorld(scene) {
   concrete.repeat.set(30 / 4, 18 / 4);
   const garageFloor = new THREE.Mesh(new THREE.PlaneGeometry(30, 18), new THREE.MeshLambertMaterial({ map: concrete }));
   garageFloor.rotation.x = -Math.PI / 2;
-  garageFloor.position.set(0, 0.01, 19);
+  garageFloor.position.set(0, 0.03, 19);
   scene.add(garageFloor);
   scene.add(ceil);
 
@@ -366,16 +366,20 @@ export function buildWorld(scene) {
   sign('COUNT IT TWICE.\nKEEP IT ALL.', 29.68, 3.4, -42, -Math.PI / 2, 4, 1.2, { h: 256 });
 
   // Garage: an armored cash truck, parking lines, pillars and the big shutter.
+  // Everything on the truck goes into one group so the ending can drive it away.
+  const truck = new THREE.Group(), truckCols = [];
+  scene.add(truck);
+  const onTruck = (o) => { if (o.col) truckCols.push(o.col); truck.add(o.mesh || o); return o; };
   const truckMat = new THREE.MeshLambertMaterial({ color: 0x3d4a3d });
-  box(-6.4, -3.6, 14, 21, 0, 2.8, truckMat);
-  box(-6.3, -3.7, 21, 23, 0, 2.1, truckMat);
-  box(-6.25, -3.75, 22.2, 22.95, 1.2, 1.9, new THREE.MeshBasicMaterial({ color: 0x1a2a33 }), false);
+  onTruck(box(-6.4, -3.6, 14, 21, 0, 2.8, truckMat));
+  onTruck(box(-6.3, -3.7, 21, 23, 0, 2.1, truckMat));
+  onTruck(box(-6.25, -3.75, 22.2, 22.95, 1.2, 1.9, new THREE.MeshBasicMaterial({ color: 0x1a2a33 }), false));
   const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 10);
   for (const x of [-6.5, -3.5]) for (const z of [15.5, 19.5, 22]) {
-    const w = new THREE.Mesh(wheelGeo, dark); w.rotation.z = Math.PI / 2; w.position.set(x, 0.5, z); scene.add(w);
+    const w = new THREE.Mesh(wheelGeo, dark); w.rotation.z = Math.PI / 2; w.position.set(x, 0.5, z); onTruck(w);
   }
-  sign('ARMORED\nCASH OUT', -6.42, 1.7, 17.5, -Math.PI / 2, 4.6, 1.5, { bg: '#2a3a2a', fg: '#f5d76e', border: '#b8902f', h: 256 });
-  sign('ARMORED\nCASH OUT', -3.58, 1.7, 17.5, Math.PI / 2, 4.6, 1.5, { bg: '#2a3a2a', fg: '#f5d76e', border: '#b8902f', h: 256 });
+  onTruck(sign('ARMORED\nCASH OUT', -6.42, 1.7, 17.5, -Math.PI / 2, 4.6, 1.5, { bg: '#2a3a2a', fg: '#f5d76e', border: '#b8902f', h: 256 }));
+  onTruck(sign('ARMORED\nCASH OUT', -3.58, 1.7, 17.5, Math.PI / 2, 4.6, 1.5, { bg: '#2a3a2a', fg: '#f5d76e', border: '#b8902f', h: 256 }));
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xc9a227 });
   for (const x of [-8, -2, 4]) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 7), lineMat);
@@ -384,7 +388,7 @@ export function buildWorld(scene) {
   for (const x of [3, 9]) box(x - 0.4, x + 0.4, 18.6, 19.4, 0, WALL_H, mats.concreteMat);
   const shutterWall = new THREE.Mesh(new THREE.PlaneGeometry(10, 4.2), new THREE.MeshLambertMaterial({ map: T.shutterTex() }));
   shutterWall.position.set(0, 2.1, 27.68); shutterWall.rotation.y = Math.PI; scene.add(shutterWall);
-  sign('LOADING DOCK – CLOSED', 0, 4.55, 27.66, Math.PI, 5, 0.5);
+  const dockSign = sign('LOADING DOCK – CLOSED', 0, 4.55, 27.66, Math.PI, 5, 0.5);
 
   // Security office: a wall of camera feeds, a desk and lockers.
   for (let i = 0; i < 6; i++) {
@@ -542,7 +546,7 @@ export function buildWorld(scene) {
     for (let i = animated.length - 1; i >= 0; i--) if (animated[i](dt)) animated.splice(i, 1);
   }
 
-  return { colliders, doors, spawnPoints, monitors, areaAt, isUnlocked, pathTarget, moveCircle, raycast, pointBlocked, update, box, sign };
+  return { truck, truckCols, shutterWall, dockSign, colliders, doors, spawnPoints, monitors, areaAt, isUnlocked, pathTarget, moveCircle, raycast, pointBlocked, update, box, sign };
 }
 
 function rayBox(o, d, b) {
