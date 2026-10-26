@@ -361,7 +361,7 @@ export class Enemies {
     for (const e of this.list) {
       if (e.state === 'dying' || e.pos.y < -0.5) continue;
       const s = e.def.scale;
-      v.set(e.pos.x, e.pos.y + 1.35 * s, e.pos.z).sub(o);
+      v.set(e.pos.x, e.pos.y + 1.78 * s, e.pos.z).sub(o); // head height, same as the headshot sphere
       const dist = v.length();
       if (dist > maxDist || dist < 0.5) continue;
       const ang = v.angleTo(fwd);
