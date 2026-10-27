@@ -70,7 +70,7 @@ export const features = [];
 export const rails = [];
 
 function kicker(x, z, H, L, T, Lnd, W, natural = false) {
-  if (!natural) Lnd *= 1.7;
+  if (!natural) Lnd *= 2.1;
   const lip = z + L, knuckle = z + L + T;
   const f = {
     type: 'kick', x, z, H, L, T, Lnd, W, natural,

@@ -240,8 +240,8 @@ export class Skier {
     const newL = vl * Math.exp(-grip * dt);
     const removed = Math.abs(vl) - Math.abs(newL);
     const spd = Math.hypot(vf, newL);
-    const drag = tuck ? 0.0045 : 0.0075;
-    let loss = removed * (0.25 + brake * 0.75) + (0.035 * G * n.y + drag * spd * spd + brake * 8) * dt;
+    const drag = tuck ? 0.0028 : 0.005;
+    let loss = removed * (0.25 + brake * 0.75) + (0.028 * G * n.y + drag * spd * spd + brake * 8) * dt;
     let newSpd = Math.max(0, spd - loss);
     // Skating: push forward when slow.
     let push = 0;
