@@ -81,6 +81,7 @@ function tone(freq, at, dur, vol, type = 'triangle') {
 export const sfx = {
   land(impact) { burst(500 + impact * 40, 0.25, Math.min(0.9, 0.2 + impact * 0.05)); },
   pop() { burst(900, 0.08, 0.25, 'bandpass'); },
+  grab() { burst(1400, 0.14, 0.1, 'bandpass'); },
   crash() { burst(300, 0.6, 0.9); burst(1500, 0.35, 0.3, 'bandpass'); },
   grind() { if (!ctx) return; tone(2400, 0, 0.12, 0.05, 'square'); },
   trick(level) {

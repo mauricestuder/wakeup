@@ -16,16 +16,60 @@ renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0xd9e6f3);
 scene.fog = new THREE.Fog(HORIZON, 120, 780);
-const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 2600);
+const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 4200);
 
-// Sky dome
-const sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 24, 12), new THREE.ShaderMaterial({
+// Sky dome: deep blue overhead, a warm glow around the sun, drifting clouds.
+const SUN_DIR = new THREE.Vector3(-40, 60, 70).normalize();
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 16), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color(0x3d7fd6) }, mid: { value: HORIZON } },
-  vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-  fragmentShader: 'uniform vec3 top; uniform vec3 mid; varying vec3 vp; void main(){ float h = clamp(vp.y*2.2+0.05,0.,1.); gl_FragColor = vec4(mix(mid, top, pow(h,0.7)),1.); }',
+  uniforms: { top: { value: new THREE.Color(0x2763c4) }, mid: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 } },
+  vertexShader: 'varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 sunDir; uniform float time; varying vec3 vp;
+    float hs(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float ns(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+      return mix(mix(hs(i), hs(i + vec2(1, 0)), f.x), mix(hs(i + vec2(0, 1)), hs(i + vec2(1, 1)), f.x), f.y); }
+    float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 5; i++) { s += a * ns(p); p *= 2.03; a *= .5; } return s; }
+    void main(){
+      vec3 d = normalize(vp);
+      float h = clamp(d.y * 2.2 + 0.05, 0., 1.);
+      vec3 col = mix(mid, top, pow(h, .7));
+      float sd = max(dot(d, sunDir), 0.);
+      col += vec3(1., .72, .42) * pow(sd, 6.) * .32 + vec3(1., .9, .72) * pow(sd, 90.) * .7;
+      col = mix(col, vec3(1., .98, .92), smoothstep(.9972, .9988, sd));
+      if (d.y > 0.0) {
+        vec2 uv = d.xz / (d.y + .12) * 1.4 + vec2(time * .012, time * .005);
+        float c = fbm(uv);
+        float cov = smoothstep(.52, .8, c) * smoothstep(.0, .18, d.y);
+        vec3 cc = mix(vec3(.96, .97, 1.), vec3(1., .86, .7), pow(sd, 3.)) * (.82 + .18 * fbm(uv * 2.3 + 3.));
+        col = mix(col, cc, cov * .9);
+      }
+      gl_FragColor = vec4(col, 1.);
+    }`,
 }));
+sky.renderOrder = -1;
 scene.add(sky);
+
+// Light snow drifting around the camera.
+const snowfall = (() => {
+  const N = 700, pos = new Float32Array(N * 3), seed = new Float32Array(N);
+  for (let i = 0; i < N; i++) { pos.set([Math.random() * 80, Math.random() * 40, Math.random() * 80], i * 3); seed[i] = Math.random() * 6.3; }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+  const m = new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { time: { value: 0 }, cam: { value: new THREE.Vector3() } },
+    vertexShader: `uniform float time; uniform vec3 cam; attribute float seed;
+      void main(){ vec3 b = vec3(80., 40., 80.);
+        vec3 p = position + vec3(sin(time * .7 + seed) * 1.5 + time * 1.2, -time * 2.2, time * .6);
+        p = mod(p - cam + b * .5, b) + cam - b * .5;
+        vec4 mv = modelViewMatrix * vec4(p, 1.); gl_PointSize = clamp(80. / -mv.z, 1., 5.); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: 'void main(){ vec2 c = gl_PointCoord - .5; if (dot(c, c) > .25) discard; gl_FragColor = vec4(1., 1., 1., .75); }',
+  }));
+  m.frustumCulled = false;
+  scene.add(m);
+  return m;
+})();
 scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x5d7394, 0.85));
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
 sun.position.set(-40, 60, 70);
@@ -53,7 +97,7 @@ const input = new Input({
 // ---------- HUD ----------
 
 const hud = {
-  score: $('score'), best: $('best'), speed: $('speed'), combo: $('combo'), comboPts: $('comboPts'),
+  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), combo: $('combo'), comboPts: $('comboPts'),
   live: $('live'), pop: $('pop'), popName: $('popName'), popPts: $('popPts'), popTag: $('popTag'),
 };
 let popTimer = 0;
@@ -65,8 +109,14 @@ function showPop(name, pts, tag, kind = '') {
   void hud.pop.offsetWidth;
   popTimer = 1.8;
 }
+let shownScore = 0;
 function updateHud(dt) {
-  hud.score.textContent = run.score.toLocaleString();
+  // The score counts up rather than jumping.
+  if (shownScore !== run.score) {
+    shownScore += (run.score - shownScore) * (1 - Math.exp(-7 * dt));
+    if (Math.abs(run.score - shownScore) < 5) shownScore = run.score;
+  }
+  hud.score.textContent = Math.round(shownScore).toLocaleString();
   hud.best.textContent = 'BEST ' + Math.max(best, run.score).toLocaleString();
   hud.speed.textContent = Math.round(skier.speed * 3.6);
   if (run.combo.length) {
@@ -98,6 +148,9 @@ function bankCombo() {
   if (!run.combo.length) return;
   const total = run.comboPts * run.combo.length;
   run.score += total;
+  hud.scoreBox.classList.remove('bump');
+  void hud.scoreBox.offsetWidth;
+  hud.scoreBox.classList.add('bump');
   if (run.combo.length > 1) showPop(run.combo.length + 'x COMBO', total, '', 'bank');
   sfx.bank();
   run.combo = []; run.comboPts = 0;
@@ -106,6 +159,12 @@ function bankCombo() {
 function handleEvents() {
   for (const e of skier.events) {
     if (e.type === 'takeoff' && e.popped) sfx.pop();
+    if (e.type === 'grab') sfx.grab();
+    if (e.type === 'pressEnd' && e.time > 0.4) {
+      const pts = Math.round((100 + Math.min(e.time, 3) * 250) / 10) * 10;
+      addToCombo(e.name, pts);
+      showPop(e.name, pts, '');
+    }
     if (e.type === 'grind') {
       sfx.grind();
       if (e.airTrick && e.airTrick.name) addToCombo(e.airTrick.name, e.airTrick.points);
@@ -192,6 +251,7 @@ function startRun(where, quick = false) {
   dropIn = where;
   const d = dropIns[where];
   skier.spawn(d.x, d.z, 0, d.speed);
+  shownScore = 0;
   Object.assign(run, { score: 0, combo: [], comboPts: 0, comboT: 0, bestTrick: null, tricks: 0 });
   input.clear();
   mode = 'play';
@@ -274,7 +334,7 @@ function frame(now) {
     updateCamera(dt);
     updateHud(dt);
     setMix(skier.speed, skier.scrub, skier.state === 'ground' || skier.state === 'crash', false);
-    if (skier.p.z > WORLD.finishZ) finishRun();
+    if (skier.p.z > (dropIns[dropIn].finish || WORLD.finishZ)) finishRun();
     if (Math.abs(skier.p.x) > WORLD.half - 8) skier.p.x = Math.sign(skier.p.x) * (WORLD.half - 8);
   } else {
     setMix(0, 0, false, true);
@@ -282,12 +342,15 @@ function frame(now) {
     skier.render(dt);
   }
   spray.update(dt);
+  sky.material.uniforms.time.value += dt;
+  snowfall.material.uniforms.time.value += dt;
+  snowfall.material.uniforms.cam.value.copy(camera.position);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 show('menu');
 requestAnimationFrame(frame);
 
-window.__ski = { skier, run, input, startRun, LANE };
+window.__ski = { skier, run, input, startRun, LANE, camDir };
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');

@@ -1,13 +1,16 @@
-// Controls: a floating joystick on the left of the screen, JUMP and GRAB
-// buttons on the right, and the keyboard on a computer.
+// Controls: a floating joystick on the left of the screen, JUMP, GRAB, STYLE
+// and TUCK buttons on the right, and the keyboard on a computer.
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('touch');
 const STICK_R = 58;
+const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
+const STYLE_KEYS = ['KeyK', 'KeyL'];
+const TUCK_KEYS = ['KeyE', 'ControlLeft'];
 
 export class Input {
   constructor({ onPause, onReset }) {
     this.x = 0; this.y = 0;
-    this.jump = false; this.grab = false;
+    this.jump = false; this.grab = false; this.style = false; this.tuck = false;
     this.jumpReleased = false;
     this.keys = new Set();
     this.stick = { x: 0, y: 0 };
@@ -26,14 +29,18 @@ export class Input {
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
       if (e.code === 'KeyR') this.onReset();
       if (e.code === 'Space') { this.jump = true; e.preventDefault(); }
-      if (['ShiftLeft', 'ShiftRight', 'KeyJ', 'KeyK'].includes(e.code)) this.grab = true;
+      if (GRAB_KEYS.includes(e.code)) this.grab = true;
+      if (STYLE_KEYS.includes(e.code)) this.style = true;
+      if (TUCK_KEYS.includes(e.code)) this.tuck = true;
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
       if (e.code === 'Space' && this.jump) { this.jump = false; this.jumpReleased = true; }
-      if (['ShiftLeft', 'ShiftRight', 'KeyJ', 'KeyK'].includes(e.code)) this.grab = false;
+      if (GRAB_KEYS.includes(e.code)) this.grab = false;
+      if (STYLE_KEYS.includes(e.code)) this.style = false;
+      if (TUCK_KEYS.includes(e.code)) this.tuck = false;
     });
-    addEventListener('blur', () => { this.keys.clear(); this.jump = this.grab = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.jump = this.grab = this.style = this.tuck = false; });
   }
 
   initTouch() {
@@ -83,6 +90,8 @@ export class Input {
         el.classList.add('down');
         if (act === 'jump') this.jump = true;
         if (act === 'grab') this.grab = true;
+        if (act === 'style') this.style = true;
+        if (act === 'tuck') this.tuck = true;
         if (act === 'pause') this.onPause();
         if (act === 'reset') this.onReset();
       };
@@ -90,6 +99,8 @@ export class Input {
         el.classList.remove('down');
         if (act === 'jump' && this.jump) { this.jump = false; this.jumpReleased = true; }
         if (act === 'grab') this.grab = false;
+        if (act === 'style') this.style = false;
+        if (act === 'tuck') this.tuck = false;
       };
       el.addEventListener('pointerdown', down);
       el.addEventListener('pointerup', up);
@@ -112,7 +123,7 @@ export class Input {
   consume() { this.jumpReleased = false; }
 
   clear() {
-    this.jump = this.grab = this.jumpReleased = false;
+    this.jump = this.grab = this.style = this.tuck = this.jumpReleased = false;
     this.stick.x = this.stick.y = 0;
   }
 }
