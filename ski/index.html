@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fresh Line">
+  <meta name="theme-color" content="#0d1b2e">
+  <meta name="description" content="Fresh Line: a freeski park and big-mountain game. Corks, flips, grabs and rails. Plays in the browser on iPhone, iPad and PC.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>Fresh Line</title>
+  <style>
+    :root { --ink: #0d1b2e; --snow: #f4f8fc; --orange: #ff5a1f; --blue: #1e88e5; --gold: #ffcf33; --red: #ff3b3b;
+      --font: system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--snow);
+      font-family: var(--font); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .heavy { font-weight: 900; font-style: italic; letter-spacing: -0.02em; text-transform: uppercase; }
+    .sh { text-shadow: 0 2px 0 rgba(0,0,0,.35), 0 0 12px rgba(0,20,50,.35); }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+    #hud[hidden] { display: none; }
+    #scoreBox { position: absolute; left: calc(16px + env(safe-area-inset-left)); top: calc(10px + env(safe-area-inset-top)); }
+    #score { font-size: 40px; line-height: 1; }
+    #best { font-size: 13px; font-weight: 800; opacity: .8; margin-top: 2px; letter-spacing: .06em; }
+    #speedBox { font-size: 15px; font-weight: 800; margin-top: 6px; opacity: .9; }
+    #speed { font-size: 22px; font-style: italic; font-weight: 900; }
+    #comboBox { position: absolute; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+      text-align: center; opacity: 0; transition: opacity .2s; max-width: 60vw; }
+    #comboBox.on { opacity: 1; }
+    #combo { font-size: 14px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background: rgba(13,27,46,.55); padding: 4px 10px; border-radius: 6px; }
+    #comboPts { font-size: 28px; color: var(--gold); margin-top: 2px; }
+    #live { position: absolute; left: 0; right: 0; top: 62%; text-align: center; font-size: 26px; color: var(--snow); opacity: .95; }
+    #pop { position: absolute; left: 0; right: 0; top: 20%; text-align: center; opacity: 0; transform: scale(.85); }
+    #pop.show { animation: pop 1.8s ease-out forwards; }
+    @keyframes pop { 0% { opacity: 0; transform: scale(.6); } 8% { opacity: 1; transform: scale(1.08); } 14% { transform: scale(1); }
+      80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+    #popName { font-size: clamp(30px, 6vw, 56px); line-height: 1; }
+    #popPts { font-size: clamp(22px, 4vw, 34px); color: var(--gold); margin-top: 4px; }
+    #popTag { font-size: 16px; font-weight: 900; letter-spacing: .2em; margin-top: 4px; color: #7fd4ff; }
+    #pop.perfect #popTag { color: var(--gold); }
+    #pop.crash #popName { color: var(--red); }
+    #pop.crash #popTag { color: #ffb0b0; }
+    #pop.bank #popName { color: var(--gold); }
+
+    /* ---------- touch controls ---------- */
+    #touchUI { position: fixed; inset: 0; z-index: 3; display: none; touch-action: none; }
+    body.playing #touchUI { display: block; }
+    body:not(.touch) #touchUI .tc { display: none; }
+    #stickZone { position: absolute; left: 0; top: 0; bottom: 0; width: 46%; touch-action: none; }
+    #stick { position: absolute; left: calc(110px + env(safe-area-inset-left)); top: calc(100% - 120px - env(safe-area-inset-bottom));
+      width: 126px; height: 126px; margin: -63px 0 0 -63px; border-radius: 50%; pointer-events: none;
+      background: rgba(13,27,46,.22); border: 2px solid rgba(255,255,255,.35); opacity: .55; }
+    #stick.live { opacity: 1; }
+    #knob { position: absolute; left: 36px; top: 36px; width: 50px; height: 50px; border-radius: 50%;
+      background: rgba(255,255,255,.75); box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+    .btn { position: absolute; display: grid; place-items: center; border-radius: 50%; touch-action: none;
+      font: 900 italic 17px var(--font); letter-spacing: .02em; color: #fff; border: 2px solid rgba(255,255,255,.55);
+      box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+    .btn.down { transform: scale(.92); filter: brightness(1.25); }
+    [data-btn="jump"] { width: 96px; height: 96px; font-size: 20px; background: rgba(255,90,31,.78);
+      right: calc(26px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
+    [data-btn="grab"] { width: 74px; height: 74px; background: rgba(30,136,229,.78);
+      right: calc(136px + env(safe-area-inset-right)); bottom: calc(46px + env(safe-area-inset-bottom)); }
+    [data-btn="pause"], [data-btn="reset"] { width: 44px; height: 44px; font-size: 18px; font-style: normal; background: rgba(13,27,46,.45); }
+    [data-btn="pause"] { right: calc(14px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); }
+    [data-btn="reset"] { right: calc(66px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); }
+    @media (max-height: 420px) {
+      [data-btn="jump"] { width: 84px; height: 84px; }
+      [data-btn="grab"] { width: 64px; height: 64px; right: calc(122px + env(safe-area-inset-right)); bottom: calc(36px + env(safe-area-inset-bottom)); }
+      #score { font-size: 32px; }
+    }
+
+    /* ---------- screens ---------- */
+    .screen { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; overflow-y: auto; padding: 16px;
+      padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+      background: linear-gradient(180deg, rgba(13,27,46,.25), rgba(13,27,46,.78)); }
+    .screen[hidden] { display: none; }
+    .panel { width: 100%; max-width: 620px; text-align: center; }
+    h1 { margin: 0; font-size: clamp(54px, 12vw, 110px); line-height: .9; }
+    h1 span { color: var(--orange); }
+    h2 { margin: 0 0 6px; font-size: clamp(36px, 8vw, 64px); }
+    .tag { margin: 8px 0 18px; font-size: 16px; font-weight: 700; opacity: .9; }
+    .drops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 auto 16px; max-width: 560px; }
+    button { font: 900 italic 18px var(--font); text-transform: uppercase; color: #fff; background: var(--orange);
+      border: 0; border-radius: 10px; padding: 12px 10px; cursor: pointer; box-shadow: 0 4px 0 #b83a0c; }
+    button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b83a0c; }
+    button.alt { background: var(--blue); box-shadow: 0 4px 0 #11589a; }
+    button.dark { background: #22344d; box-shadow: 0 4px 0 #101a28; }
+    button small { display: block; font: 700 11px var(--font); text-transform: none; opacity: .85; margin-top: 2px; }
+    .controls { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; text-align: left; font-size: 14px;
+      background: rgba(13,27,46,.6); border-radius: 12px; padding: 10px 16px; margin: 0 auto; max-width: 480px; }
+    .controls b { color: var(--gold); font-weight: 800; }
+    body.touch .kb, body:not(.touch) .tch { display: none; }
+    .stack { display: grid; gap: 10px; max-width: 300px; margin: 14px auto 0; }
+    #menuBest { margin-top: 10px; font-weight: 800; color: var(--gold); min-height: 1em; }
+    .stats { display: grid; grid-template-columns: auto auto; gap: 4px 16px; justify-content: center; font-size: 16px; margin: 10px 0 6px; }
+    .stats b { color: var(--gold); }
+    #finScore { font-size: 54px; color: var(--gold); }
+    @media (max-height: 460px) {
+      h1 { font-size: 52px; }
+      .tag { margin: 4px 0 10px; }
+      .drops { margin-bottom: 10px; }
+      .controls { font-size: 12px; padding: 6px 12px; }
+    }
+    @media (max-width: 520px) { .drops { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="scoreBox" class="sh">
+      <div id="score" class="heavy">0</div>
+      <div id="best">BEST 0</div>
+      <div id="speedBox"><span id="speed">0</span> KM/H</div>
+    </div>
+    <div id="comboBox" class="sh"><div id="combo"></div><div id="comboPts" class="heavy"></div></div>
+    <div id="live" class="heavy sh"></div>
+    <div id="pop" class="sh"><div id="popName" class="heavy"></div><div id="popPts" class="heavy"></div><div id="popTag"></div></div>
+  </div>
+
+  <div id="touchUI">
+    <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div></div></div>
+    <div class="btn tc" data-btn="grab">GRAB</div>
+    <div class="btn tc" data-btn="jump">JUMP</div>
+    <div class="btn" data-btn="reset" title="Back to drop-in (R)">↺</div>
+    <div class="btn" data-btn="pause" title="Pause (Esc)">❚❚</div>
+  </div>
+
+  <section id="menu" class="screen">
+    <div class="panel">
+      <h1 class="heavy sh">Fresh<span>Line</span></h1>
+      <p class="tag sh">Park laps and big mountain. Corks, flips, grabs and rails.</p>
+      <div class="drops">
+        <button data-drop="summit">Summit<small>Full run</small></button>
+        <button data-drop="park" class="alt">Park<small>Kickers + rails</small></button>
+        <button data-drop="pro" class="alt">Pro Line<small>Big jumps</small></button>
+        <button data-drop="backcountry" class="dark">Backcountry<small>Trees + cliffs</small></button>
+      </div>
+      <div class="controls">
+        <b class="tch">Joystick</b><span class="tch">Steer · up = tuck/skate · down = brake</span>
+        <b class="kb">WASD / Arrows</b><span class="kb">Steer · W = tuck/skate · S = brake</span>
+        <b class="tch">Hold JUMP</b><span class="tch">Crouch, release to pop (time it on the lip)</span>
+        <b class="kb">Hold Space</b><span class="kb">Crouch, release to pop (time it on the lip)</span>
+        <b>In the air</b><span>Stick sideways = spin · up/down = front/back flip · diagonal = cork</span>
+        <b class="tch">Hold GRAB</b><span class="tch">Grab · stick picks it: Mute, Tail, Japan, Truck Driver, Safety</span>
+        <b class="kb">Hold Shift / J</b><span class="kb">Grab · direction picks it: Mute, Tail, Japan, Truck Driver, Safety</span>
+        <b>Rails &amp; boxes</b><span>Jump onto them · JUMP to pop off</span>
+        <b>Combos</b><span>Chain tricks within 2.5 s of landing to multiply</span>
+      </div>
+      <div id="menuBest" class="sh"></div>
+    </div>
+  </section>
+
+  <section id="pauseScreen" class="screen" hidden>
+    <div class="panel">
+      <h2 class="heavy sh">Paused</h2>
+      <div class="stack">
+        <button id="resumeBtn">Resume</button>
+        <button id="restartBtn" class="alt">Restart run</button>
+        <button id="menuBtn" class="dark">Drop-in menu</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="finish" class="screen" hidden>
+    <div class="panel">
+      <h2 class="heavy sh">Run complete</h2>
+      <div id="finScore" class="heavy sh">0</div>
+      <div id="finBest" class="heavy sh"></div>
+      <div class="stats sh"><span>Tricks landed</span><b id="finTricks">0</b><span>Best trick</span><b id="finTop">—</b></div>
+      <div class="stack">
+        <button id="againBtn">Ride the lift up</button>
+        <button id="finMenuBtn" class="dark">Drop-in menu</button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
