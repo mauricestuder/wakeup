@@ -215,6 +215,7 @@ const AIM_KEYS = ['KeyC', 'ShiftRight'];
 // Some iPad keyboards leave e.code empty, so fall back to the key's name.
 const isFire = (e) => FIRE_KEYS.includes(e.code) || e.key === 'Enter' || e.key === 'x' || e.key === 'X';
 const isAim = (e) => AIM_KEYS.includes(e.code) || e.key === 'c' || e.key === 'C';
+const isPause = (e) => e.code === 'KeyP' || e.code === 'Escape' || e.key === 'p' || e.key === 'P' || e.key === 'Escape';
 
 addEventListener('keydown', (e) => {
   keys[e.code] = true;
@@ -225,7 +226,7 @@ addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.repeat && !onSettings) {
       e.preventDefault();
       if (mode === 'over' || mode === 'won') location.reload(); else if (mode !== 'escape') start();
-    } else if ((e.code === 'KeyP' || e.code === 'Escape') && mode === 'paused' && !onSettings) start();
+    } else if (isPause(e) && mode === 'paused' && !onSettings) start();
     return;
   }
   if (isFire(e)) { e.preventDefault(); if (!e.repeat) firing(true); }
@@ -238,7 +239,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyQ') game.arsenal.cycle();
   if (e.code === 'KeyG') game.items.throwGrenade();
   if (e.code === 'KeyE' || e.code === 'KeyF') { const n = game.items.nearest(); if (n) n.it.use(); }
-  if (e.code === 'KeyP' || e.code === 'Escape') pause();
+  if (isPause(e)) { e.preventDefault(); pause(); }
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup', (e) => {
