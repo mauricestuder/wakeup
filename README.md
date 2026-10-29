@@ -115,3 +115,14 @@ Call `onActivity()` on every user interaction (resets the idle timer) and
 - Volume is capped by the phone's media volume – turn it up before bed.
 - Later: `npx cap init` + `npx cap add android` with `webDir: "."` turns
   this into a real Android app with true background alarms.
+
+## Seven-Nil (bonus game)
+
+`seven/` is a separate World Cup draft game in the style of 7a0. Spin a nation
+and a World Cup year, take one player from that squad into an open slot, and
+fill an XI (6 formations, 3 rerolls, Classic or Blind mode). Then try to win all seven
+matches: three group games, the Round of 16, the quarter-final, the semi-final and the final.
+
+Open `/seven/` on the same server (e.g. `https://mauricestuder.github.io/wakeup/seven/`).
+The squads are in `seven/js/data.js`, about 40 squads from 1954 to 2022. The match odds are in
+`seven/js/sim.js`.
