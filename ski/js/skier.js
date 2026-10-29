@@ -8,6 +8,7 @@ const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
+const PIVOT = 0.85; // height of the body's centre above the feet
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -206,6 +207,7 @@ export class Skier {
     this.v = new THREE.Vector3();
     this.q = new THREE.Quaternion();      // body orientation while airborne
     this.renderQ = new THREE.Quaternion();
+    this.pivotUp = new THREE.Vector3(0, 1, 0); // body up at takeoff; air spins turn around a point this far up
     this.heading = 0;                     // direction of travel along the snow
     this.switch = false;                  // riding backwards
     this.wallF = null;                    // travel direction while on a pipe wall
@@ -255,6 +257,7 @@ export class Skier {
     this.air = this.grind = this.press = this.landAnim = null;
     this.charge = 0;
     this.groundQuat(this.renderQ);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.renderQ);
   }
 
   get speed() { return this.v.length(); }
@@ -785,7 +788,12 @@ export class Skier {
       P.poles[i].lerp(T.poles[i], k);
     }
 
-    M.root.position.copy(this.p);
+    // Spin and flip around the middle of the body, not the feet. On the snow the
+    // pivot follows the body up, so the offset is zero there; in the air it stays
+    // put, and it eases back after landing so there's no pop.
+    const up = v1.set(0, 1, 0).applyQuaternion(this.renderQ);
+    if (this.state === 'ground' || this.state === 'grind') this.pivotUp.lerp(up, 1 - Math.exp(-10 * dt)).normalize();
+    M.root.position.copy(this.p).addScaledVector(this.pivotUp, PIVOT).addScaledVector(up, -PIVOT);
     M.root.quaternion.copy(this.renderQ);
     if (Math.abs(P.press) > 1e-3) {
       // Presses pivot on the tip or tail of the skis.
