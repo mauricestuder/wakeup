@@ -302,7 +302,7 @@ export class Skier {
 
   // Pop: the take-off animation changes from jump to jump.
   pop(n) {
-    const pop = 3.4 + this.charge * 5;
+    const pop = 4.6 + this.charge * 6.5;
     this.v.addScaledVector(n, pop * 0.7).addScaledVector(Y, pop * 0.3);
     this.popKind = this.press ? (this.press.nose ? 'kick' : 'tuck') : this.charge >= 0.5 ? 'tuck' : POP_KINDS[this.popCount++ % 3];
     this.endPress();
@@ -453,7 +453,7 @@ export class Skier {
     a.t += dt;
     if (input.jumpReleased && !a.popped && a.t < 0.18 && this.charge > 0) {
       // Late pop off a lip still counts.
-      this.v.y += 2.5 + this.charge * 4;
+      this.v.y += 3.3 + this.charge * 5;
       a.popped = true;
       this.popKind = POP_KINDS[this.popCount++ % 3];
     }
@@ -633,7 +633,7 @@ export class Skier {
     basisQuat(Y, fwd, this.q);
     const done = g.s < 0 || g.s > r.len || Math.abs(g.u) < 0.4;
     if (done || input.jumpReleased) {
-      if (input.jumpReleased) this.v.y += 4;
+      if (input.jumpReleased) this.v.y += 5.2;
       this.v.y = Math.max(this.v.y, 0.5);
       this.emit('grindEnd', { name: g.name, time: g.t });
       this.state = 'air';
@@ -651,8 +651,17 @@ export class Skier {
     }
   }
 
+  // The body is three balls along its up axis: knees, middle and head. In the
+  // air it turns around its middle, just like the drawn model.
   checkObstacles() {
-    const o = obstacleHit(this.p.x, this.p.y, this.p.z);
+    let o = null;
+    const air = this.state === 'air';
+    const up = air ? v1.set(0, 1, 0).applyQuaternion(this.q) : normal(this.p.x, this.p.z, v1);
+    const c = v2.copy(this.p).addScaledVector(air ? this.pivotUp : up, PIVOT);
+    for (const k of [-0.6, 0, 0.55]) {
+      v3.copy(c).addScaledVector(up, k);
+      if ((o = obstacleHit(v3.x, v3.y, v3.z, 0.28))) break;
+    }
     if (!o) return false;
     const cx = o.kind === 'box' ? (o.x0 + o.x1) / 2 : o.x, cz = o.kind === 'box' ? (o.z0 + o.z1) / 2 : o.z;
     const away = new THREE.Vector3(this.p.x - cx, 0, this.p.z - cz);

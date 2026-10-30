@@ -15,7 +15,7 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0xd9e6f3);
-scene.fog = new THREE.Fog(HORIZON, 120, 780);
+scene.fog = new THREE.Fog(HORIZON, 260, 1500);
 const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 4200);
 
 // Sky dome: deep blue overhead, a warm glow around the sun, drifting clouds.
@@ -70,8 +70,8 @@ const snowfall = (() => {
   scene.add(m);
   return m;
 })();
-scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x5d7394, 0.85));
-const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x4f6a96, 0.95));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
 sun.position.set(-40, 60, 70);
 scene.add(sun, sun.target);
 
