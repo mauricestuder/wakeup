@@ -8,6 +8,7 @@ const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
+const PIVOT = 0.85; // height of the body's centre above the feet
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -206,6 +207,7 @@ export class Skier {
     this.v = new THREE.Vector3();
     this.q = new THREE.Quaternion();      // body orientation while airborne
     this.renderQ = new THREE.Quaternion();
+    this.pivotUp = new THREE.Vector3(0, 1, 0); // body up at takeoff; air spins turn around a point this far up
     this.heading = 0;                     // direction of travel along the snow
     this.switch = false;                  // riding backwards
     this.wallF = null;                    // travel direction while on a pipe wall
@@ -255,6 +257,7 @@ export class Skier {
     this.air = this.grind = this.press = this.landAnim = null;
     this.charge = 0;
     this.groundQuat(this.renderQ);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.renderQ);
   }
 
   get speed() { return this.v.length(); }
@@ -299,7 +302,7 @@ export class Skier {
 
   // Pop: the take-off animation changes from jump to jump.
   pop(n) {
-    const pop = 3.4 + this.charge * 5;
+    const pop = 4.6 + this.charge * 6.5;
     this.v.addScaledVector(n, pop * 0.7).addScaledVector(Y, pop * 0.3);
     this.popKind = this.press ? (this.press.nose ? 'kick' : 'tuck') : this.charge >= 0.5 ? 'tuck' : POP_KINDS[this.popCount++ % 3];
     this.endPress();
@@ -426,6 +429,7 @@ export class Skier {
     const n = normal(this.p.x, this.p.z, new THREE.Vector3());
     this.state = 'air';
     this.groundQuat(this.q);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
     this.air = {
       t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
       switchTakeoff: this.switch, grabs: [], grab: null, popped,
@@ -450,7 +454,7 @@ export class Skier {
     a.t += dt;
     if (input.jumpReleased && !a.popped && a.t < 0.18 && this.charge > 0) {
       // Late pop off a lip still counts.
-      this.v.y += 2.5 + this.charge * 4;
+      this.v.y += 3.3 + this.charge * 5;
       a.popped = true;
       this.popKind = POP_KINDS[this.popCount++ % 3];
     }
@@ -528,11 +532,34 @@ export class Skier {
     this.checkRails(false);
     if (this.state !== 'air') return;
     if (this.checkObstacles()) return;
-    const gy = height(this.p.x, this.p.z);
-    if (this.p.y <= gy) {
-      this.p.y = gy;
-      this.land();
+    this.checkGround(a);
+  }
+
+  // Ground contact in the air uses the body where it really is: it turns
+  // around its middle, so mid-flip the feet, skis or head can be well away
+  // from this.p. Head or hips into the snow is a crash; feet or skis first is
+  // a landing, judged by land() as usual.
+  checkGround(a) {
+    const up = v1.set(0, 1, 0).applyQuaternion(this.q);
+    const fwd = v2.set(0, 0, 1).applyQuaternion(this.q);
+    const c = v3.copy(this.p).addScaledVector(this.pivotUp, PIVOT);
+    const below = (k, f = 0) => {
+      const x = c.x + up.x * k + fwd.x * f, z = c.z + up.z * k + fwd.z * f;
+      return c.y + up.y * k + fwd.y * f - height(x, z);
+    };
+    if (Math.min(below(0.75), below(0.25), below(-0.4)) < -0.05) {
+      this.crash('Wipeout');
+      return;
     }
+    const feet = below(-PIVOT);
+    const skis = a.t > 0.15 ? Math.min(below(-PIVOT, 0.86), below(-PIVOT, -0.86)) : 1;
+    if (feet > 0 && skis > -0.4) return; // skis flex, so only a tip deep in the snow counts
+    // Put the physics point where the feet really are, and line the drawn body
+    // up with it so nothing jumps.
+    this.p.copy(c).addScaledVector(up, -PIVOT);
+    this.p.y = height(this.p.x, this.p.z);
+    this.pivotUp.copy(up);
+    this.land();
   }
 
   land() {
@@ -630,7 +657,7 @@ export class Skier {
     basisQuat(Y, fwd, this.q);
     const done = g.s < 0 || g.s > r.len || Math.abs(g.u) < 0.4;
     if (done || input.jumpReleased) {
-      if (input.jumpReleased) this.v.y += 4;
+      if (input.jumpReleased) this.v.y += 5.2;
       this.v.y = Math.max(this.v.y, 0.5);
       this.emit('grindEnd', { name: g.name, time: g.t });
       this.state = 'air';
@@ -644,12 +671,22 @@ export class Skier {
         left: new THREE.Vector3().crossVectors(Y, vh), fromSlide: g.slide, pipe: false, side: 1,
       };
       this.p.y += 0.05;
+      this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
       this.grind = null;
     }
   }
 
+  // The body is three balls along its up axis: knees, middle and head. In the
+  // air it turns around its middle, just like the drawn model.
   checkObstacles() {
-    const o = obstacleHit(this.p.x, this.p.y, this.p.z);
+    let o = null;
+    const air = this.state === 'air';
+    const up = air ? v1.set(0, 1, 0).applyQuaternion(this.q) : normal(this.p.x, this.p.z, v1);
+    const c = v2.copy(this.p).addScaledVector(air ? this.pivotUp : up, PIVOT);
+    for (const k of [-0.6, 0, 0.55]) {
+      v3.copy(c).addScaledVector(up, k);
+      if ((o = obstacleHit(v3.x, v3.y, v3.z, 0.28))) break;
+    }
     if (!o) return false;
     const cx = o.kind === 'box' ? (o.x0 + o.x1) / 2 : o.x, cz = o.kind === 'box' ? (o.z0 + o.z1) / 2 : o.z;
     const away = new THREE.Vector3(this.p.x - cx, 0, this.p.z - cz);
@@ -785,7 +822,12 @@ export class Skier {
       P.poles[i].lerp(T.poles[i], k);
     }
 
-    M.root.position.copy(this.p);
+    // Spin and flip around the middle of the body, not the feet. On the snow the
+    // pivot follows the body up, so the offset is zero there; in the air it stays
+    // put, and it eases back after landing so there's no pop.
+    const up = v1.set(0, 1, 0).applyQuaternion(this.renderQ);
+    if (this.state === 'ground' || this.state === 'grind') this.pivotUp.lerp(up, 1 - Math.exp(-10 * dt)).normalize();
+    M.root.position.copy(this.p).addScaledVector(this.pivotUp, PIVOT).addScaledVector(up, -PIVOT);
     M.root.quaternion.copy(this.renderQ);
     if (Math.abs(P.press) > 1e-3) {
       // Presses pivot on the tip or tail of the skis.

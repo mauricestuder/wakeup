@@ -124,7 +124,7 @@ function kicker(x, z, H, L, T, Lnd, W, opts = {}) {
   const f = { type: 'kick', x, z, H, L, T, Lnd, W, natural, ang: opts.ang, gap: opts.gap || 0 };
   f.ca = Math.cos(f.ang || 0);
   f.Hk = H + fallLine(z + L * f.ca) - fallLine(z + (L + T) * f.ca);
-  return addFeature(f, 0, L + T + Lnd, W / 2 + (opts.ang ? 12 : 6));
+  return addFeature(f, 0, L + T + Lnd, W / 2 + (opts.ang ? 18 : 6));
 }
 
 // Step-up: clear a gap onto a deck that sits higher than the lip, then roll off.
@@ -188,7 +188,7 @@ function featureOffset(f, x, z) {
   } else {
     const s = (u - f.L - f.T) / f.Lnd;
     p = f.Hk * (1 - smooth(0, 1, s));
-    w = f.W + (f.ang ? 12 : 7) * s;
+    w = f.W + (f.ang ? 24 * Math.sqrt(s) : 7 * s); // hips open up early so a straight line still lands
   }
   return p * (1 - smooth(w / 2, w / 2 + (f.natural || f.ang ? 5 : 1.8), v));
 }
@@ -286,36 +286,39 @@ function addObstacle(o) {
   grid.get(k).push(o);
 }
 
-const BODY = 1.6; // the skier is a capsule this tall
-function hits(o, x, y, z) {
+const cone = (h, base, tip, R) => R * Math.min(1, Math.max(0, (tip - h) / (tip - base)));
+
+// Is a ball of radius r at (x, y, z) inside an obstacle? The skier's body is
+// tested as a few of these balls from the knees to the head. Shapes are a
+// touch smaller than they look so brushing past feels fair.
+function hits(o, x, y, z, r) {
   if (o.kind === 'box') {
-    return x > o.x0 - 0.3 && x < o.x1 + 0.3 && z > o.z0 - 0.3 && z < o.z1 + 0.3 && y < o.top;
+    return x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r && y < o.top;
   }
   const d = Math.hypot(x - o.x, z - o.z);
   if (o.kind === 'tree') {
     const s = o.s;
-    if (d < 0.22 * s + 0.3 && y < o.g + 1.6 * s) return true; // trunk
-    const base = o.g + 0.9 * s, tip = o.g + 7 * s;
-    const low = Math.max(y, base);
-    if (low > tip || y + BODY < base) return false;
-    return d < 1.55 * s * (1 - (low - base) / (tip - base)) + 0.25; // branches thin out toward the top
+    if (d < 0.2 * s + r && y < o.g + 1.6 * s) return true; // trunk
+    const h = (y - o.g) / s; // the three cones of branches, slightly trimmed
+    if (h < 0.9 - r / s || h > 6.75) return false;
+    const R = Math.max(cone(h, 0.9, 4.3, 2.1), cone(h, 2.7, 5.5, 1.6), cone(h, 4.45, 6.75, 1.0));
+    return d < R * s * 0.85 + r;
   }
   if (o.kind === 'rock') {
-    if (d > o.s * 0.95 + 0.25) return false;
-    const k = Math.min(1, d / (o.s * 0.95));
-    return y < o.g - 0.2 * o.s + 0.7 * o.s * Math.sqrt(1 - k * k) - 0.05;
+    const a = o.s * 0.9 + r, b = o.s * 0.65 + r, dy = y - (o.g - 0.2 * o.s);
+    return dy > -b && (d / a) ** 2 + (dy / b) ** 2 < 1;
   }
-  return d < o.r + 0.3 && y < o.top; // post
+  return d < o.r + r && y < o.top; // post
 }
 
-export function obstacleHit(x, y, z) {
+export function obstacleHit(x, y, z, r = 0.3) {
   const gx = Math.floor(x / GRID), gz = Math.floor(z / GRID);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
     const list = grid.get((gx + i) + ',' + (gz + j));
     if (!list) continue;
-    for (const o of list) if (hits(o, x, y, z)) return o;
+    for (const o of list) if (hits(o, x, y, z, r)) return o;
   }
-  for (const o of solids) if (hits(o, x, y, z)) return o;
+  for (const o of solids) if (hits(o, x, y, z, r)) return o;
   return null;
 }
 
@@ -348,30 +351,73 @@ for (let i = 0; i < 260; i++) {
 
 // ---------- meshes ----------
 
+// Tileable snow detail: fine grain in red, soft drifts in green, sparkle
+// flecks in blue. The shader below mixes it at three scales so it never
+// looks like a repeating tile.
 function snowTexture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  const N = 256, c = document.createElement('canvas');
+  c.width = c.height = N;
   const g = c.getContext('2d');
-  g.fillStyle = '#fff';
-  g.fillRect(0, 0, 256, 256);
-  const img = g.getImageData(0, 0, 256, 256);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = 242 + Math.random() * 13;
-    img.data[i] = n - 4; img.data[i + 1] = n - 2; img.data[i + 2] = n;
+  const img = g.createImageData(N, N);
+  const tn = (x, y, p) => { // value noise that wraps every p cells
+    const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const h = (a, b) => hash(((a % p) + p) % p, ((b % p) + p) % p + 911);
+    const A = h(i, j), B = h(i + 1, j), C = h(i, j + 1), D = h(i + 1, j + 1);
+    return A + (B - A) * u + (C - A) * v + (A - B - C + D) * u * v;
+  };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const fx = x / N, fy = y / N;
+    const grain = tn(fx * 64, fy * 64, 64) * 0.55 + tn(fx * 128, fy * 128, 128) * 0.45;
+    const drift = tn(fx * 4, fy * 4, 4) * 0.5 + tn(fx * 8, fy * 8, 8) * 0.3 + tn(fx * 16, fy * 16, 16) * 0.2;
+    const k = (y * N + x) * 4;
+    img.data[k] = grain * 255;
+    img.data[k + 1] = drift * 255;
+    img.data[k + 2] = hash(x, y + 5000) > 0.993 ? 255 : 0;
+    img.data[k + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
+}
+
+// Snow material: vertex colours for shape and shade, the detail texture in
+// world space, and corduroy lines on groomed snow that fade out with distance.
+function snowMaterial(tex, extra = {}) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, ...extra });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.detail = { value: tex };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float groom; varying float vGroom; varying vec3 vW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroom = groom; vW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D detail; varying float vGroom; varying vec3 vW;')
+      .replace('#include <map_fragment>', `
+        vec4 d1 = texture2D(detail, vW.xz / 2.6);
+        vec4 d2 = texture2D(detail, vW.xz / 14.0 + 0.37);
+        vec4 d3 = texture2D(detail, vW.xz / 83.0 + 0.71);
+        float fine = 1.0 - smoothstep(0.08, 0.5, fwidth(vW.x) + fwidth(vW.z));
+        float tone = (d1.r - 0.5) * 0.22 * fine + (d2.g - 0.5) * 0.26 + (d3.g - 0.5) * 0.3;
+        float off = 1.0 - vGroom;
+        tone += (d1.g - 0.5) * 0.2 * off * fine + (d2.r - 0.5) * 0.1 * off; // wind-blown powder is rougher
+        float cx = vW.x / 0.42;
+        float cord = abs(fract(cx) - 0.5) * 2.0 - 0.5;
+        cord *= 1.0 - smoothstep(0.3, 0.8, fwidth(cx));
+        tone += cord * 0.16 * vGroom;
+        diffuseColor.rgb *= 1.0 + tone;
+        diffuseColor.rgb += vec3(0.5) * d1.b * fine * 0.6;
+      `);
+  };
+  return m;
 }
 
 // A grid mesh sampling fn(x, z); colorFn picks each vertex colour.
 function gridMesh(x0, x1, z0, z1, step, fn, colorFn, mat, stepZ = step) {
   const nx = Math.ceil((x1 - x0) / step) + 1, nz = Math.ceil((z1 - z0) / stepZ) + 1;
   const pos = new Float32Array(nx * nz * 3), nor = new Float32Array(nx * nz * 3);
-  const col = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2);
+  const col = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), groom = new Float32Array(nx * nz);
   const c = new THREE.Color();
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i;
@@ -382,6 +428,7 @@ function gridMesh(x0, x1, z0, z1, step, fn, colorFn, mat, stepZ = step) {
     pos.set([x, y, z], k * 3);
     nor.set([n.x, n.y, n.z], k * 3);
     uv.set([x / 9, z / 9], k * 2);
+    groom[k] = groomedAt(x, z);
     colorFn(x, z, n, c);
     col.set([c.r, c.g, c.b], k * 3);
   }
@@ -397,30 +444,35 @@ function gridMesh(x0, x1, z0, z1, step, fn, colorFn, mat, stepZ = step) {
   g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setAttribute('groom', new THREE.BufferAttribute(groom, 1));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   return new THREE.Mesh(g, mat);
 }
+
+// 1 on the machine-groomed park lane and in the pipe, 0 in the powder.
+const groomedAt = (x, z) => Math.max(1 - smooth(LANE - 4, LANE + 6, Math.abs(x)), inPipe(x, z, PIPE.deck + 2) ? 1 : 0);
 
 const ROCK = new THREE.Color(0.32, 0.31, 0.33), PARK_SHADE = new THREE.Color(0.62, 0.72, 0.88);
 function snowColor(x, z, n, c, built = false) {
   const steep = 1 - n.y;
   const groomed = 1 - smooth(LANE - 4, LANE + 10, Math.abs(x));
-  c.setRGB(0.88 - groomed * 0.02, 0.92 - groomed * 0.01, 0.98);
+  // Groomed snow is a touch warmer and brighter, powder a cooler blue, so the
+  // lane reads at a glance. Both stay a little below pure white so the shading
+  // and the detail show instead of burning out.
+  c.setRGB(0.74 + groomed * 0.07, 0.8 + groomed * 0.05, 0.93 - groomed * 0.01);
   // Shade slopes facing uphill (toward the rider) so jumps and rollers read.
-  c.multiplyScalar(1 - smooth(0.02, 0.5, -n.z) * (built ? 0.14 : 0.24) - smooth(0.05, 0.35, steep) * 0.08);
+  c.multiplyScalar(1 - smooth(0.02, 0.5, -n.z) * (built ? 0.16 : 0.26) - smooth(0.05, 0.35, steep) * 0.1);
   if (steep > 0.35) c.lerp(built ? PARK_SHADE : ROCK, smooth(0.35, 0.6, steep) * (built ? 0.6 : 1));
 }
 
 export function buildTerrain(scene) {
   const tex = snowTexture();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex });
+  const mat = snowMaterial(tex);
   const W = WORLD;
   scene.add(gridMesh(-W.half, W.half, W.top, W.bottom, 4, baseHeight, snowColor, mat));
 
   // Features get their own fine meshes laid over the coarse mountain.
-  const fmat = new THREE.MeshLambertMaterial({
-    vertexColors: true, map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
-  });
+  const fmat = snowMaterial(tex, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const blue = new THREE.Color(0.2, 0.45, 0.95), orange = new THREE.Color(1, 0.42, 0.12);
   for (const f of features) {
     if (f.type === 'pipe') {
@@ -490,8 +542,35 @@ export function buildTerrain(scene) {
   return { update(dt) { updateLift(dt); flagMat.uniforms.time.value += dt; } };
 }
 
+// Soft shadows under trees and rocks, thrown away from the sun, so they sit on
+// the snow instead of floating on it.
+let blobTex = null;
+function blobShadows(scene, list, size) {
+  if (!blobTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const r = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+    r.addColorStop(0, 'rgba(30,50,100,0.6)'); r.addColorStop(0.55, 'rgba(30,50,100,0.32)'); r.addColorStop(1, 'rgba(40,60,110,0)');
+    g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+    blobTex = new THREE.CanvasTexture(c);
+  }
+  const inst = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }),
+    list.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3();
+  list.forEach((o, i) => {
+    const k = o.s * size;
+    const x = o.x + 0.35 * k, z = o.z - 0.25 * k;
+    q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal(x, z, n));
+    m.compose(p.set(x, height(x, z) + 0.12, z), q, sc.set(k * 1.25, 1, k));
+    inst.setMatrixAt(i, m);
+  });
+  inst.renderOrder = 1;
+  scene.add(inst);
+}
+
 function buildTrees(scene) {
-  const leaf = new THREE.MeshLambertMaterial({ color: 0x1f4a35, flatShading: true });
+  const leaf = new THREE.MeshLambertMaterial({ color: 0x2c6146, flatShading: true });
   const snowy = new THREE.MeshLambertMaterial({ color: 0xe8eef5, flatShading: true });
   const trunk = new THREE.MeshLambertMaterial({ color: 0x4a3426 });
   const parts = [
@@ -510,6 +589,7 @@ function buildTrees(scene) {
     });
     scene.add(inst);
   }
+  blobShadows(scene, trees, 4.6);
 }
 
 function buildRocks(scene) {
@@ -522,6 +602,7 @@ function buildRocks(scene) {
     inst.setMatrixAt(i, m);
   });
   scene.add(inst);
+  blobShadows(scene, rocks, 2.6);
 }
 
 // ---------- chairlift ----------
