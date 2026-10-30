@@ -429,6 +429,7 @@ export class Skier {
     const n = normal(this.p.x, this.p.z, new THREE.Vector3());
     this.state = 'air';
     this.groundQuat(this.q);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
     this.air = {
       t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
       switchTakeoff: this.switch, grabs: [], grab: null, popped,
@@ -531,11 +532,34 @@ export class Skier {
     this.checkRails(false);
     if (this.state !== 'air') return;
     if (this.checkObstacles()) return;
-    const gy = height(this.p.x, this.p.z);
-    if (this.p.y <= gy) {
-      this.p.y = gy;
-      this.land();
+    this.checkGround(a);
+  }
+
+  // Ground contact in the air uses the body where it really is: it turns
+  // around its middle, so mid-flip the feet, skis or head can be well away
+  // from this.p. Head or hips into the snow is a crash; feet or skis first is
+  // a landing, judged by land() as usual.
+  checkGround(a) {
+    const up = v1.set(0, 1, 0).applyQuaternion(this.q);
+    const fwd = v2.set(0, 0, 1).applyQuaternion(this.q);
+    const c = v3.copy(this.p).addScaledVector(this.pivotUp, PIVOT);
+    const below = (k, f = 0) => {
+      const x = c.x + up.x * k + fwd.x * f, z = c.z + up.z * k + fwd.z * f;
+      return c.y + up.y * k + fwd.y * f - height(x, z);
+    };
+    if (Math.min(below(0.75), below(0.25), below(-0.4)) < -0.05) {
+      this.crash('Wipeout');
+      return;
     }
+    const feet = below(-PIVOT);
+    const skis = a.t > 0.15 ? Math.min(below(-PIVOT, 0.86), below(-PIVOT, -0.86)) : 1;
+    if (feet > 0 && skis > -0.4) return; // skis flex, so only a tip deep in the snow counts
+    // Put the physics point where the feet really are, and line the drawn body
+    // up with it so nothing jumps.
+    this.p.copy(c).addScaledVector(up, -PIVOT);
+    this.p.y = height(this.p.x, this.p.z);
+    this.pivotUp.copy(up);
+    this.land();
   }
 
   land() {
@@ -647,6 +671,7 @@ export class Skier {
         left: new THREE.Vector3().crossVectors(Y, vh), fromSlide: g.slide, pipe: false, side: 1,
       };
       this.p.y += 0.05;
+      this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
       this.grind = null;
     }
   }
