@@ -7,7 +7,7 @@ const STICK_R = 58;
 // a button lights up while its key is held, H hides the key labels.
 const KEY_BTN = {
   Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
-  KeyE: 'tuck', ControlLeft: 'tuck', KeyR: 'reset', Escape: 'pause', KeyP: 'pause',
+  KeyE: 'butter', ControlLeft: 'butter', KeyR: 'reset', Escape: 'pause', KeyP: 'pause',
 };
 function lightKey(code, on) {
   const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
@@ -21,12 +21,12 @@ try { if (localStorage.getItem('freshline.nokeys')) document.body.classList.add(
 
 const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const STYLE_KEYS = ['KeyK', 'KeyL'];
-const TUCK_KEYS = ['KeyE', 'ControlLeft'];
+const BUTTER_KEYS = ['KeyE', 'ControlLeft'];
 
 export class Input {
   constructor({ onPause, onReset }) {
     this.x = 0; this.y = 0;
-    this.jump = false; this.grab = false; this.style = false; this.tuck = false;
+    this.jump = false; this.grab = false; this.style = false; this.butter = false;
     this.jumpReleased = false;
     this.keys = new Set();
     this.stick = { x: 0, y: 0 };
@@ -49,7 +49,7 @@ export class Input {
       if (e.code === 'Space') { this.jump = true; e.preventDefault(); }
       if (GRAB_KEYS.includes(e.code)) this.grab = true;
       if (STYLE_KEYS.includes(e.code)) this.style = true;
-      if (TUCK_KEYS.includes(e.code)) this.tuck = true;
+      if (BUTTER_KEYS.includes(e.code) && !e.repeat) this.butter = true;
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
@@ -57,9 +57,8 @@ export class Input {
       if (e.code === 'Space' && this.jump) { this.jump = false; this.jumpReleased = true; }
       if (GRAB_KEYS.includes(e.code)) this.grab = false;
       if (STYLE_KEYS.includes(e.code)) this.style = false;
-      if (TUCK_KEYS.includes(e.code)) this.tuck = false;
     });
-    addEventListener('blur', () => { this.keys.clear(); for (const el of document.querySelectorAll('[data-btn].down')) el.classList.remove('down'); this.jump = this.grab = this.style = this.tuck = false; });
+    addEventListener('blur', () => { this.keys.clear(); for (const el of document.querySelectorAll('[data-btn].down')) el.classList.remove('down'); this.jump = this.grab = this.style = false; });
   }
 
   initTouch() {
@@ -110,7 +109,7 @@ export class Input {
         if (act === 'jump') this.jump = true;
         if (act === 'grab') this.grab = true;
         if (act === 'style') this.style = true;
-        if (act === 'tuck') this.tuck = true;
+        if (act === 'butter') this.butter = true;
         if (act === 'pause') this.onPause();
         if (act === 'reset') this.onReset();
       };
@@ -119,7 +118,6 @@ export class Input {
         if (act === 'jump' && this.jump) { this.jump = false; this.jumpReleased = true; }
         if (act === 'grab') this.grab = false;
         if (act === 'style') this.style = false;
-        if (act === 'tuck') this.tuck = false;
       };
       el.addEventListener('pointerdown', down);
       el.addEventListener('pointerup', up);
@@ -144,10 +142,10 @@ export class Input {
   }
 
   // Release events last one physics step.
-  consume() { this.jumpReleased = false; }
+  consume() { this.jumpReleased = this.butter = false; }
 
   clear() {
-    this.jump = this.grab = this.style = this.tuck = this.jumpReleased = false;
+    this.jump = this.grab = this.style = this.butter = this.jumpReleased = false;
     this.stick.x = this.stick.y = 0;
   }
 }

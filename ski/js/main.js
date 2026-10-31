@@ -1,6 +1,6 @@
 // Fresh Line: boot, game loop, camera, scoring and screens.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { buildTerrain, height, WORLD, dropIns, LANE } from './terrain.js';
+import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill } from './terrain.js';
 import { Skier } from './skier.js';
 import { Input, isTouch } from './input.js';
 import { initAudio, setMix, sfx } from './audio.js';
@@ -97,7 +97,7 @@ const input = new Input({
 // ---------- HUD ----------
 
 const hud = {
-  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), speedMult: $('speedMult'), combo: $('combo'), comboPts: $('comboPts'),
+  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), speedMult: $('speedMult'), jumpHud: $('jumpHud'), jumpLabel: $('jumpLabel'), jumpMark: $('jumpMark'), combo: $('combo'), comboPts: $('comboPts'),
   live: $('live'), pop: $('pop'), popName: $('popName'), popPts: $('popPts'), popTag: $('popTag'),
 };
 let popTimer = 0;
@@ -133,6 +133,7 @@ function updateHud(dt) {
     live = (deg >= 90 ? deg + '°' : '') + (skier.air.grab ? '  ' + skier.air.grab.name.toUpperCase() : '');
   } else if (skier.state === 'grind') live = skier.grind.name.toUpperCase();
   hud.live.textContent = live;
+  updateJumpHud();
   if (popTimer > 0 && (popTimer -= dt) <= 0) hud.pop.className = '';
 }
 
@@ -167,10 +168,70 @@ function bankCombo() {
   run.combo = []; run.comboPts = 0;
 }
 
+// Ski jump: distance points like real jumping (60 at the K point, 1.8 per
+// metre either side) plus up to 60 style points for takeoff, flight and
+// telemark, all ×10 to match the other scores.
+const grade = (q) => (q > 0.9 ? 'PERFECT' : q > 0.65 ? 'GOOD' : q > 0.3 ? 'OK' : 'POOR');
+function scoreJump(e) {
+  if (!e.dist) { showPop('NO DISTANCE', 0, 'Land past the takeoff edge', 'crash'); return; }
+  const distPts = Math.max(0, 60 + (e.dist - JUMP.K) * 1.8);
+  const style = 20 * e.takeoff + 20 * e.flight + 20 * (e.tele ? e.tele.q : 0);
+  const pts = Math.round((distPts + style) * 10 / 10) * 10;
+  run.score += pts;
+  run.tricks++;
+  const name = e.dist.toFixed(1) + ' m';
+  if (!run.bestTrick || pts > run.bestTrick.pts) run.bestTrick = { name: 'Ski jump ' + name, pts };
+  hud.scoreBox.classList.remove('bump');
+  void hud.scoreBox.offsetWidth;
+  hud.scoreBox.classList.add('bump');
+  const tags = [e.dist >= JUMP.HS ? 'HILL RECORD ZONE' : e.dist >= JUMP.K ? 'PAST K' : '',
+    'TAKEOFF ' + grade(e.takeoff), 'FLIGHT ' + grade(e.flight), e.tele ? 'TELEMARK ' + e.tele.grade : 'NO TELEMARK'];
+  showPop(name, pts, tags.filter(Boolean).join('  ·  '), e.dist >= JUMP.K ? 'perfect' : '');
+  popTimer = 4;
+  sfx.bank();
+}
+
+// The meters for the ski jump's three skill shots.
+function updateJumpHud() {
+  const el = hud.jumpHud;
+  let show = false;
+  const a = skier.air, J = a && a.jump;
+  if (skier.state === 'ground' && onJumpHill(skier.p.x, skier.p.z, 2) && jumpU(skier.p.z) < JUMP.edge) {
+    const d = JUMP.edge - jumpU(skier.p.z);
+    if (d < 45) {
+      show = true;
+      el.dataset.mode = 'takeoff';
+      hud.jumpLabel.textContent = input.jump ? 'RELEASE IN THE GREEN!' : 'HOLD JUMP · RELEASE AT THE EDGE';
+      hud.jumpMark.style.left = (100 - Math.min(45, d) / 45 * 100) + '%';
+    }
+  } else if (J) {
+    show = true;
+    if (J.tele) { el.dataset.mode = 'done'; hud.jumpLabel.textContent = 'TELEMARK ' + J.tele.grade; }
+    else if (J.h !== undefined && J.h < 6 && skier.v.y < 0 && J.t > 0.4) {
+      el.dataset.mode = 'tele';
+      hud.jumpLabel.textContent = 'TELEMARK! PRESS JUMP';
+      hud.jumpMark.style.left = (100 - Math.min(6, J.h) / 6 * 100) + '%';
+    } else {
+      el.dataset.mode = 'balance';
+      hud.jumpLabel.textContent = 'BALANCE · STEER TO STAY CENTRED';
+      hud.jumpMark.style.left = (50 + (J.bal || 0) * 50) + '%';
+    }
+  }
+  el.hidden = !show;
+}
+
 function handleEvents() {
   for (const e of skier.events) {
     if (e.type === 'takeoff' && e.popped) sfx.pop();
     if (e.type === 'grab') sfx.grab();
+    if (e.type === 'butter') {
+      const m = speedMult();
+      const pts = withSpeed(150, m);
+      addToCombo(e.name, pts);
+      showPop(e.name, pts, speedTag(m));
+      sfx.grab();
+    }
+    if (e.type === 'jumpLand') scoreJump(e);
     if (e.type === 'pressEnd' && e.time > 0.4) {
       const m = speedMult();
       const pts = withSpeed(100 + Math.min(e.time, 3) * 250, m);
@@ -194,7 +255,7 @@ function handleEvents() {
       if (e.airtime > 0.2) sfx.land(e.impact);
       shake = Math.min(0.5, e.impact * 0.03);
       const t = e.trick;
-      if (t.name && (t.points > 120 || t.name !== 'Air')) {
+      if (!e.jump && t.name && (t.points > 120 || t.name !== 'Air')) {
         const m = speedMult();
         let pts = t.points;
         let tag = '';

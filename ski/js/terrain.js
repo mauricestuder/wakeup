@@ -41,7 +41,10 @@ export const rand = () => {
 
 function slopeAt(z) {
   const run = 0.22 + 0.04 * Math.cos(z / 190) + 0.025 * Math.sin(z / 77);
-  return 0.06 + (run - 0.06) * smooth(-50, 20, z) * (1 - smooth(1870, 1950, z));
+  // A short flat by the hut, then a steep opening pitch that eases into the run.
+  const top = 0.08 + 0.3 * smooth(-92, -66, z);
+  const k = smooth(-20, 40, z);
+  return (top * (1 - k) + run * k) * (1 - smooth(1870, 1950, z));
 }
 
 const FALL = new Float32Array(WORLD.bottom - WORLD.top + 2);
@@ -79,6 +82,43 @@ function pipeOffset(x, z) {
   return h * t;
 }
 
+// ---------- ski jump ----------
+
+// A proper jumping hill off to the left: in-run, takeoff table, knoll, a long
+// steep landing slope and a flat outrun. The profile is built from its slope
+// (how much it drops per metre) along u = z - z0.
+export const JUMP = { x: -190, z0: 230, len: 300, half: 5, side: 40, K: 90, HS: 105 };
+const jumpSlope = (u) => {
+  if (u < JUMP.edge) {
+    return 0.02 + 0.6 * smooth(8, 26, u) - 0.44 * smooth(76, 98, u);
+  }
+  return 0.18 + 0.44 * smooth(JUMP.edge, JUMP.edge + 7, u) - 0.5 * smooth(192, 236, u);
+};
+JUMP.edge = 106;
+{
+  const N = JUMP.len * 4 + 1;
+  JUMP.P = new Float32Array(N); // height below the start
+  JUMP.S = new Float32Array(N); // distance along the surface
+  for (let i = 1; i < N; i++) {
+    const s = jumpSlope((i - 0.5) / 4);
+    JUMP.P[i] = JUMP.P[i - 1] - s / 4;
+    JUMP.S[i] = JUMP.S[i - 1] + Math.sqrt(1 + s * s) / 4;
+  }
+  // The outrun meets the mountain at the bottom; the hill stands above it.
+  JUMP.base = fallLine(JUMP.z0 + JUMP.len) + JUMP.x * -0.035 - JUMP.P[N - 1];
+}
+const jumpTable = (arr, u) => {
+  const f = Math.min(arr.length - 1.001, Math.max(0, u * 4)), i = Math.floor(f);
+  return arr[i] + (arr[i + 1] - arr[i]) * (f - i);
+};
+export const jumpU = (z) => z - JUMP.z0;
+// Metres along the landing hill from the takeoff edge, as judges measure it.
+export const jumpDistance = (z) => jumpTable(JUMP.S, jumpU(z)) - jumpTable(JUMP.S, JUMP.edge);
+export function onJumpHill(x, z, pad = 0) {
+  const u = jumpU(z);
+  return Math.abs(x - JUMP.x) < JUMP.half + pad && u > -2 && u < JUMP.len;
+}
+
 export function baseHeight(x, z) {
   const ax = Math.abs(x);
   const wild = smooth(LANE, LANE + 45, ax);
@@ -91,6 +131,12 @@ export function baseHeight(x, z) {
   if (pd < 46 && z > PIPE.z0 - 70 && z < PIPE.z1 + 60) {
     const m = (1 - smooth(32, 46, pd)) * smooth(PIPE.z0 - 70, PIPE.z0 - 30, z) * (1 - smooth(PIPE.z1 + 20, PIPE.z1 + 60, z));
     h += (fallLine(z) + PIPE.x * 0.035 - h) * m;
+  }
+  // The jumping hill replaces the mountain in its corridor, with banked sides.
+  const jd = Math.abs(x - JUMP.x), ju = jumpU(z);
+  if (jd < JUMP.half + JUMP.side && ju > -30 && ju < JUMP.len + 20) {
+    const m = (1 - smooth(JUMP.half, JUMP.half + JUMP.side, jd)) * smooth(-30, -4, ju) * (1 - smooth(JUMP.len - 10, JUMP.len + 20, ju));
+    h += (JUMP.base + jumpTable(JUMP.P, Math.min(JUMP.len, Math.max(0, ju))) - h) * m;
   }
   return h;
 }
@@ -152,6 +198,7 @@ function rail(x, z, len, h, kind = 'rail', dx = 0) {
 
 function featureOffset(f, x, z) {
   if (f.type === 'pipe') return pipeOffset(x, z);
+  if (f.type === 'jumphill') return 0; // part of baseHeight; listed for its mesh and to keep trees off
   const dx = x - f.x, dzz = z - f.z;
   const u = dzz * f.ca + dx * f.sa, v = Math.abs(dx * f.ca - dzz * f.sa);
   if (f.type === 'cliff') {
@@ -262,6 +309,8 @@ cliff(165, 900, 7, 30);
 cliff(-120, 1290, 9, 30);
 cliff(95, 1720, 5, 24);
 features.push({ type: 'pipe', x: PIPE.x, z: PIPE.z0, x0: PIPE.x - 30, x1: PIPE.x + 30, z0: PIPE.z0, z1: PIPE.z1 + 6 });
+features.push({ type: 'jumphill', x: JUMP.x, z: JUMP.z0, x0: JUMP.x - JUMP.half - JUMP.side, x1: JUMP.x + JUMP.half + JUMP.side,
+  z0: JUMP.z0 - 30, z1: JUMP.z0 + JUMP.len + 20 });
 
 export const dropIns = {
   summit: { x: 0, z: -60, label: 'Summit', speed: 0 },
@@ -269,6 +318,7 @@ export const dropIns = {
   pro: { x: 0, z: 990, label: 'Pro Line', speed: 16 },
   pipe: { x: PIPE.x, z: PIPE.z0 - 25, label: 'Halfpipe', speed: 14, finish: PIPE.z1 + 12 },
   backcountry: { x: -150, z: 30, label: 'Backcountry', speed: 6 },
+  jump: { x: JUMP.x, z: JUMP.z0 + 2, label: 'Ski Jump', speed: 0, finish: JUMP.z0 + JUMP.len - 15 },
 };
 
 // ---------- trees, rocks and other solid things ----------
@@ -450,7 +500,7 @@ function gridMesh(x0, x1, z0, z1, step, fn, colorFn, mat, stepZ = step) {
 }
 
 // 1 on the machine-groomed park lane and in the pipe, 0 in the powder.
-const groomedAt = (x, z) => Math.max(1 - smooth(LANE - 4, LANE + 6, Math.abs(x)), inPipe(x, z, PIPE.deck + 2) ? 1 : 0);
+const groomedAt = (x, z) => Math.max(1 - smooth(LANE - 4, LANE + 6, Math.abs(x)), inPipe(x, z, PIPE.deck + 2) || onJumpHill(x, z, 2) ? 1 : 0);
 
 const ROCK = new THREE.Color(0.32, 0.31, 0.33), PARK_SHADE = new THREE.Color(0.62, 0.72, 0.88);
 function snowColor(x, z, n, c, built = false) {
@@ -484,6 +534,25 @@ export function buildTerrain(scene) {
         if (Math.abs(d - PIPE.lipD - PIPE.deck) < 0.25) c.copy(orange); // deck edge
       };
       scene.add(gridMesh(f.x0, f.x1, f.z0, f.z1, 0.4, height, pipeColor, fmat, 1));
+      continue;
+    }
+    if (f.type === 'jumphill') {
+      // Fine track over the hill with what a jumper reads: in-run grooves,
+      // the takeoff edge, distance lines every 10 m, K (red) and HS (green).
+      const red = new THREE.Color(0.9, 0.12, 0.12), green = new THREE.Color(0.1, 0.75, 0.3);
+      const jumpColor = (x, z, n, c) => {
+        snowColor(x, z, n, c, true);
+        const u = jumpU(z), v = Math.abs(x - JUMP.x);
+        if (u < JUMP.edge && u > 6 && Math.abs(v - 0.55) < 0.12) c.multiplyScalar(0.78); // grooves
+        if (Math.abs(u - JUMP.edge) < 0.3) c.copy(blue);
+        if (u > JUMP.edge && v > JUMP.half - 1.2) {
+          const d = jumpDistance(z);
+          if (Math.abs(d - JUMP.K) < 0.35) c.copy(red);
+          else if (Math.abs(d - JUMP.HS) < 0.35) c.copy(green);
+          else if (d > 35 && d < JUMP.HS + 10 && Math.abs(d - Math.round(d / 10) * 10) < 0.18) c.copy(blue);
+        }
+      };
+      scene.add(gridMesh(JUMP.x - JUMP.half - 2, JUMP.x + JUMP.half + 2, JUMP.z0 - 4, JUMP.z0 + JUMP.len, 0.5, height, jumpColor, fmat, 1));
       continue;
     }
     // Paint the lines a rider reads: lip, knuckle, the gap edge and the deck.
@@ -766,6 +835,8 @@ function buildDecor(scene) {
   arch(scene, WORLD.finishZ, 'FINISH', '#1e88e5', '#ffffff');
   arch(scene, PIPE.z0 - 8, 'SUPERPIPE', '#ff5a1f', '#ffffff', PIPE.x, PIPE.lipD + PIPE.deck + 2);
   arch(scene, PIPE.z1 + 12, 'FINISH', '#1e88e5', '#ffffff', PIPE.x, PIPE.lipD + PIPE.deck + 2);
+  arch(scene, JUMP.z0 + 18, 'SKI JUMP', '#ff5a1f', '#ffffff', JUMP.x, JUMP.half + 2);
+  arch(scene, JUMP.z0 + JUMP.len - 15, 'FINISH', '#1e88e5', '#ffffff', JUMP.x, JUMP.half + 6);
 
   // Start hut at the summit
   const hutY = height(-14, -70);

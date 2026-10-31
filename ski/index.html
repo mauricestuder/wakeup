@@ -53,6 +53,15 @@
       80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
     #popName { font-size: clamp(30px, 6vw, 54px); line-height: 1; }
     #popPts { font-size: clamp(22px, 4vw, 34px); color: var(--orange); margin-top: 4px; }
+    #jumpHud { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); width: min(360px, 70vw); text-align: center; }
+    #jumpLabel { font-size: 15px; letter-spacing: .08em; margin-bottom: 6px; }
+    #jumpBar { position: relative; height: 16px; border-radius: 999px; background: rgba(10,20,36,.6); border: 2px solid rgba(255,255,255,.6); overflow: hidden; }
+    #jumpBar .zone { position: absolute; top: 0; bottom: 0; background: #2ecc71; }
+    #jumpHud[data-mode="takeoff"] .zone { left: 96%; right: 0; }
+    #jumpHud[data-mode="balance"] .zone { left: 40%; right: 40%; }
+    #jumpHud[data-mode="tele"] .zone { left: 60%; right: 6%; }
+    #jumpHud[data-mode="done"] #jumpBar { display: none; }
+    #jumpMark { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; background: #fff; border-radius: 3px; box-shadow: 0 0 8px #fff; }
     #speedMult { color: var(--orange); margin-left: 6px; }
     #speedMult:empty { display: none; }
     #popTag { font-size: 15px; font-weight: 900; letter-spacing: .2em; margin-top: 4px; color: #7fd4ff; }
@@ -80,7 +89,7 @@
     body:not(.touch) [data-btn="jump"] { right: 30px; bottom: 44px; }
     body:not(.touch) [data-btn="grab"] { right: 150px; bottom: 48px; }
     body:not(.touch) [data-btn="style"] { right: 140px; bottom: 154px; }
-    body:not(.touch) [data-btn="tuck"] { right: 44px; bottom: 172px; }
+    body:not(.touch) [data-btn="butter"] { right: 44px; bottom: 172px; }
     #stickZone { position: absolute; left: 0; top: 0; bottom: 0; width: 46%; touch-action: none; }
     #stick { position: absolute; left: calc(110px + env(safe-area-inset-left)); top: calc(100% - 120px - env(safe-area-inset-bottom));
       width: 126px; height: 126px; margin: -63px 0 0 -63px; border-radius: 50%; pointer-events: none;
@@ -99,7 +108,7 @@
       right: calc(128px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
     [data-btn="style"] { --c: var(--gold); width: 62px; height: 62px; font-size: 13px;
       right: calc(112px + env(safe-area-inset-right)); bottom: calc(108px + env(safe-area-inset-bottom)); }
-    [data-btn="tuck"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
+    [data-btn="butter"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
       right: calc(34px + env(safe-area-inset-right)); bottom: calc(128px + env(safe-area-inset-bottom)); }
     [data-btn="pause"], [data-btn="reset"] { width: 42px; height: 42px; border-width: 2px; border-color: rgba(255,255,255,.5); }
     [data-btn="pause"] svg, [data-btn="reset"] svg { width: 18px; height: 18px; }
@@ -109,7 +118,7 @@
       [data-btn="jump"] { width: 82px; height: 82px; }
       [data-btn="grab"] { width: 62px; height: 62px; right: calc(114px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); }
       [data-btn="style"] { width: 54px; height: 54px; right: calc(100px + env(safe-area-inset-right)); bottom: calc(94px + env(safe-area-inset-bottom)); }
-      [data-btn="tuck"] { width: 54px; height: 54px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(112px + env(safe-area-inset-bottom)); }
+      [data-btn="butter"] { width: 54px; height: 54px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(112px + env(safe-area-inset-bottom)); }
       #score { font-size: 50px; }
     }
 
@@ -123,7 +132,7 @@
     h1 span { color: var(--orange); }
     h2 { margin: 0 0 6px; font-size: clamp(36px, 8vw, 64px); }
     .tag { margin: 8px 0 18px; font-size: 16px; font-weight: 700; opacity: .9; }
-    .drops { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 640px; }
+    .drops { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 760px; }
     button { font: 900 italic 18px var(--font); text-transform: uppercase; color: #fff; background: var(--orange);
       border: 0; border-radius: 10px; padding: 12px 10px; cursor: pointer; box-shadow: 0 4px 0 #b83a0c; }
     button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b83a0c; }
@@ -151,7 +160,7 @@
     details.how summary::-webkit-details-marker { display: none; }
     details.how summary:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     details.how[open] summary { margin-bottom: 8px; }
-    @media (max-width: 620px) { .drops { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 900px) { .drops { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 380px) { .drops { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
@@ -165,13 +174,14 @@
     </div>
     <div id="comboBox" class="sh"><div id="combo"></div><div id="comboPts" class="heavy"></div></div>
     <div id="live" class="heavy sh"></div>
+    <div id="jumpHud" hidden><div id="jumpLabel" class="heavy sh"></div><div id="jumpBar"><i class="zone"></i><i id="jumpMark"></i></div></div>
     <div id="pop" class="sh"><div id="popName" class="heavy"></div><div id="popPts" class="heavy"></div><div id="popTag"></div></div>
   </div>
 
   <div id="touchUI">
     <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div>
       <div class="stickKeys kb"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Steer · air: A/D spin, W/S flip</span></div></div></div>
-    <div class="btn tc" data-btn="tuck">TUCK<kbd class="kb">E</kbd></div>
+    <div class="btn tc" data-btn="butter">180<kbd class="kb">E</kbd></div>
     <div class="btn tc" data-btn="style">STYLE<kbd class="kb">K</kbd></div>
     <div class="btn tc" data-btn="grab">GRAB<kbd class="kb">Shift</kbd></div>
     <div class="btn tc" data-btn="jump">JUMP<kbd class="kb">Space</kbd></div>
@@ -189,6 +199,7 @@
         <button data-drop="pro" class="alt">Pro Line<small>Step-up, hip, big air</small></button>
         <button data-drop="pipe">Halfpipe<small>Superpipe airs</small></button>
         <button data-drop="backcountry" class="dark">Backcountry<small>Trees + cliffs</small></button>
+        <button data-drop="jump" class="alt">Ski Jump<small>Distance + style</small></button>
       </div>
       <details class="how">
         <summary>How to ride</summary>
@@ -202,8 +213,9 @@
           <b class="kb">Hold Shift / J</b><span class="kb">Grab · 8 directions + none: Safety, Mute, Tail, Japan, Nose, Blunt, Critical, Seatbelt, Truck Driver</span>
           <b class="tch">Hold STYLE</b><span class="tch">In the air: Iron Cross, Daffy (up), Backscratcher (down), Spread Eagle (sideways) · on snow: nose press, or tail press with stick down</span>
           <b class="kb">Hold K</b><span class="kb">In the air: Iron Cross, Daffy (W), Backscratcher (S), Spread Eagle (A/D) · on snow: nose press, or tail press with S</span>
-          <b class="tch">Hold TUCK</b><span class="tch">Tuck for speed, skate when slow</span>
-          <b class="kb">Hold E</b><span class="kb">Tuck for speed, skate when slow</span>
+          <b class="tch">180</b><span class="tch">On snow: butter a 180 and ride switch (stick right turns the other way) · tuck with the stick up</span>
+          <b class="kb">E</b><span class="kb">On snow: butter a 180 and ride switch (hold D to turn the other way) · tuck with W</span>
+          <b>Ski Jump</b><span>Release JUMP right at the edge · steer to keep your balance centred in the air · press JUMP just before landing for a telemark</span>
           <b class="kb">H</b><span class="kb">Show or hide the key labels under the buttons</span>
           <b>Rails &amp; boxes</b><span>Jump onto them · JUMP to pop off</span>
           <b>Halfpipe</b><span>Steer up the walls · spin 180 to come back in forwards</span>

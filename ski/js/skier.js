@@ -1,6 +1,6 @@
 // The skier: a small rigged model, ground/air/rail physics and trick tracking.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { height, normal, rails, obstacleHit, inPipe, PIPE } from './terrain.js';
+import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance } from './terrain.js';
 
 const G = 9.81;
 const SPIN_MAX = 10.5;  // rad/s, about 600 degrees a second
@@ -266,7 +266,7 @@ export class Skier {
     this.switch = false;
     this.wallF = null;
     this.state = 'ground';
-    this.air = this.grind = this.press = this.landAnim = null;
+    this.air = this.grind = this.press = this.landAnim = this.butter = null;
     this.charge = 0;
     this.groundQuat(this.renderQ);
     this.pivotUp.set(0, 1, 0).applyQuaternion(this.renderQ);
@@ -286,7 +286,7 @@ export class Skier {
   // input: { x, y, jump, grab, style, tuck, jumpReleased }
   step(dt, input) {
     this.time += dt;
-    if (this.landAnim && (this.landAnim.t += dt) > 0.6) this.landAnim = null;
+    if (this.landAnim && (this.landAnim.t += dt) > (this.landAnim.kind === 'telemark' ? 1.4 : 0.6)) this.landAnim = null;
     if (this.state === 'ground') this.stepGround(dt, input);
     else if (this.state === 'air') this.stepAir(dt, input);
     else if (this.state === 'grind') this.stepGrind(dt, input);
@@ -323,6 +323,15 @@ export class Skier {
     this.p.addScaledVector(this.v, 1 / 120);
   }
 
+  jumpPop(n, q) {
+    this.v.addScaledVector(n, 0.5 + 1.5 * q);
+    this.popKind = 'stretch';
+    this.charge = 0;
+    this.takeoff(true);
+    this.air.jump.takeoffQ = q;
+    this.p.addScaledVector(this.v, 1 / 120);
+  }
+
   // The slope the skis are on, sampled a little behind them so a sharp lip
   // throws the skier into the air instead of bending them down its far side.
   surfaceNormal() {
@@ -336,8 +345,19 @@ export class Skier {
     if (n.y < 0.8 && inPipe(this.p.x, this.p.z, 2)) { this.stepWall(dt, input, n); return; }
     this.wallF = null;
     const speed = this.v.length();
-    const tuck = (input.y < -0.35 || input.tuck) && speed > 5;
+    // On the ski jump in-run the skier holds a tuck and a straight line.
+    const ju = jumpU(this.p.z);
+    const inrun = onJumpHill(this.p.x, this.p.z, 2) && ju < JUMP.edge;
+    if (inrun) input = { ...input, x: Math.max(-1, Math.min(1, (this.p.x - JUMP.x) * 0.5 + this.heading * 3)), y: -1 };
+    const tuck = input.y < -0.35 && speed > 5;
     this.tuck = tuck;
+    if (this.butter && (this.butter.t += dt) > 0.4) this.butter = null;
+    if (input.butter && !inrun && !this.press && !this.butter && speed > 1.5) {
+      // Butter 180: swing the skis round and ride the other way.
+      this.butter = { t: 0, dir: input.x > 0.2 ? -1 : 1 };
+      this.switch = !this.switch;
+      this.emit('butter', { name: this.switch ? 'Butter 180 to Switch' : 'Butter 180' });
+    }
     const brake = input.y > 0.3 && !this.press ? (input.y - 0.3) / 0.7 : 0;
     this.updatePress(dt, input, speed);
 
@@ -361,7 +381,7 @@ export class Skier {
     let newSpd = Math.max(0, spd - loss);
     // Skating: push forward when slow.
     let push = 0;
-    if ((input.y < -0.35 || input.tuck) && spd < 7) push = 3.2 * dt;
+    if (input.y < -0.35 && spd < 7) push = 3.2 * dt;
     const scale = spd > 1e-4 ? newSpd / spd : 0;
     const vt = f.clone().multiplyScalar(vf * scale).addScaledVector(l, newL * scale);
     if (push) vt.addScaledVector(f, push);
@@ -376,7 +396,12 @@ export class Skier {
     if (input.jump) { this.charge = Math.min(0.5, this.charge + dt); target = 0.75; }
     this.crouch += (target - this.crouch) * (1 - Math.exp(-10 * dt));
 
-    if (input.jumpReleased && this.charge > 0) { this.pop(n); return; }
+    if (inrun && input.jumpReleased && this.charge > 0) {
+      // Ski jump takeoff: the closer to the edge, the better the spring.
+      const d = JUMP.edge - ju;
+      if (d < 5) { this.jumpPop(n, d < 1.6 ? 1 : 1 - (d - 1.6) / 3.4 * 0.85); return; }
+      this.charge = 0; // far too early: no spring at all
+    } else if (input.jumpReleased && this.charge > 0) { this.pop(n); return; }
     if (!input.jump) this.charge = 0;
 
     this.p.addScaledVector(this.v, dt);
@@ -456,8 +481,14 @@ export class Skier {
       a.tilt = new THREE.Quaternion().setFromUnitVectors(Y, n);
       a.qb = a.tilt.clone().invert().multiply(this.q);
     }
+    const ju = jumpU(this.p.z);
+    if (onJumpHill(this.p.x, this.p.z, 2) && ju > JUMP.edge - 15 && ju < JUMP.edge + 3) {
+      // Ski jump flight: no tricks, just balance and the landing.
+      this.air.jump = { t: 0, takeoffQ: 0, bal: (Math.random() < 0.5 ? -1 : 1) * 0.12, balV: 0, gust: 0, qSum: 0, qT: 0, tele: null, lastJump: true };
+    }
     if (!popped) this.popKind = null;
     this.wallF = null;
+    this.butter = null;
     this.emit('takeoff', { popped });
   }
 
@@ -465,15 +496,19 @@ export class Skier {
     const a = this.air;
     a.t += dt;
     if (input.jumpReleased && !a.popped && a.t < 0.18 && this.charge > 0) {
-      // Late pop off a lip still counts.
-      this.v.y += 3.3 + this.charge * 5;
+      // Late pop off a lip still counts (on the ski jump, a late spring is weaker).
+      if (a.jump) {
+        const q = Math.max(0, 1 - a.t / 0.18) * 0.75;
+        this.v.y += 0.5 + 1.5 * q;
+        a.jump.takeoffQ = q;
+      } else this.v.y += 3.3 + this.charge * 5;
       a.popped = true;
-      this.popKind = POP_KINDS[this.popCount++ % 3];
+      this.popKind = a.jump ? 'stretch' : POP_KINDS[this.popCount++ % 3];
     }
     if (!input.jump) this.charge = 0;
 
     const dz = (x) => (Math.abs(x) < 0.22 ? 0 : (x - Math.sign(x) * 0.22) / 0.78);
-    const sx = dz(input.x), sy = dz(input.y);
+    const sx = a.jump ? 0 : dz(input.x), sy = a.jump ? 0 : dz(input.y);
     const slow = a.grab ? 0.8 : 1;
     const k = 1 - Math.exp(-12 * dt);
     a.spinRate += (-sx * SPIN_MAX * slow - a.spinRate) * k;
@@ -513,6 +548,8 @@ export class Skier {
       }
       const lean = Math.min(1, Math.abs(this.v.y) / a.vy0);
       this.q.copy(new THREE.Quaternion().slerp(a.tilt, lean)).multiply(a.qb);
+    } else if (a.jump) {
+      this.stepJumpAir(dt, input, a.jump);
     } else if (Math.abs(sx) + Math.abs(sy) < 0.05 && up.y > 0.6) {
       // Landing assist: with the stick centred, settle toward an upright stance.
       const fwd = v3.copy(Z).applyQuaternion(this.q).setY(0);
@@ -531,7 +568,7 @@ export class Skier {
     }
 
     // Grabs (GRAB) and style moves (STYLE); the stick picks which one.
-    if (!a.grab && a.t > 0.06 && (input.grab || input.style)) {
+    if (!a.grab && !a.jump && a.t > 0.06 && (input.grab || input.style)) {
       const style = !input.grab;
       a.grab = { name: style ? styleName(input.x, input.y) : grabName(input.x, input.y), t: 0, style };
       a.grabs.push(a.grab);
@@ -552,6 +589,39 @@ export class Skier {
     if (this.state !== 'air') return;
     if (this.checkObstacles()) return;
     this.checkGround(a);
+  }
+
+  // Ski jump flight. Balance drifts away on its own (and with gusts); the stick
+  // left/right brings it back. Good balance means a flat V and more lift. Near
+  // the ground, JUMP sets a telemark: press it close to the snow, not early.
+  stepJumpAir(dt, input, J) {
+    J.t += dt;
+    J.gust += ((Math.random() - 0.5) * 7 - J.gust) * (1 - Math.exp(-1.5 * dt));
+    J.balV += (J.bal * 2.6 + J.gust * 1.2) * dt;
+    J.balV *= Math.exp(-1.2 * dt);
+    J.bal += (J.balV + input.x * 1.7) * dt;
+    if (Math.abs(J.bal) > 1) { J.bal = Math.sign(J.bal); J.balV = 0; }
+    const q = 1 - Math.pow(Math.abs(J.bal), 1.5);
+    J.q = q;
+    J.qSum += q * dt; J.qT += dt;
+    const spd = Math.hypot(this.v.x, this.v.z);
+    this.v.y += G * 0.3 * q * Math.min(1, spd / 18) * dt;
+    this.v.x *= Math.exp(-0.6 * dt);
+    // Lie forward over the skis, matching the hill below.
+    const travel = v3.set(this.v.x, 0, this.v.z);
+    if (travel.lengthSq() > 1) {
+      travel.normalize();
+      const ahead = normal(this.p.x + travel.x * 4, this.p.z + travel.z * 4, new THREE.Vector3());
+      this.q.slerp(basisQuat(ahead, travel.clone(), new THREE.Quaternion()), 1 - Math.exp(-4 * dt));
+    }
+    const pressed = input.jump && !J.lastJump;
+    J.lastJump = input.jump;
+    const h = this.p.y - height(this.p.x, this.p.z);
+    J.h = h;
+    if (pressed && !J.tele && J.t > 0.4) {
+      const tq = h < 0.35 ? 0.5 : h <= 2.4 ? 1 : h <= 5.5 ? 1 - (h - 2.4) / 3.1 * 0.8 : 0.1;
+      J.tele = { q: tq, grade: h < 0.35 ? 'LATE' : h <= 2.4 ? 'PERFECT' : h <= 5.5 ? 'EARLY' : 'WAY TOO EARLY' };
+    }
   }
 
   // Ground contact in the air uses the body where it really is: it turns
@@ -596,8 +666,8 @@ export class Skier {
     const align = fp.dot(vdir);
     const upDot = up.dot(n);
     const trick = nameTrick(a);
-    if (upDot < 0.55 || flat < 0.35 || Math.abs(align) < 0.6 || impact > 17) {
-      this.crash(impact > 17 ? 'Too hard' : 'Wipeout');
+    if (upDot < 0.55 || flat < 0.35 || Math.abs(align) < 0.6) {
+      this.crash('Wipeout');
       return;
     }
     this.switch = align < 0;
@@ -613,6 +683,16 @@ export class Skier {
     const clean = upDot > 0.92 && Math.abs(align) > 0.94;
     const sketchy = !!a.grab || upDot < 0.75 || Math.abs(align) < 0.8;
     this.air = null;
+    if (a.jump) {
+      const J = a.jump, past = jumpU(this.p.z) > JUMP.edge;
+      this.landAnim = { t: 0, kind: J.tele ? 'telemark' : J.q < 0.3 ? 'windmill' : 'stomp' };
+      this.emit('land', { trick, clean, sketchy, impact, airtime: a.t, jump: true });
+      this.emit('jumpLand', {
+        dist: past ? Math.round(jumpDistance(this.p.z) * 2) / 2 : 0,
+        takeoff: J.takeoffQ, flight: J.qT > 0 ? J.qSum / J.qT : 0, tele: J.tele,
+      });
+      return;
+    }
     if (a.t > 0.3) this.landAnim = { t: 0, kind: sketchy ? 'windmill' : 'stomp' };
     this.emit('land', { trick, clean, sketchy, impact, airtime: a.t });
   }
@@ -721,7 +801,7 @@ export class Skier {
   crash(reason) {
     this.state = 'crash';
     this.crashT = 0;
-    this.air = this.grind = this.press = this.landAnim = null;
+    this.air = this.grind = this.press = this.landAnim = this.butter = null;
     this.wallF = null;
     this.tumbleAxis = new THREE.Vector3(Math.random() - 0.5, 0.3, Math.random() - 0.5).normalize();
     this.emit('crash', { reason });
@@ -779,7 +859,12 @@ export class Skier {
         both((s, i) => T.hands[i].set(s * 0.65, hipY + 0.4, 0.05));
       }
       const L = this.landAnim;
-      if (L && L.kind === 'windmill') {
+      if (L && L.kind === 'telemark') {
+        // One ski forward, knees deep, arms out to the side.
+        T.skis[0].z += 0.38; T.skis[1].z -= 0.38; T.skis[1].y += 0.06;
+        T.crouch = Math.max(c, 0.6);
+        both((s, i) => T.hands[i].set(s * 0.75, hipY + 0.45, 0.1));
+      } else if (L && L.kind === 'windmill') {
         both((s, i) => T.hands[i].set(s * 0.6, hipY + 0.5 + 0.35 * Math.sin(L.t * 14 + s), 0.35 * Math.cos(L.t * 14 + s)));
       } else if (L) {
         both((s, i) => T.hands[i].set(s * 0.3, hipY + 0.1, 0.45));
@@ -794,7 +879,19 @@ export class Skier {
     } else if (this.state === 'air') {
       const a = this.air, g = a.grab;
       both((s, i) => { T.skis[i].y += 0.18; T.hands[i].set(s * 0.5, hipY + 0.45, 0.2); T.poles[i].set(s * 0.4, -0.6, -0.6); });
-      if (g) {
+      if (a.jump) {
+        const J = a.jump;
+        T.rate = 10;
+        if (J.tele) {
+          T.skis[0].z += 0.35; T.skis[1].z -= 0.35;
+          both((s, i) => T.hands[i].set(s * 0.75, hipY + 0.4, 0.1));
+        } else {
+          // V-style: tips apart, lying forward, arms back along the body.
+          both((s, i) => { T.skis[i].ry += s * 0.32; T.skis[i].y -= 0.1; T.hands[i].set(s * 0.32, hipY - 0.05, -0.45); });
+          T.tx += 0.75; T.crouch = 0.12;
+        }
+        T.tz += (J.bal || 0) * 0.55; // wobbles show the balance
+      } else if (g) {
         const def = g.style ? STYLES[g.name] : GRABS[g.name];
         const k = Math.min(1, g.t / 0.12), tw = 1 + Math.min(1, g.t / 0.7) * 0.4; // tweak it the longer you hold
         T.rate = 22;
@@ -829,7 +926,12 @@ export class Skier {
       this.groundQuat(target);
       q1.setFromAxisAngle(Z, this.switch ? -this.lean : this.lean);
       target.multiply(q1);
-      this.renderQ.slerp(target, 1 - Math.exp(-18 * dt));
+      if (this.butter) {
+        // Swing round to the new direction instead of snapping.
+        const k = Math.min(1, this.butter.t / 0.4), e = k * k * (3 - 2 * k);
+        target.multiply(q1.setFromAxisAngle(Y, this.butter.dir * Math.PI * (1 - e)));
+        this.renderQ.copy(target);
+      } else this.renderQ.slerp(target, 1 - Math.exp(-18 * dt));
     }
 
     // Blend the pose toward its targets.
