@@ -466,7 +466,13 @@ export class Skier {
     const k = 1 - Math.exp(-12 * dt);
     a.spinRate += (-sx * SPIN_MAX * slow - a.spinRate) * k;
     a.flipRate += (-sy * FLIP_MAX * slow - a.flipRate) * k;
-    const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.left, a.flipRate);
+    // Spins turn around the world's up. A flip turns around the skier's own
+    // left-right axis as it was when the flip started, so W/S after a spin is
+    // still a front or back flip instead of a sideways roll, and a cork (both
+    // at once) turns around one fixed tilted axis.
+    if (sy && !a.flipAxis) a.flipAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(a.pipe ? a.qb : this.q);
+    if (!sy && Math.abs(a.flipRate) < 0.2) a.flipAxis = null;
+    const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.flipAxis || a.left, a.flipRate);
     const wl = w.length();
     if (wl > 1e-4) {
       q1.setFromAxisAngle(w.clone().divideScalar(wl), wl * dt);
