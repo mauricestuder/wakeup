@@ -20,6 +20,18 @@ function basisQuat(up, fwd, out) {
   return out.setFromRotationMatrix(m1);
 }
 
+// Never let the skier roll onto their side in the air: turn the body about its
+// own forward axis until its left-right axis is level again. Spins and flips
+// (and corks, which mix the two) are untouched; only the sideways tilt goes.
+const _L = new THREE.Vector3(), _U = new THREE.Vector3(), _F = new THREE.Vector3(), _lq = new THREE.Quaternion();
+function levelRoll(q) {
+  _L.set(1, 0, 0).applyQuaternion(q);
+  _U.set(0, 1, 0).applyQuaternion(q);
+  _F.set(0, 0, 1).applyQuaternion(q);
+  const th = Math.abs(_U.y) > 1e-4 ? Math.atan(-_L.y / _U.y) : -Math.sign(_L.y) * Math.PI / 2;
+  if (Math.abs(th) > 1e-5) q.premultiply(_lq.setFromAxisAngle(_F, th));
+}
+
 // ---------- model ----------
 
 function box(w, h, d, color, y = 0) {
@@ -481,6 +493,7 @@ export class Skier {
       a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
       a.flip += a.flipRate * dt;
     }
+    levelRoll(a.pipe ? a.qb : this.q);
     const up = v2.copy(Y).applyQuaternion(this.q);
     if (a.pipe) {
       // Halfpipe: drift back over the coping, stand up on the way up and lay

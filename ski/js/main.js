@@ -97,7 +97,7 @@ const input = new Input({
 // ---------- HUD ----------
 
 const hud = {
-  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), combo: $('combo'), comboPts: $('comboPts'),
+  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), speedMult: $('speedMult'), combo: $('combo'), comboPts: $('comboPts'),
   live: $('live'), pop: $('pop'), popName: $('popName'), popPts: $('popPts'), popTag: $('popTag'),
 };
 let popTimer = 0;
@@ -119,6 +119,8 @@ function updateHud(dt) {
   hud.score.textContent = Math.round(shownScore).toLocaleString();
   hud.best.textContent = 'BEST ' + Math.max(best, run.score).toLocaleString();
   hud.speed.textContent = Math.round(skier.speed * 3.6);
+  const m = speedMult();
+  hud.speedMult.textContent = m > 1 ? '×' + m.toFixed(1) : '';
   if (run.combo.length) {
     hud.combo.textContent = run.combo.join('  ·  ');
     hud.comboPts.textContent = run.comboPts.toLocaleString() + (run.combo.length > 1 ? '  ×' + run.combo.length : '');
@@ -135,6 +137,15 @@ function updateHud(dt) {
 }
 
 // ---------- scoring ----------
+
+// Going faster pays: ×1 up to 40 km/h, then +0.1 for every 6 km/h, up to ×2.5.
+function speedMult() {
+  const kmh = skier.speed * 3.6;
+  return Math.min(2.5, Math.max(1, Math.round((1 + (kmh - 40) / 60) * 10) / 10));
+}
+const withSpeed = (pts, m) => Math.round(pts * m / 10) * 10;
+const speedTag = (m) => (m > 1 ? 'SPEED ×' + m.toFixed(1) : '');
+const tags = (...t) => t.filter(Boolean).join('  ·  ');
 
 function addToCombo(name, pts) {
   run.combo.push(name);
@@ -161,20 +172,22 @@ function handleEvents() {
     if (e.type === 'takeoff' && e.popped) sfx.pop();
     if (e.type === 'grab') sfx.grab();
     if (e.type === 'pressEnd' && e.time > 0.4) {
-      const pts = Math.round((100 + Math.min(e.time, 3) * 250) / 10) * 10;
+      const m = speedMult();
+      const pts = withSpeed(100 + Math.min(e.time, 3) * 250, m);
       addToCombo(e.name, pts);
-      showPop(e.name, pts, '');
+      showPop(e.name, pts, speedTag(m));
     }
     if (e.type === 'grind') {
       sfx.grind();
-      if (e.airTrick && e.airTrick.name) addToCombo(e.airTrick.name, e.airTrick.points);
+      if (e.airTrick && e.airTrick.name) addToCombo(e.airTrick.name, withSpeed(e.airTrick.points, speedMult()));
       run.comboT = 99;
     }
     if (e.type === 'grindEnd') {
-      const pts = Math.round((200 + e.time * 300) / 10) * 10;
+      const m = speedMult();
+      const pts = withSpeed(200 + e.time * 300, m);
       if (e.time > 0.25) {
         addToCombo(e.name, pts);
-        showPop(e.name, pts, '');
+        showPop(e.name, pts, speedTag(m));
       }
     }
     if (e.type === 'land') {
@@ -182,12 +195,14 @@ function handleEvents() {
       shake = Math.min(0.5, e.impact * 0.03);
       const t = e.trick;
       if (t.name && (t.points > 120 || t.name !== 'Air')) {
+        const m = speedMult();
         let pts = t.points;
         let tag = '';
-        if (e.clean) { pts = Math.round(pts * 1.25 / 10) * 10; tag = 'PERFECT'; }
-        else if (e.sketchy) { pts = Math.round(pts * 0.7 / 10) * 10; tag = 'SKETCHY'; }
+        if (e.clean) { pts *= 1.25; tag = 'PERFECT'; }
+        else if (e.sketchy) { pts *= 0.7; tag = 'SKETCHY'; }
+        pts = withSpeed(pts, m);
         addToCombo(t.name, pts);
-        showPop(t.name, pts, tag, e.clean ? 'perfect' : '');
+        showPop(t.name, pts, tags(tag, speedTag(m)), e.clean ? 'perfect' : '');
         sfx.trick(Math.min(3, Math.floor(pts / 700)));
       }
       run.comboT = 2.6;
