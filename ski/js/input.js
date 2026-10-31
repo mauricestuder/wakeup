@@ -3,16 +3,15 @@
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('touch');
 const STICK_R = 58;
-// The on-screen key guide: keys light up while held, H hides it (remembered).
-const held = new Set();
+// On a keyboard the touch buttons stay on screen with their key under them:
+// a button lights up while its key is held, H hides the key labels.
+const KEY_BTN = {
+  Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
+  KeyE: 'tuck', ControlLeft: 'tuck', KeyR: 'reset', Escape: 'pause', KeyP: 'pause',
+};
 function lightKey(code, on) {
-  if (on) held.add(code); else held.delete(code);
-  const any = (...c) => c.some((k) => held.has(k));
-  const cork = any('KeyW', 'KeyS', 'ArrowUp', 'ArrowDown') && any('KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight');
-  for (const el of document.querySelectorAll('#keys kbd')) {
-    if (el.dataset.k === 'cork') el.classList.toggle('on', cork);
-    else if (el.dataset.k.split(' ').includes(code)) el.classList.toggle('on', on);
-  }
+  const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
+  if (el) el.classList.toggle('down', on);
 }
 function toggleKeyHints() {
   const off = document.body.classList.toggle('nokeys');
@@ -60,7 +59,7 @@ export class Input {
       if (STYLE_KEYS.includes(e.code)) this.style = false;
       if (TUCK_KEYS.includes(e.code)) this.tuck = false;
     });
-    addEventListener('blur', () => { this.keys.clear(); held.clear(); for (const el of document.querySelectorAll('#keys kbd.on')) el.classList.remove('on'); this.jump = this.grab = this.style = this.tuck = false; });
+    addEventListener('blur', () => { this.keys.clear(); for (const el of document.querySelectorAll('[data-btn].down')) el.classList.remove('down'); this.jump = this.grab = this.style = this.tuck = false; });
   }
 
   initTouch() {
@@ -137,6 +136,11 @@ export class Input {
     if (x && y) { x *= 0.75; y *= 0.75; }
     this.x = Math.max(-1, Math.min(1, x + this.stick.x));
     this.y = Math.max(-1, Math.min(1, y + this.stick.y));
+    if (!isTouch) { // the on-screen stick follows the keys
+      if (!this.knob) this.knob = document.getElementById('knob');
+      this.knob.style.transform = x || y ? `translate(${x * STICK_R}px, ${y * STICK_R}px)` : '';
+      this.knob.parentElement.classList.toggle('live', !!(x || y));
+    }
   }
 
   // Release events last one physics step.
