@@ -3,6 +3,23 @@
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('touch');
 const STICK_R = 58;
+// The on-screen key guide: keys light up while held, H hides it (remembered).
+const held = new Set();
+function lightKey(code, on) {
+  if (on) held.add(code); else held.delete(code);
+  const any = (...c) => c.some((k) => held.has(k));
+  const cork = any('KeyW', 'KeyS', 'ArrowUp', 'ArrowDown') && any('KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight');
+  for (const el of document.querySelectorAll('#keys kbd')) {
+    if (el.dataset.k === 'cork') el.classList.toggle('on', cork);
+    else if (el.dataset.k.split(' ').includes(code)) el.classList.toggle('on', on);
+  }
+}
+function toggleKeyHints() {
+  const off = document.body.classList.toggle('nokeys');
+  try { localStorage.setItem('freshline.nokeys', off ? '1' : ''); } catch { /* private mode */ }
+}
+try { if (localStorage.getItem('freshline.nokeys')) document.body.classList.add('nokeys'); } catch { /* private mode */ }
+
 const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const STYLE_KEYS = ['KeyK', 'KeyL'];
 const TUCK_KEYS = ['KeyE', 'ControlLeft'];
@@ -26,6 +43,8 @@ export class Input {
     addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
+      lightKey(e.code, true);
+      if (e.code === 'KeyH' && !e.repeat) toggleKeyHints();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
       if (e.code === 'KeyR') this.onReset();
       if (e.code === 'Space') { this.jump = true; e.preventDefault(); }
@@ -35,12 +54,13 @@ export class Input {
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
+      lightKey(e.code, false);
       if (e.code === 'Space' && this.jump) { this.jump = false; this.jumpReleased = true; }
       if (GRAB_KEYS.includes(e.code)) this.grab = false;
       if (STYLE_KEYS.includes(e.code)) this.style = false;
       if (TUCK_KEYS.includes(e.code)) this.tuck = false;
     });
-    addEventListener('blur', () => { this.keys.clear(); this.jump = this.grab = this.style = this.tuck = false; });
+    addEventListener('blur', () => { this.keys.clear(); held.clear(); for (const el of document.querySelectorAll('#keys kbd.on')) el.classList.remove('on'); this.jump = this.grab = this.style = this.tuck = false; });
   }
 
   initTouch() {

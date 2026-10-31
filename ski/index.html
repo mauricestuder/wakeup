@@ -59,6 +59,18 @@
     #pop.crash #popTag { color: #ffb0b0; }
     #pop.bank #popName { color: var(--gold); }
 
+    /* ---------- keyboard hints ---------- */
+    #keys { position: fixed; left: max(14px, env(safe-area-inset-left)); bottom: 14px; z-index: 3; display: none;
+      background: rgba(10,20,36,.55); border-radius: 12px; padding: 8px 12px 9px; color: var(--snow);
+      font-size: 12px; font-weight: 700; letter-spacing: .02em; pointer-events: none;
+      grid-template-columns: auto auto; gap: 4px 10px; align-items: center; }
+    body.playing:not(.touch):not(.nokeys) #keys { display: grid; }
+    #keys .k { display: flex; gap: 3px; justify-content: flex-end; }
+    #keys kbd { font: 800 11px var(--font); min-width: 20px; padding: 3px 6px; border-radius: 5px; text-align: center;
+      background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); border-bottom-width: 2px; }
+    #keys kbd.on { background: var(--orange, #ff6a1a); color: #fff; border-color: #ffb07a; }
+    #keys .sep { grid-column: 1 / -1; height: 1px; background: rgba(255,255,255,.15); margin: 2px 0; }
+    #keys .dim { opacity: .65; font-weight: 600; }
     /* ---------- touch controls ---------- */
     #touchUI { position: fixed; inset: 0; z-index: 3; display: none; touch-action: none; }
     body.playing #touchUI { display: block; }
@@ -150,6 +162,21 @@
     <div id="pop" class="sh"><div id="popName" class="heavy"></div><div id="popPts" class="heavy"></div><div id="popTag"></div></div>
   </div>
 
+  <div id="keys" aria-hidden="true">
+    <div class="k"><kbd data-k="KeyW ArrowUp">W</kbd><kbd data-k="KeyA ArrowLeft">A</kbd><kbd data-k="KeyS ArrowDown">S</kbd><kbd data-k="KeyD ArrowRight">D</kbd></div><span>Steer · W tuck · S brake</span>
+    <div class="k"><kbd data-k="Space">Space</kbd></div><span>Hold, release to jump</span>
+    <div class="sep"></div>
+    <div class="k"><kbd data-k="KeyA ArrowLeft">A</kbd><kbd data-k="KeyD ArrowRight">D</kbd></div><span>Spin</span>
+    <div class="k"><kbd data-k="KeyW ArrowUp">W</kbd><kbd data-k="KeyS ArrowDown">S</kbd></div><span>Front / back flip</span>
+    <div class="k"><kbd data-k="cork">W/S + A/D</kbd></div><span>Cork</span>
+    <div class="k"><kbd data-k="ShiftLeft ShiftRight">Shift</kbd><kbd data-k="KeyJ">J</kbd></div><span>Grab (+ direction)</span>
+    <div class="k"><kbd data-k="KeyK KeyL">K</kbd></div><span>Style · press on snow</span>
+    <div class="k"><kbd data-k="KeyE ControlLeft">E</kbd></div><span>Tuck</span>
+    <div class="sep"></div>
+    <div class="k"><kbd data-k="KeyR">R</kbd><kbd data-k="Escape KeyP">Esc</kbd></div><span class="dim">Reset · pause</span>
+    <div class="k"><kbd data-k="KeyH">H</kbd></div><span class="dim">Hide these keys</span>
+  </div>
+
   <div id="touchUI">
     <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div></div></div>
     <div class="btn tc" data-btn="tuck">TUCK</div>
@@ -185,6 +212,7 @@
           <b class="kb">Hold K</b><span class="kb">In the air: Iron Cross, Daffy (W), Backscratcher (S), Spread Eagle (A/D) · on snow: nose press, or tail press with S</span>
           <b class="tch">Hold TUCK</b><span class="tch">Tuck for speed, skate when slow</span>
           <b class="kb">Hold E</b><span class="kb">Tuck for speed, skate when slow</span>
+          <b class="kb">H</b><span class="kb">Show or hide the key guide while riding</span>
           <b>Rails &amp; boxes</b><span>Jump onto them · JUMP to pop off</span>
           <b>Halfpipe</b><span>Steer up the walls · spin 180 to come back in forwards</span>
           <b>Combos</b><span>Chain tricks within 2.5 s of landing to multiply</span>
