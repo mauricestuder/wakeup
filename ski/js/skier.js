@@ -3,7 +3,7 @@ import * as THREE from '../../game/vendor/three.module.min.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
-const SPIN_MAX = 10.5;  // rad/s, about 600 degrees a second
+const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
 const FLIP_MAX = 7.2;
 const CORK_FLIP = 6.2;  // rad/s; the spin runs at twice this in a cork
 const Y = new THREE.Vector3(0, 1, 0);
@@ -517,7 +517,10 @@ export class Skier {
       flipT = -Math.sign(sy) * CORK_FLIP * slow;
       spinT = -Math.sign(sx) * CORK_FLIP * 2 * slow;
     }
-    a.spinRate += (spinT - a.spinRate) * k;
+    // Spins build up and run out over a moment instead of following the stick
+    // exactly, so they have a bit of weight (and carry a little after release).
+    const ks = 1 - Math.exp(-(Math.abs(spinT) > Math.abs(a.spinRate) ? 7 : 9) * dt);
+    a.spinRate += (spinT - a.spinRate) * ks;
     a.flipRate += (flipT - a.flipRate) * k;
     if (a.yaw === undefined) { // first air step: start from the takeoff stance, dropping any roll
       _e.setFromQuaternion(a.pipe ? a.qb : this.q, 'YXZ');
@@ -535,8 +538,17 @@ export class Skier {
     }
     const settle = (yaw, rate) => { // ease upright, toward a heading if given
       a.pitch = wrapPi(a.pitch) * Math.exp(-rate * dt);
-      if (yaw !== null) a.yaw += wrapPi(yaw - a.yaw) * (1 - Math.exp(-rate * dt));
+      if (yaw !== null) {
+        // Turn toward the heading at a gentle, capped speed: a slow glide, not a snap.
+        const err = wrapPi(yaw - a.yaw), w = Math.min(Math.abs(err) * 2.2, 2.4);
+        a.yaw += Math.sign(err) * Math.min(Math.abs(err), w * dt);
+      }
     };
+    // Flat spins: while steering only sideways, level out the ramp's tilt so
+    // the spin turns around a straight up axis instead of wobbling.
+    if (!a.jump && Math.abs(sy) < 0.05 && Math.abs(sx) > 0.05 && Math.cos(a.pitch) > 0.3) {
+      a.pitch = wrapPi(a.pitch) * Math.exp(-3.5 * dt);
+    }
     if (a.pipe) {
       // Halfpipe: drift back over the coping, stand up on the way up and lay
       // back into the wall on the way down.
