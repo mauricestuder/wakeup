@@ -5,7 +5,6 @@ import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHi
 const G = 9.81;
 const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
 const FLIP_MAX = 7.2;
-const CORK_FLIP = 6.2;  // rad/s; the spin runs at twice this in a cork
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
@@ -21,9 +20,7 @@ function basisQuat(up, fwd, out) {
   return out.setFromRotationMatrix(m1);
 }
 
-// In the air the body is just two angles: yaw (spins, around the world's up)
-// and pitch (flips, around the skier's own hips). With no third angle the
-// skier can never roll onto their side, and nothing ever needs correcting.
+// Ski jump flight holds the body as two angles: heading (yaw) and lean (pitch).
 const _e = new THREE.Euler();
 const wrapPi = (x) => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
 function airQuat(a, out) { return out.setFromEuler(_e.set(a.pitch, a.yaw, 0, 'YXZ')); }
@@ -144,10 +141,9 @@ export function nameTrick(air) {
     base = 500 * n * n;
   } else {
     // Named from how far the skier spun and how many times they went upside down.
-    const spun = air.spinAbs !== undefined ? air.spinAbs * DEG : total;
+    const spun = total;
     const deg = Math.max(360, Math.round(spun / 180) * 180);
-    const corks = air.flipAbs !== undefined ? Math.min(3, Math.max(1, Math.round(air.flipAbs / (2 * Math.PI))))
-      : deg <= 720 ? 1 : deg <= 1260 ? 2 : 3;
+    const corks = deg <= 720 ? 1 : deg <= 1260 ? 2 : 3;
     const kind = air.flip >= 0 ? 'Misty' : 'Cork';
     rot = ['', '', 'Double ', 'Triple '][corks] + kind + ' ' + deg;
     base = (deg / 180 * 160 + Math.pow(deg / 360, 2) * 160) * (1 + 0.5 * corks);
@@ -510,76 +506,82 @@ export class Skier {
     const sx = a.jump ? 0 : dz(input.x), sy = a.jump ? 0 : dz(input.y);
     const slow = a.grab ? 0.8 : 1;
     const k = 1 - Math.exp(-12 * dt);
-    let spinT = -sx * SPIN_MAX * slow, flipT = -sy * FLIP_MAX * slow;
-    if (Math.abs(sx) > 0.3 && Math.abs(sy) > 0.3) {
-      // Cork: a diagonal locks the spin to twice the flip, so each flip comes
-      // round with two full spins and the skier lands facing forward again.
-      flipT = -Math.sign(sy) * CORK_FLIP * slow;
-      spinT = -Math.sign(sx) * CORK_FLIP * 2 * slow;
-    }
+    const spinT = -sx * SPIN_MAX * slow, flipT = -sy * FLIP_MAX * slow;
     // Spins build up and run out over a moment instead of following the stick
     // exactly, so they have a bit of weight (and carry a little after release).
     const ks = 1 - Math.exp(-(Math.abs(spinT) > Math.abs(a.spinRate) ? 7 : 9) * dt);
     a.spinRate += (spinT - a.spinRate) * ks;
     a.flipRate += (flipT - a.flipRate) * k;
-    if (a.yaw === undefined) { // first air step: start from the takeoff stance, dropping any roll
-      _e.setFromQuaternion(a.pipe ? a.qb : this.q, 'YXZ');
-      a.yaw = _e.y; a.pitch = _e.x;
-    }
-    const wl = Math.hypot(a.spinRate, a.flipRate);
-    if (wl > 1e-4) {
-      a.yaw += a.spinRate * dt;
-      a.pitch += a.flipRate * dt;
-      a.total += wl * dt;
-      a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
-      a.flip += a.flipRate * dt;
-      a.spinAbs = (a.spinAbs || 0) + Math.abs(a.spinRate) * dt;
-      a.flipAbs = (a.flipAbs || 0) + Math.abs(a.flipRate) * dt;
-    }
-    const settle = (yaw, rate) => { // ease upright, toward a heading if given
-      a.pitch = wrapPi(a.pitch) * Math.exp(-rate * dt);
-      if (yaw !== null) {
-        // Turn toward the heading at a gentle, capped speed: a slow glide, not a snap.
-        const err = wrapPi(yaw - a.yaw), w = Math.min(Math.abs(err) * 2.2, 2.4);
-        a.yaw += Math.sign(err) * Math.min(Math.abs(err), w * dt);
-      }
-    };
-    // Flat spins: while steering only sideways, level out the ramp's tilt so
-    // the spin turns around a straight up axis instead of wobbling.
-    if (!a.jump && Math.abs(sy) < 0.05 && Math.abs(sx) > 0.05 && Math.cos(a.pitch) > 0.3) {
-      a.pitch = wrapPi(a.pitch) * Math.exp(-3.5 * dt);
-    }
-    if (a.pipe) {
-      // Halfpipe: drift back over the coping, stand up on the way up and lay
-      // back into the wall on the way down.
-      const side = a.side, d = (this.p.x - PIPE.x) * side;
-      if (d > PIPE.lipD - 2.5 && this.v.x * side > -0.9) this.v.x += (-0.9 * side - this.v.x) * (1 - Math.exp(-5 * dt));
-      if (this.v.y < 0 && Math.abs(sx) + Math.abs(sy) < 0.05) {
-        // Landing assist: turn (in the upright frame) so the skis point down
-        // the wall when we touch it, forward or fakie, whichever is closer.
-        const n0 = v3.set(0, 1, 0).applyQuaternion(a.tilt);
-        const d = this.v.clone().addScaledVector(n0, -this.v.dot(n0)).applyQuaternion(a.tilt.clone().invert()).setY(0);
-        if (d.lengthSq() > 0.01) {
-          const dy = Math.atan2(d.x, d.z);
-          settle(Math.cos(a.yaw - dy) >= 0 ? dy : dy + Math.PI, 6);
-        }
-      }
-      airQuat(a, a.qb);
-      const lean = Math.min(1, Math.abs(this.v.y) / a.vy0);
-      this.q.copy(new THREE.Quaternion().slerp(a.tilt, lean)).multiply(a.qb);
-    } else {
-      if (a.jump) this.stepJumpAir(dt, input, a.jump);
-      else if (Math.abs(sx) + Math.abs(sy) < 0.05 && Math.cos(a.pitch) > 0.3) {
-        // Landing assist: with the stick centred, settle upright and line the
-        // skis up with the direction of travel, forward or switch.
-        let target = null;
-        if (this.v.x * this.v.x + this.v.z * this.v.z > 1) {
-          const ty = Math.atan2(this.v.x, this.v.z), c = Math.cos(a.yaw - ty);
-          if (Math.abs(c) > 0.45) target = c > 0 ? ty : ty + Math.PI;
-        }
-        settle(target, 5);
-      }
+
+    if (a.jump) {
+      // Ski jump flight: the body is held as heading and lean angles.
+      if (a.yaw === undefined) { _e.setFromQuaternion(this.q, 'YXZ'); a.yaw = _e.y; a.pitch = _e.x; }
+      this.stepJumpAir(dt, input, a.jump);
       airQuat(a, this.q);
+    } else {
+      // Free rotation. Spins turn around the world's up; a flip turns around
+      // the skier's own left-right axis as it was when the flip started, so a
+      // cork or misty (both at once) turns around one fixed tilted axis.
+      const body = a.pipe ? a.qb : this.q;
+      if (sy && !a.flipAxis) a.flipAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(body);
+      if (!sy && Math.abs(a.flipRate) < 0.2) a.flipAxis = null;
+      const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.flipAxis || a.left, a.flipRate);
+      const wl = w.length();
+      if (wl > 1e-4) {
+        q1.setFromAxisAngle(w.clone().divideScalar(wl), wl * dt);
+        body.premultiply(q1);
+        a.total += wl * dt;
+        a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
+        a.flip += a.flipRate * dt;
+      }
+      // Turn the body toward a target at a gentle, capped speed (no snapping).
+      const ease = (q, target, rate, cap) => {
+        const ang = q.angleTo(target);
+        if (ang > 1e-5) q.rotateTowards(target, Math.min(ang * rate, cap) * dt);
+      };
+      const up = v2.copy(Y).applyQuaternion(body);
+      const centred = Math.abs(sx) + Math.abs(sy) < 0.05;
+      const fwdOf = (q) => new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0);
+      if (a.pipe) {
+        // Halfpipe: drift back over the coping, stand up on the way up and lay
+        // back into the wall on the way down.
+        const side = a.side, d = (this.p.x - PIPE.x) * side;
+        if (d > PIPE.lipD - 2.5 && this.v.x * side > -0.9) this.v.x += (-0.9 * side - this.v.x) * (1 - Math.exp(-5 * dt));
+        if (this.v.y < 0 && centred) {
+          // Landing assist: turn (in the upright frame) so the skis point down
+          // the wall when we touch it, forward or fakie, whichever is closer.
+          const n0 = new THREE.Vector3(0, 1, 0).applyQuaternion(a.tilt);
+          const d = this.v.clone().addScaledVector(n0, -this.v.dot(n0)).applyQuaternion(a.tilt.clone().invert()).setY(0);
+          const fb = fwdOf(a.qb).clone();
+          if (d.lengthSq() > 0.01 && fb.lengthSq() > 0.01) {
+            d.normalize().multiplyScalar(Math.sign(fb.dot(d)) || 1);
+            a.qb.slerp(basisQuat(Y, d, new THREE.Quaternion()), 1 - Math.exp(-6 * dt));
+          }
+        }
+        const lean = Math.min(1, Math.abs(this.v.y) / a.vy0);
+        this.q.copy(new THREE.Quaternion().slerp(a.tilt, lean)).multiply(a.qb);
+      } else if (up.y > 0.6 && (centred || (Math.abs(sy) < 0.05 && !a.flipAxis))) {
+        const fwd = fwdOf(this.q);
+        if (fwd.lengthSq() > 0.01) {
+          fwd.normalize();
+          if (centred) {
+            // Landing assist: with the stick centred, stand upright, then glide
+            // the skis round to the direction of travel, forward or switch.
+            this.q.slerp(basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 1 - Math.exp(-5 * dt));
+            const travel = new THREE.Vector3(this.v.x, 0, this.v.z);
+            if (travel.lengthSq() > 1) {
+              travel.normalize();
+              const d = fwd.dot(travel);
+              if (Math.abs(d) > 0.45) fwd.copy(travel).multiplyScalar(Math.sign(d));
+            }
+            ease(this.q, basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 3, 2.6);
+          } else {
+            // Flat spins: while steering only sideways, level out the ramp's
+            // tilt so the spin turns around a straight up axis.
+            ease(this.q, basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 3.5, 3);
+          }
+        }
+      }
     }
 
     // Grabs (GRAB) and style moves (STYLE); the stick picks which one.
