@@ -13,11 +13,12 @@ function lightKey(code, on) {
   const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
   if (el) el.classList.toggle('down', on);
 }
+let onKeyHints = null;
+export function keyHintsChanged(fn) { onKeyHints = fn; }
 function toggleKeyHints() {
   const off = document.body.classList.toggle('nokeys');
-  try { localStorage.setItem('freshline.nokeys', off ? '1' : ''); } catch { /* private mode */ }
+  if (onKeyHints) onKeyHints(!off);
 }
-try { if (localStorage.getItem('freshline.nokeys')) document.body.classList.add('nokeys'); } catch { /* private mode */ }
 
 const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const STYLE_KEYS = ['KeyK', 'KeyL'];

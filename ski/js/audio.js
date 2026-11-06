@@ -1,7 +1,8 @@
 // Synthesised sound: wind that rises with speed, carving hiss, landings and
 // a little chime when a trick lands. No audio files needed.
 
-let ctx = null, master, wind, windFilter, carve, carveFilter;
+let ctx = null, master, wind, windFilter, carve, carveFilter, volume = 0.8;
+export function setVolume(v) { volume = v; if (master) master.gain.value = 0.875 * v; }
 
 function noiseBuffer() {
   const b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -21,7 +22,7 @@ export function initAudio() {
   if (!AC) return;
   ctx = new AC();
   master = ctx.createGain();
-  master.gain.value = 0.7;
+  master.gain.value = 0.875 * volume;
   master.connect(ctx.destination);
   const buf = noiseBuffer();
 
