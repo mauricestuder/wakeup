@@ -3,6 +3,7 @@ import * as THREE from '../../game/vendor/three.module.min.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
+const ROLL_MAX = 4;     // rad/s, rolling with Q / R
 const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
 const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
@@ -512,6 +513,9 @@ export class Skier {
     const ks = 1 - Math.exp(-(Math.abs(spinT) > Math.abs(a.spinRate) ? 7 : 9) * dt);
     a.spinRate += (spinT - a.spinRate) * ks;
     a.flipRate += (flipT - a.flipRate) * k;
+    // Roll (Q / R): turn around the skier's own forward axis, to straighten up.
+    const roll = a.jump ? 0 : (input.roll || 0);
+    a.rollRate = (a.rollRate || 0) + (roll * ROLL_MAX - (a.rollRate || 0)) * k;
 
     if (a.jump) {
       // Ski jump flight: the body is held as heading and lean angles.
@@ -526,6 +530,10 @@ export class Skier {
       if (sy && !a.flipAxis) a.flipAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(body);
       if (!sy && Math.abs(a.flipRate) < 0.2) a.flipAxis = null;
       const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.flipAxis || a.left, a.flipRate);
+      if (Math.abs(a.rollRate) > 1e-4) {
+        q1.setFromAxisAngle(new THREE.Vector3(0, 0, 1).applyQuaternion(body).normalize(), a.rollRate * dt);
+        body.premultiply(q1);
+      }
       const wl = w.length();
       if (wl > 1e-4) {
         q1.setFromAxisAngle(w.clone().divideScalar(wl), wl * dt);
@@ -540,7 +548,7 @@ export class Skier {
         if (ang > 1e-5) q.rotateTowards(target, Math.min(ang * rate, cap) * dt);
       };
       const up = v2.copy(Y).applyQuaternion(body);
-      const centred = Math.abs(sx) + Math.abs(sy) < 0.05;
+      const centred = Math.abs(sx) + Math.abs(sy) < 0.05 && !roll;
       const fwdOf = (q) => new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0);
       if (a.pipe) {
         // Halfpipe: drift back over the coping, stand up on the way up and lay

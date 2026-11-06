@@ -113,6 +113,11 @@
       right: calc(112px + env(safe-area-inset-right)); bottom: calc(108px + env(safe-area-inset-bottom)); }
     [data-btn="butter"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
       right: calc(34px + env(safe-area-inset-right)); bottom: calc(128px + env(safe-area-inset-bottom)); }
+    /* Roll buttons: above the stick, to straighten up in the air. */
+    .btn.roll { --c: #c58cff; width: 50px; height: 50px; bottom: calc(232px + env(safe-area-inset-bottom)); }
+    [data-btn="rollL"] { left: calc(46px + env(safe-area-inset-left)); }
+    [data-btn="rollR"] { left: calc(116px + env(safe-area-inset-left)); }
+    @media (max-height: 420px) { .btn.roll { width: 44px; height: 44px; bottom: calc(238px + env(safe-area-inset-bottom)); } }
     [data-btn="pause"], [data-btn="reset"] { width: 42px; height: 42px; border-width: 2px; border-color: rgba(255,255,255,.5); }
     [data-btn="pause"] svg, [data-btn="reset"] svg { width: 18px; height: 18px; }
     [data-btn="pause"] { right: calc(14px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); }
@@ -184,11 +189,13 @@
   <div id="touchUI">
     <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div>
       <div class="stickKeys kb"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Steer · air: A/D spin, W/S flip</span></div></div></div>
+    <div class="btn roll" data-btn="rollL" title="Roll left (Q)"><svg viewBox="0 0 24 24"><path d="M5 13a7 7 0 1 0 3-6.3"/><path d="M8 2v5h5"/></svg><kbd class="kb">Q</kbd></div>
+    <div class="btn roll" data-btn="rollR" title="Roll right (R)"><svg viewBox="0 0 24 24"><path d="M19 13a7 7 0 1 1-3-6.3"/><path d="M16 2v5h-5"/></svg><kbd class="kb">R</kbd></div>
     <div class="btn tc" data-btn="butter">180<kbd class="kb">E</kbd></div>
     <div class="btn tc" data-btn="style">STYLE<kbd class="kb">K</kbd></div>
     <div class="btn tc" data-btn="grab">GRAB<kbd class="kb">Shift</kbd></div>
     <div class="btn tc" data-btn="jump">JUMP<kbd class="kb">Space</kbd></div>
-    <div class="btn" data-btn="reset" title="Back to drop-in (R)"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg><kbd class="kb">R</kbd></div>
+    <div class="btn" data-btn="reset" title="Back to drop-in (T)"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg><kbd class="kb">T</kbd></div>
     <div class="btn" data-btn="pause" title="Pause (Esc)"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><kbd class="kb">Esc</kbd></div>
   </div>
 
@@ -219,6 +226,9 @@
           <b class="tch">180</b><span class="tch">On snow: butter a 180 and ride switch (stick right turns the other way) · tuck with the stick up</span>
           <b class="kb">E</b><span class="kb">On snow: butter a 180 and ride switch (hold D to turn the other way) · tuck with W</span>
           <b>Ski Jump</b><span>Release JUMP right at the edge · steer to keep your balance centred in the air · press JUMP just before landing for a telemark</span>
+          <b class="tch">Roll buttons</b><span class="tch">In the air: roll left or right to straighten up if you're tilted</span>
+          <b class="kb">Q / R</b><span class="kb">In the air: roll left / right to straighten up if you're tilted</span>
+          <b class="kb">T</b><span class="kb">Back to the drop-in</span>
           <b class="kb">H</b><span class="kb">Show or hide the key labels under the buttons</span>
           <b>Rails &amp; boxes</b><span>Jump onto them · JUMP to pop off</span>
           <b>Halfpipe</b><span>Steer up the walls · spin 180 to come back in forwards</span>

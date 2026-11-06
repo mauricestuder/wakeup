@@ -7,7 +7,7 @@ const STICK_R = 58;
 // a button lights up while its key is held, H hides the key labels.
 const KEY_BTN = {
   Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
-  KeyE: 'butter', ControlLeft: 'butter', KeyR: 'reset', Escape: 'pause', KeyP: 'pause',
+  KeyE: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyR: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
 };
 function lightKey(code, on) {
   const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
@@ -28,6 +28,7 @@ export class Input {
     this.x = 0; this.y = 0;
     this.jump = false; this.grab = false; this.style = false; this.butter = false;
     this.jumpReleased = false;
+    this.roll = 0; this.touchRoll = 0; // -1 rolls left, 1 rolls right
     this.keys = new Set();
     this.stick = { x: 0, y: 0 };
     this.enabled = false;
@@ -45,7 +46,7 @@ export class Input {
       lightKey(e.code, true);
       if (e.code === 'KeyH' && !e.repeat) toggleKeyHints();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
-      if (e.code === 'KeyR') this.onReset();
+      if (e.code === 'KeyT') this.onReset();
       if (e.code === 'Space') { this.jump = true; e.preventDefault(); }
       if (GRAB_KEYS.includes(e.code)) this.grab = true;
       if (STYLE_KEYS.includes(e.code)) this.style = true;
@@ -112,12 +113,15 @@ export class Input {
         if (act === 'butter') this.butter = true;
         if (act === 'pause') this.onPause();
         if (act === 'reset') this.onReset();
+        if (act === 'rollL') this.touchRoll = -1;
+        if (act === 'rollR') this.touchRoll = 1;
       };
       const up = () => {
         el.classList.remove('down');
         if (act === 'jump' && this.jump) { this.jump = false; this.jumpReleased = true; }
         if (act === 'grab') this.grab = false;
         if (act === 'style') this.style = false;
+        if (act === 'rollL' || act === 'rollR') this.touchRoll = 0;
       };
       el.addEventListener('pointerdown', down);
       el.addEventListener('pointerup', up);
@@ -134,6 +138,7 @@ export class Input {
     if (x && y) { x *= 0.75; y *= 0.75; }
     this.x = Math.max(-1, Math.min(1, x + this.stick.x));
     this.y = Math.max(-1, Math.min(1, y + this.stick.y));
+    this.roll = Math.max(-1, Math.min(1, (k.has('KeyR') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) + this.touchRoll));
     if (!isTouch) { // the on-screen stick follows the keys
       if (!this.knob) this.knob = document.getElementById('knob');
       this.knob.style.transform = x || y ? `translate(${x * STICK_R}px, ${y * STICK_R}px)` : '';
@@ -146,6 +151,6 @@ export class Input {
 
   clear() {
     this.jump = this.grab = this.style = this.butter = this.jumpReleased = false;
-    this.stick.x = this.stick.y = 0;
+    this.stick.x = this.stick.y = this.touchRoll = this.roll = 0;
   }
 }
