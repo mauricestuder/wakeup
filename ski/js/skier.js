@@ -1,13 +1,19 @@
 // The skier: a small rigged model, ground/air/rail physics and trick tracking.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { height, normal, rails, obstacleHit, inPipe, PIPE } from './terrain.js';
+import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
-const SPIN_MAX = 10.5;  // rad/s, about 600 degrees a second
+const ROLL_MAX = 4;     // rad/s, rolling with Q / E
+const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
+// Snowboard spins: same top speed as skis, but heavier to start and stop (they
+// float and carry), and you can wind up before the lip to leave already turning.
+const BOARD_SPIN = { max: SPIN_MAX, up: 4.5, down: 4.2, wind: 0.75 };
 const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
+const PIVOT = 0.85; // height of the body's centre above the feet
+const BOARD_YAW = -1.35; // a snowboarder's body faces this far round from the board
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -18,6 +24,11 @@ function basisQuat(up, fwd, out) {
   m1.makeBasis(left, up, f);
   return out.setFromRotationMatrix(m1);
 }
+
+// Ski jump flight holds the body as two angles: heading (yaw) and lean (pitch).
+const _e = new THREE.Euler();
+const wrapPi = (x) => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
+function airQuat(a, out) { return out.setFromEuler(_e.set(a.pitch, a.yaw, 0, 'YXZ')); }
 
 // ---------- model ----------
 
@@ -30,22 +41,42 @@ function buildModel() {
   const root = new THREE.Group();
   const body = new THREE.Group(); // everything except skis; turned for slides and stops
   root.add(body);
-  const jacket = 0xff4f1f, pants = 0x22303f, dark = 0x15181c;
+  // Shared materials by role, so a skin can recolour the whole rider at once.
+  const L = (color) => new THREE.MeshLambertMaterial({ color });
+  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da) };
+  const mb = (w, h, d, mat, y = 0) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y, 0), mat);
 
   const skis = [];
   for (const side of [1, -1]) {
     const ski = new THREE.Group();
-    const plank = box(0.1, 0.035, 1.72, 0x1e88e5);
-    const tip = box(0.1, 0.035, 0.22, 0x1e88e5);
+    const plank = mb(0.1, 0.035, 1.72, mats.gear);
+    const tip = mb(0.1, 0.035, 0.22, mats.gear);
     tip.position.set(0, 0.05, 0.92); tip.rotation.x = -0.5;
-    const tail = box(0.1, 0.035, 0.2, 0x1e88e5);
+    const tail = mb(0.1, 0.035, 0.2, mats.gear);
     tail.position.set(0, 0.04, -0.92); tail.rotation.x = 0.45;
-    const boot = box(0.13, 0.22, 0.3, dark, 0.11);
+    const boot = mb(0.13, 0.22, 0.3, mats.dark, 0.11);
     ski.add(plank, tip, tail, boot);
     ski.position.set(side * 0.13, 0.02, 0);
     root.add(ski);
     skis.push(ski);
   }
+
+  // Snowboard (shown instead of the skis on a board): deck, kicked nose and
+  // tail, a stripe and two bindings.
+  const board = new THREE.Group();
+  board.add(mb(0.28, 0.03, 1.2, mats.gear));
+  for (const sgn of [1, -1]) {
+    const end = mb(0.28, 0.03, 0.2, mats.gear);
+    end.position.set(0, 0.035, sgn * 0.68); end.rotation.x = -sgn * 0.35;
+    board.add(end);
+    const bind = mb(0.24, 0.1, 0.16, mats.dark, 0.065);
+    bind.position.z = sgn * 0.26;
+    board.add(bind);
+  }
+  board.add(mb(0.08, 0.005, 1.16, mats.accent, 0.017));
+  board.position.y = 0.02;
+  board.visible = false;
+  root.add(board);
 
   const hips = new THREE.Group();
   body.add(hips);
@@ -53,38 +84,33 @@ function buildModel() {
   for (const side of [1, -1]) {
     const thigh = new THREE.Group();
     thigh.position.set(side * 0.12, 0, 0);
-    thigh.add(box(0.15, 0.46, 0.17, pants, -0.23));
+    thigh.add(mb(0.15, 0.46, 0.17, mats.pants, -0.23));
     const shin = new THREE.Group();
     shin.position.y = -0.46;
-    shin.add(box(0.14, 0.46, 0.16, pants, -0.23));
+    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23));
     thigh.add(shin);
     hips.add(thigh);
     legs.push({ thigh, shin, side });
   }
   const torso = new THREE.Group();
   hips.add(torso);
-  torso.add(box(0.4, 0.56, 0.25, jacket, 0.28));
+  torso.add(mb(0.4, 0.56, 0.25, mats.jacket, 0.28));
+  const zip = mb(0.03, 0.5, 0.01, mats.accent, 0.28); zip.position.z = 0.13;
+  const pack = new THREE.Group(); // extras some characters wear on the back
+  torso.add(zip, pack);
   const head = new THREE.Group();
   head.position.y = 0.66;
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 9), new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }));
-  const goggles = box(0.24, 0.07, 0.05, 0x111111);
-  goggles.position.set(0, 0, 0.12);
-  const lens = box(0.2, 0.05, 0.02, 0xffb02e);
-  lens.position.set(0, 0, 0.145);
-  head.add(helmet, goggles, lens);
   torso.add(head);
   const arms = [];
   for (const side of [1, -1]) {
     const upper = new THREE.Group();
     upper.position.set(side * 0.25, 0.52, 0);
-    upper.add(box(0.12, 0.34, 0.13, jacket, -0.17));
+    upper.add(mb(0.12, 0.34, 0.13, mats.jacket, -0.17));
     const fore = new THREE.Group();
     fore.position.y = -0.34;
-    fore.add(box(0.11, 0.32, 0.12, jacket, -0.16));
-    const glove = box(0.11, 0.1, 0.12, dark, -0.36);
-    fore.add(glove);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 5).translate(0, -0.5, 0),
-      new THREE.MeshLambertMaterial({ color: 0xcfd4da }));
+    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16));
+    fore.add(mb(0.11, 0.1, 0.12, mats.dark, -0.36));
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 5).translate(0, -0.5, 0), mats.pole);
     pole.position.y = -0.36;
     pole.rotation.x = 0.9;
     fore.add(pole);
@@ -92,8 +118,84 @@ function buildModel() {
     torso.add(upper);
     arms.push({ upper, fore, pole, side });
   }
-  root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
-  return { root, body, hips, torso, legs, arms, skis, head };
+  const model = { root, body, hips, torso, legs, arms, skis, head, board, mats, pack };
+  setHead(model, 'rider');
+  return model;
+}
+
+// ---------- characters ----------
+
+// Each character is a head (and sometimes something on the back); the skin
+// colours the jacket, pants and gear.
+const HEADS = {
+  rider: (h, m) => { // helmet and goggles
+    h.add(sphere(0.135, m.helmet), at(box3(0.24, 0.07, 0.05, m.dark), 0, 0, 0.12), at(box3(0.2, 0.05, 0.02, m.lens), 0, 0, 0.145));
+  },
+  beanie: (h, m) => {
+    face(h, m);
+    h.add(at(cap(0.14, m.accent), 0, 0.03, 0), at(box3(0.29, 0.06, 0.29, m.jacket), 0, 0.03, 0), at(sphere(0.05, m.white), 0, 0.2, 0));
+    h.add(at(box3(0.24, 0.06, 0.04, m.dark), 0, 0.07, 0.13), at(box3(0.2, 0.04, 0.02, m.lens), 0, 0.07, 0.15));
+  },
+  cap: (h, m) => {
+    face(h, m);
+    h.add(at(cap(0.14, m.accent), 0, 0.02, 0), at(box3(0.2, 0.02, 0.14, m.accent), 0, 0.04, -0.17));
+  },
+  bear: (h, m) => {
+    face(h, m);
+    h.add(at(cap(0.155, m.fur), 0, 0.0, -0.01));
+    for (const s of [1, -1]) h.add(at(sphere(0.055, m.fur), s * 0.11, 0.13, -0.02), at(sphere(0.03, m.inner), s * 0.11, 0.13, 0.015));
+  },
+  penguin: (h, m) => {
+    h.add(sphere(0.15, m.black), at(squash(sphere(0.11, m.white), 1, 1.1, 0.5), 0, -0.01, 0.09));
+    h.add(at(cone(0.04, 0.12, m.beak), 0, -0.02, 0.19));
+    for (const s of [1, -1]) h.add(at(sphere(0.022, m.black), s * 0.05, 0.04, 0.135));
+  },
+  robot: (h, m) => {
+    h.add(box3(0.26, 0.24, 0.24, m.metal), at(box3(0.22, 0.07, 0.02, m.glow), 0, 0.02, 0.125));
+    h.add(at(box3(0.02, 0.12, 0.02, m.metal), 0.07, 0.17, 0), at(sphere(0.03, m.glow), 0.07, 0.24, 0));
+    for (const s of [1, -1]) h.add(at(box3(0.03, 0.08, 0.08, m.dark), s * 0.145, 0, 0));
+  },
+  yeti: (h, m) => {
+    h.add(squash(ico(0.17, m.yfur), 1.05, 1, 1), at(squash(sphere(0.1, m.yface), 1, 0.9, 0.6), 0, -0.02, 0.1));
+    for (const s of [1, -1]) {
+      const horn = at(cone(0.035, 0.16, m.horn), s * 0.12, 0.15, -0.02); horn.rotation.z = -s * 0.5;
+      h.add(horn, at(sphere(0.02, m.black), s * 0.04, 0.02, 0.17));
+    }
+  },
+  astro: (h, m) => {
+    h.add(sphere(0.19, m.white), at(squash(sphere(0.15, m.visor), 1, 0.8, 0.6), 0, 0, 0.1));
+    h.add(at(box3(0.05, 0.05, 0.05, m.glow), 0.17, 0.06, 0));
+  },
+};
+const PACKS = {
+  astro: (p, m) => { p.add(at(box3(0.3, 0.36, 0.14, m.white), 0, 0.3, -0.19)); },
+  robot: (p, m) => { p.add(at(box3(0.22, 0.3, 0.1, m.metal), 0, 0.3, -0.17), at(box3(0.06, 0.06, 0.02, m.glow), 0, 0.36, -0.225)); },
+};
+const box3 = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+const sphere = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
+const ico = (r, mat) => new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), mat);
+const cap = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+const cone = (r, h, mat) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat); c.rotation.x = Math.PI / 2; return c; };
+const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
+const squash = (o, x, y, z) => { o.scale.set(x, y, z); return o; };
+function face(h, m) {
+  h.add(at(box3(0.21, 0.22, 0.2, m.skinTone), 0, -0.02, 0));
+  for (const s of [1, -1]) h.add(at(box3(0.035, 0.035, 0.01, m.black), s * 0.05, 0.0, 0.102));
+}
+const HEAD_MATS = (() => {
+  const L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0 });
+  return { helmet: L(0xf2f2f2), dark: L(0x111111), lens: L(0xffb02e, 0x553300), white: L(0xf4f6fa), black: L(0x16181c),
+    skinTone: L(0xe0ac85), fur: L(0x8a5a36), inner: L(0xe8b49a), beak: L(0xff9b1a), metal: L(0x9aa6b4), glow: L(0x00e5ff, 0x00b8d4),
+    yface: L(0x8fa3b8), yfur: L(0xf2f5fa), horn: L(0xe8dcc0), visor: L(0xffc94a, 0x7a5200) };
+})();
+function setHead(model, id) {
+  const h = model.head, p = model.pack;
+  while (h.children.length) h.remove(h.children[0]);
+  while (p.children.length) p.remove(p.children[0]);
+  const m = { ...HEAD_MATS, jacket: model.mats.jacket, accent: model.mats.accent };
+  (HEADS[id] || HEADS.rider)(h, m);
+  if (PACKS[id]) PACKS[id](p, m);
+  model.character = id;
 }
 
 // Two-bone IK for arms and legs: `tgt` is in the parent's space, the chain
@@ -118,6 +220,10 @@ function twoBone(upper, lower, tgt, L1, L2, bend) {
 
 // ---------- tricks ----------
 
+// A snowboarder (left foot forward) spins frontside when the chest turns to
+// face down the hill first, backside when the back does. Riding switch flips it.
+const boardSide = (air) => ((air.spinSigned || 0) * (air.switchTakeoff ? -1 : 1) > 0 ? 'Frontside ' : 'Backside ');
+
 export function nameTrick(air) {
   const total = air.total * DEG;
   const off = air.total > 0 ? air.off / air.total * DEG : 0;
@@ -128,16 +234,20 @@ export function nameTrick(air) {
     let deg = Math.round(total / 180) * 180;
     if (air.fromSlide) deg = Math.max(90, Math.round((total - 90) / 180) * 180 + 90);
     rot = deg + (air.fromSlide ? ' Out' : '');
+    if (air.board && !air.fromSlide) rot = boardSide(air) + rot;
     base = deg / 180 * 140 + Math.pow(deg / 360, 2) * 120;
   } else if (off > 64) {
     const n = Math.max(1, Math.round(total / 360));
     rot = (n === 1 ? '' : n <= 4 ? ['', '', 'Double ', 'Triple ', 'Quad '][n] : n + 'x ') + flipDir + 'flip';
     base = 500 * n * n;
   } else {
-    const deg = Math.max(360, Math.round(total / 180) * 180);
+    // Named from how far the skier spun and how many times they went upside down.
+    const spun = total;
+    const deg = Math.max(360, Math.round(spun / 180) * 180);
     const corks = deg <= 720 ? 1 : deg <= 1260 ? 2 : 3;
     const kind = air.flip >= 0 ? 'Misty' : 'Cork';
     rot = ['', '', 'Double ', 'Triple '][corks] + kind + ' ' + deg;
+    if (air.board) rot = boardSide(air) + rot;
     base = (deg / 180 * 160 + Math.pow(deg / 360, 2) * 160) * (1 + 0.5 * corks);
   }
   const parts = [];
@@ -145,7 +255,7 @@ export function nameTrick(air) {
   let pts = base * (air.switchTakeoff && rot ? 1.2 : 1);
   for (const g of air.grabs) {
     if (g.t < 0.2) continue;
-    parts.push(g.name);
+    parts.push(showName(g.name));
     const def = GRABS[g.name] || STYLES[g.name];
     pts += (150 + Math.min(g.t, 1.5) * 350) * (def ? def.k : 1);
   }
@@ -178,6 +288,14 @@ const STYLES = {
   Backscratcher: { k: 1.2, crouch: 0.45, hands: [[0, 'up'], [1, 'up']], skis: [{ y: 0.55, z: -0.35, rx: 1.25 }, { y: 0.55, z: -0.35, rx: 1.25 }], torso: { x: -0.3 } },
 };
 export const GRAB_NAMES = Object.keys(GRABS), STYLE_NAMES = Object.keys(STYLES);
+// On a snowboard the same moves go by their board names.
+const BOARD_NAMES = {
+  Safety: 'Indy', Mute: 'Mute', Tail: 'Tail Grab', 'Truck Driver': 'Stalefish', Japan: 'Japan', Nose: 'Nose Grab',
+  Blunt: 'Method', Critical: 'Melon', Seatbelt: 'Roast Beef',
+  'Iron Cross': 'Crail', 'Spread Eagle': 'Rocket Air', Daffy: 'Nose Bone', Backscratcher: 'Tail Bone',
+};
+let BOARD = false;
+export const showName = (n) => (BOARD && BOARD_NAMES[n]) || n;
 
 // Eight stick directions plus centre pick the grab.
 function grabName(x, y) {
@@ -206,6 +324,7 @@ export class Skier {
     this.v = new THREE.Vector3();
     this.q = new THREE.Quaternion();      // body orientation while airborne
     this.renderQ = new THREE.Quaternion();
+    this.pivotUp = new THREE.Vector3(0, 1, 0); // body up at takeoff; air spins turn around a point this far up
     this.heading = 0;                     // direction of travel along the snow
     this.switch = false;                  // riding backwards
     this.wallF = null;                    // travel direction while on a pipe wall
@@ -244,6 +363,27 @@ export class Skier {
     scene.add(this.shadow);
   }
 
+  // Ski or snowboard: the physics are shared, only the rider changes.
+  setBoard(on) {
+    BOARD = this.board = !!on;
+    const M = this.model;
+    M.board.visible = this.board;
+    for (const ski of M.skis) for (const c of ski.children) c.visible = !this.board;
+    for (const arm of M.arms) arm.pole.visible = !this.board;
+  }
+
+  // Looks from the locker: skin colours { jacket, pants, gear, accent, glow }
+  // and a character id for the head.
+  applyLook(skin, character) {
+    const m = this.model.mats;
+    for (const k of ['jacket', 'pants', 'gear', 'accent']) {
+      m[k].color.setHex(skin[k]);
+      m[k].emissive.setHex(0);
+    }
+    if (skin.glow) for (const k of skin.glow) m[k].emissive.copy(m[k].color).multiplyScalar(0.35);
+    if (this.model.character !== character) setHead(this.model, character);
+  }
+
   spawn(x, z, heading = 0, speed = 0) {
     this.p.set(x, height(x, z), z);
     this.v.set(Math.sin(heading) * speed, 0, Math.cos(heading) * speed);
@@ -252,9 +392,10 @@ export class Skier {
     this.switch = false;
     this.wallF = null;
     this.state = 'ground';
-    this.air = this.grind = this.press = this.landAnim = null;
+    this.air = this.grind = this.press = this.landAnim = this.butter = null;
     this.charge = 0;
     this.groundQuat(this.renderQ);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.renderQ);
   }
 
   get speed() { return this.v.length(); }
@@ -271,7 +412,11 @@ export class Skier {
   // input: { x, y, jump, grab, style, tuck, jumpReleased }
   step(dt, input) {
     this.time += dt;
-    if (this.landAnim && (this.landAnim.t += dt) > 0.6) this.landAnim = null;
+    // Snowboard wind-up: holding the stick sideways while crouched for a pop
+    // twists the shoulders the other way, ready to unwind off the lip.
+    const want = this.board && this.state === 'ground' && input.jump ? Math.max(-1, Math.min(1, input.x || 0)) : 0;
+    if (this.state === 'ground' || !this.board) this.wind = (this.wind || 0) + (want - (this.wind || 0)) * (1 - Math.exp(-8 * dt));
+    if (this.landAnim && (this.landAnim.t += dt) > (this.landAnim.kind === 'telemark' ? 1.4 : 0.6)) this.landAnim = null;
     if (this.state === 'ground') this.stepGround(dt, input);
     else if (this.state === 'air') this.stepAir(dt, input);
     else if (this.state === 'grind') this.stepGrind(dt, input);
@@ -299,12 +444,21 @@ export class Skier {
 
   // Pop: the take-off animation changes from jump to jump.
   pop(n) {
-    const pop = 3.4 + this.charge * 5;
+    const pop = 4.6 + this.charge * 6.5;
     this.v.addScaledVector(n, pop * 0.7).addScaledVector(Y, pop * 0.3);
     this.popKind = this.press ? (this.press.nose ? 'kick' : 'tuck') : this.charge >= 0.5 ? 'tuck' : POP_KINDS[this.popCount++ % 3];
     this.endPress();
     this.charge = 0;
     this.takeoff(true);
+    this.p.addScaledVector(this.v, 1 / 120);
+  }
+
+  jumpPop(n, q) {
+    this.v.addScaledVector(n, 0.5 + 1.5 * q);
+    this.popKind = 'stretch';
+    this.charge = 0;
+    this.takeoff(true);
+    this.air.jump.takeoffQ = q;
     this.p.addScaledVector(this.v, 1 / 120);
   }
 
@@ -321,12 +475,23 @@ export class Skier {
     if (n.y < 0.8 && inPipe(this.p.x, this.p.z, 2)) { this.stepWall(dt, input, n); return; }
     this.wallF = null;
     const speed = this.v.length();
-    const tuck = (input.y < -0.35 || input.tuck) && speed > 5;
+    // On the ski jump in-run the skier holds a tuck and a straight line.
+    const ju = jumpU(this.p.z);
+    const inrun = onJumpHill(this.p.x, this.p.z, 2) && ju < JUMP.edge;
+    if (inrun) input = { ...input, x: Math.max(-1, Math.min(1, (this.p.x - JUMP.x) * 0.5 + this.heading * 3)), y: -1 };
+    const tuck = input.y < -0.35 && speed > 5;
     this.tuck = tuck;
+    if (this.butter && (this.butter.t += dt) > 0.4) this.butter = null;
+    if (input.butter && !inrun && !this.press && !this.butter && speed > 1.5) {
+      // Butter 180: swing the skis round and ride the other way.
+      this.butter = { t: 0, dir: input.x > 0.2 ? -1 : 1 };
+      this.switch = !this.switch;
+      this.emit('butter', { name: this.switch ? 'Butter 180 to Switch' : 'Butter 180' });
+    }
     const brake = input.y > 0.3 && !this.press ? (input.y - 0.3) / 0.7 : 0;
     this.updatePress(dt, input, speed);
 
-    const turn = (2.1 - Math.min(speed, 28) / 28 * 0.9) * (tuck ? 0.55 : 1) * (1 + brake * 0.4);
+    const turn = (2.1 - Math.min(speed, 28) / 28 * 0.9) * (tuck ? 0.55 : 1) * (1 + brake * 0.4) * (this.board && input.jump ? 0.25 : 1); // on a board, crouched = winding up, not turning
     this.heading -= input.x * turn * dt;
 
     const fH = v1.set(Math.sin(this.heading), 0, Math.cos(this.heading));
@@ -346,7 +511,7 @@ export class Skier {
     let newSpd = Math.max(0, spd - loss);
     // Skating: push forward when slow.
     let push = 0;
-    if ((input.y < -0.35 || input.tuck) && spd < 7) push = 3.2 * dt;
+    if (input.y < -0.35 && spd < 7) push = 3.2 * dt;
     const scale = spd > 1e-4 ? newSpd / spd : 0;
     const vt = f.clone().multiplyScalar(vf * scale).addScaledVector(l, newL * scale);
     if (push) vt.addScaledVector(f, push);
@@ -361,7 +526,12 @@ export class Skier {
     if (input.jump) { this.charge = Math.min(0.5, this.charge + dt); target = 0.75; }
     this.crouch += (target - this.crouch) * (1 - Math.exp(-10 * dt));
 
-    if (input.jumpReleased && this.charge > 0) { this.pop(n); return; }
+    if (inrun && input.jumpReleased && this.charge > 0) {
+      // Ski jump takeoff: the closer to the edge, the better the spring.
+      const d = JUMP.edge - ju;
+      if (d < 5) { this.jumpPop(n, d < 1.6 ? 1 : 1 - (d - 1.6) / 3.4 * 0.85); return; }
+      this.charge = 0; // far too early: no spring at all
+    } else if (input.jumpReleased && this.charge > 0) { this.pop(n); return; }
     if (!input.jump) this.charge = 0;
 
     this.p.addScaledVector(this.v, dt);
@@ -426,12 +596,15 @@ export class Skier {
     const n = normal(this.p.x, this.p.z, new THREE.Vector3());
     this.state = 'air';
     this.groundQuat(this.q);
+    this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
     this.air = {
       t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
-      switchTakeoff: this.switch, grabs: [], grab: null, popped,
+      switchTakeoff: this.switch, grabs: [], grab: null, popped, board: this.board, spinSigned: 0,
       left: new THREE.Vector3().crossVectors(Y, dir), fromSlide: false,
       pipe: n.y < 0.85 && inPipe(this.p.x, this.p.z, 2), side: Math.sign(this.p.x - PIPE.x) || 1,
     };
+    if (this.board && Math.abs(this.wind || 0) > 0.2) this.air.spinRate = -this.wind * BOARD_SPIN.max * BOARD_SPIN.wind;
+    this.wind = 0;
     if (this.air.pipe) {
       // In the pipe the body leans with the wall on the way up and back down.
       // Spins happen in an upright frame (qb) that the lean is applied on top of.
@@ -440,8 +613,14 @@ export class Skier {
       a.tilt = new THREE.Quaternion().setFromUnitVectors(Y, n);
       a.qb = a.tilt.clone().invert().multiply(this.q);
     }
+    const ju = jumpU(this.p.z);
+    if (onJumpHill(this.p.x, this.p.z, 2) && ju > JUMP.edge - 15 && ju < JUMP.edge + 3) {
+      // Ski jump flight: no tricks, just balance and the landing.
+      this.air.jump = { t: 0, takeoffQ: 0, bal: (Math.random() < 0.5 ? -1 : 1) * 0.12, balV: 0, gust: 0, qSum: 0, qT: 0, tele: null, lastJump: true };
+    }
     if (!popped) this.popKind = null;
     this.wallF = null;
+    this.butter = null;
     this.emit('takeoff', { popped });
   }
 
@@ -449,70 +628,116 @@ export class Skier {
     const a = this.air;
     a.t += dt;
     if (input.jumpReleased && !a.popped && a.t < 0.18 && this.charge > 0) {
-      // Late pop off a lip still counts.
-      this.v.y += 2.5 + this.charge * 4;
+      // Late pop off a lip still counts (on the ski jump, a late spring is weaker).
+      if (a.jump) {
+        const q = Math.max(0, 1 - a.t / 0.18) * 0.75;
+        this.v.y += 0.5 + 1.5 * q;
+        a.jump.takeoffQ = q;
+      } else this.v.y += 3.3 + this.charge * 5;
       a.popped = true;
-      this.popKind = POP_KINDS[this.popCount++ % 3];
+      this.popKind = a.jump ? 'stretch' : POP_KINDS[this.popCount++ % 3];
     }
     if (!input.jump) this.charge = 0;
 
     const dz = (x) => (Math.abs(x) < 0.22 ? 0 : (x - Math.sign(x) * 0.22) / 0.78);
-    const sx = dz(input.x), sy = dz(input.y);
+    const sx = a.jump ? 0 : dz(input.x), sy = a.jump ? 0 : dz(input.y);
     const slow = a.grab ? 0.8 : 1;
     const k = 1 - Math.exp(-12 * dt);
-    a.spinRate += (-sx * SPIN_MAX * slow - a.spinRate) * k;
-    a.flipRate += (-sy * FLIP_MAX * slow - a.flipRate) * k;
-    const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.left, a.flipRate);
-    const wl = w.length();
-    if (wl > 1e-4) {
-      q1.setFromAxisAngle(w.clone().divideScalar(wl), wl * dt);
-      (a.pipe ? a.qb : this.q).premultiply(q1);
-      a.total += wl * dt;
-      a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
-      a.flip += a.flipRate * dt;
-    }
-    const up = v2.copy(Y).applyQuaternion(this.q);
-    if (a.pipe) {
-      // Halfpipe: drift back over the coping, stand up on the way up and lay
-      // back into the wall on the way down.
-      const side = a.side, d = (this.p.x - PIPE.x) * side;
-      if (d > PIPE.lipD - 2.5 && this.v.x * side > -0.9) this.v.x += (-0.9 * side - this.v.x) * (1 - Math.exp(-5 * dt));
-      if (this.v.y < 0 && Math.abs(sx) + Math.abs(sy) < 0.05) {
-        // Landing assist: turn (in the upright frame) so the skis point down
-        // the wall when we touch it, forward or fakie, whichever is closer.
-        const n0 = v3.set(0, 1, 0).applyQuaternion(a.tilt);
-        const d = this.v.clone().addScaledVector(n0, -this.v.dot(n0)).applyQuaternion(a.tilt.clone().invert()).setY(0);
-        const fb = new THREE.Vector3(0, 0, 1).applyQuaternion(a.qb).setY(0);
-        if (d.lengthSq() > 0.01 && fb.lengthSq() > 0.01) {
-          d.normalize().multiplyScalar(Math.sign(fb.dot(d)) || 1);
-          a.qb.slerp(basisQuat(Y, d, new THREE.Quaternion()), 1 - Math.exp(-6 * dt));
-        }
+    const SM = this.board ? BOARD_SPIN.max : SPIN_MAX;
+    const spinT = -sx * SM * slow, flipT = -sy * FLIP_MAX * slow;
+    // Spins build up and run out over a moment instead of following the stick
+    // exactly, so they have a bit of weight (and carry a little after release).
+    // A spin you are already in keeps going until the stick says otherwise.
+    const speeding = Math.abs(spinT) > Math.abs(a.spinRate) && spinT * a.spinRate >= 0;
+    const ks = 1 - Math.exp(-(this.board ? (speeding ? BOARD_SPIN.up : BOARD_SPIN.down) : (speeding ? 7 : 9)) * dt);
+    a.spinRate += (spinT - a.spinRate) * ks;
+    a.flipRate += (flipT - a.flipRate) * k;
+    // Roll (Q / E): turn around the skier's own forward axis, to straighten up.
+    const roll = a.jump ? 0 : (input.roll || 0);
+    a.rollRate = (a.rollRate || 0) + (roll * ROLL_MAX - (a.rollRate || 0)) * k;
+
+    if (a.jump) {
+      // Ski jump flight: the body is held as heading and lean angles.
+      if (a.yaw === undefined) { _e.setFromQuaternion(this.q, 'YXZ'); a.yaw = _e.y; a.pitch = _e.x; }
+      this.stepJumpAir(dt, input, a.jump);
+      airQuat(a, this.q);
+    } else {
+      // Free rotation. Spins turn around the world's up; a flip turns around
+      // the skier's own left-right axis as it was when the flip started, so a
+      // cork or misty (both at once) turns around one fixed tilted axis.
+      const body = a.pipe ? a.qb : this.q;
+      if (sy && !a.flipAxis) a.flipAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(body);
+      if (!sy && Math.abs(a.flipRate) < 0.2) a.flipAxis = null;
+      const w = v1.copy(Y).multiplyScalar(a.spinRate).addScaledVector(a.flipAxis || a.left, a.flipRate);
+      if (Math.abs(a.rollRate) > 1e-4) {
+        q1.setFromAxisAngle(new THREE.Vector3(0, 0, 1).applyQuaternion(body).normalize(), a.rollRate * dt);
+        body.premultiply(q1);
       }
-      const lean = Math.min(1, Math.abs(this.v.y) / a.vy0);
-      this.q.copy(new THREE.Quaternion().slerp(a.tilt, lean)).multiply(a.qb);
-    } else if (Math.abs(sx) + Math.abs(sy) < 0.05 && up.y > 0.6) {
-      // Landing assist: with the stick centred, settle toward an upright stance.
-      const fwd = v3.copy(Z).applyQuaternion(this.q).setY(0);
-      if (fwd.lengthSq() > 0.01) {
-        fwd.normalize();
-        // Also line the skis up with the direction of travel, forward or switch.
-        const travel = new THREE.Vector3(this.v.x, 0, this.v.z);
-        if (travel.lengthSq() > 1) {
-          travel.normalize();
-          const d = fwd.dot(travel);
-          if (Math.abs(d) > 0.45) fwd.copy(travel).multiplyScalar(Math.sign(d));
+      const wl = w.length();
+      if (wl > 1e-4) {
+        q1.setFromAxisAngle(w.clone().divideScalar(wl), wl * dt);
+        body.premultiply(q1);
+        a.total += wl * dt;
+        a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
+        a.flip += a.flipRate * dt;
+        a.spinSigned += a.spinRate * dt;
+      }
+      // Turn the body toward a target at a gentle, capped speed (no snapping).
+      const ease = (q, target, rate, cap) => {
+        const ang = q.angleTo(target);
+        if (ang > 1e-5) q.rotateTowards(target, Math.min(ang * rate, cap) * dt);
+      };
+      const up = v2.copy(Y).applyQuaternion(body);
+      const centred = Math.abs(sx) + Math.abs(sy) < 0.05 && !roll;
+      const fwdOf = (q) => new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0);
+      if (a.pipe) {
+        // Halfpipe: drift back over the coping, stand up on the way up and lay
+        // back into the wall on the way down.
+        const side = a.side, d = (this.p.x - PIPE.x) * side;
+        if (d > PIPE.lipD - 2.5 && this.v.x * side > -0.9) this.v.x += (-0.9 * side - this.v.x) * (1 - Math.exp(-5 * dt));
+        if (this.v.y < 0 && centred) {
+          // Landing assist: turn (in the upright frame) so the skis point down
+          // the wall when we touch it, forward or fakie, whichever is closer.
+          const n0 = new THREE.Vector3(0, 1, 0).applyQuaternion(a.tilt);
+          const d = this.v.clone().addScaledVector(n0, -this.v.dot(n0)).applyQuaternion(a.tilt.clone().invert()).setY(0);
+          const fb = fwdOf(a.qb).clone();
+          if (d.lengthSq() > 0.01 && fb.lengthSq() > 0.01) {
+            d.normalize().multiplyScalar(Math.sign(fb.dot(d)) || 1);
+            a.qb.slerp(basisQuat(Y, d, new THREE.Quaternion()), 1 - Math.exp(-6 * dt));
+          }
         }
-        const target = basisQuat(Y, fwd.clone(), new THREE.Quaternion());
-        this.q.slerp(target, 1 - Math.exp(-5 * dt));
+        const lean = Math.min(1, Math.abs(this.v.y) / a.vy0);
+        this.q.copy(new THREE.Quaternion().slerp(a.tilt, lean)).multiply(a.qb);
+      } else if (up.y > 0.6 && (centred || (Math.abs(sy) < 0.05 && !a.flipAxis))) {
+        const fwd = fwdOf(this.q);
+        if (fwd.lengthSq() > 0.01) {
+          fwd.normalize();
+          if (centred) {
+            // Landing assist: with the stick centred, stand upright, then glide
+            // the skis round to the direction of travel, forward or switch.
+            this.q.slerp(basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 1 - Math.exp(-5 * dt));
+            const travel = new THREE.Vector3(this.v.x, 0, this.v.z);
+            if (travel.lengthSq() > 1) {
+              travel.normalize();
+              const d = fwd.dot(travel);
+              if (Math.abs(d) > 0.45) fwd.copy(travel).multiplyScalar(Math.sign(d));
+            }
+            ease(this.q, basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 3, 2.6);
+          } else {
+            // Flat spins: while steering only sideways, level out the ramp's
+            // tilt so the spin turns around a straight up axis.
+            ease(this.q, basisQuat(Y, fwd.clone(), new THREE.Quaternion()), 3.5, 3);
+          }
+        }
       }
     }
 
     // Grabs (GRAB) and style moves (STYLE); the stick picks which one.
-    if (!a.grab && a.t > 0.06 && (input.grab || input.style)) {
+    if (!a.grab && !a.jump && a.t > 0.06 && (input.grab || input.style)) {
       const style = !input.grab;
       a.grab = { name: style ? styleName(input.x, input.y) : grabName(input.x, input.y), t: 0, style };
       a.grabs.push(a.grab);
-      this.emit('grab', { name: a.grab.name });
+      this.emit('grab', { name: showName(a.grab.name) });
     }
     if (a.grab) {
       if (a.grab.style ? input.style : input.grab) a.grab.t += dt; else a.grab = null;
@@ -528,11 +753,69 @@ export class Skier {
     this.checkRails(false);
     if (this.state !== 'air') return;
     if (this.checkObstacles()) return;
-    const gy = height(this.p.x, this.p.z);
-    if (this.p.y <= gy) {
-      this.p.y = gy;
-      this.land();
+    this.checkGround(a);
+  }
+
+  // Ski jump flight. Balance drifts away on its own (and with gusts); the stick
+  // left/right brings it back. Good balance means a flat V and more lift. Near
+  // the ground, JUMP sets a telemark: press it close to the snow, not early.
+  stepJumpAir(dt, input, J) {
+    J.t += dt;
+    J.gust += ((Math.random() - 0.5) * 7 - J.gust) * (1 - Math.exp(-1.5 * dt));
+    J.balV += (J.bal * 2.6 + J.gust * 1.2) * dt;
+    J.balV *= Math.exp(-1.2 * dt);
+    J.bal += (J.balV + input.x * 1.7) * dt;
+    if (Math.abs(J.bal) > 1) { J.bal = Math.sign(J.bal); J.balV = 0; }
+    const q = 1 - Math.pow(Math.abs(J.bal), 1.5);
+    J.q = q;
+    J.qSum += q * dt; J.qT += dt;
+    const spd = Math.hypot(this.v.x, this.v.z);
+    this.v.y += G * 0.3 * q * Math.min(1, spd / 18) * dt;
+    this.v.x *= Math.exp(-0.6 * dt);
+    // Lie forward over the skis, matching the hill below.
+    const travel = v3.set(this.v.x, 0, this.v.z);
+    if (travel.lengthSq() > 1) {
+      travel.normalize();
+      const ahead = normal(this.p.x + travel.x * 4, this.p.z + travel.z * 4, new THREE.Vector3());
+      const k = 1 - Math.exp(-4 * dt);
+      this.air.yaw += wrapPi(Math.atan2(travel.x, travel.z) - this.air.yaw) * k;
+      this.air.pitch += (Math.asin(Math.max(-1, Math.min(1, ahead.dot(travel)))) - wrapPi(this.air.pitch)) * k;
     }
+    const pressed = input.jump && !J.lastJump;
+    J.lastJump = input.jump;
+    const h = this.p.y - height(this.p.x, this.p.z);
+    J.h = h;
+    if (pressed && !J.tele && J.t > 0.4) {
+      const tq = h < 0.35 ? 0.5 : h <= 2.4 ? 1 : h <= 5.5 ? 1 - (h - 2.4) / 3.1 * 0.8 : 0.1;
+      J.tele = { q: tq, grade: h < 0.35 ? 'LATE' : h <= 2.4 ? 'PERFECT' : h <= 5.5 ? 'EARLY' : 'WAY TOO EARLY' };
+    }
+  }
+
+  // Ground contact in the air uses the body where it really is: it turns
+  // around its middle, so mid-flip the feet, skis or head can be well away
+  // from this.p. Head or hips into the snow is a crash; feet or skis first is
+  // a landing, judged by land() as usual.
+  checkGround(a) {
+    const up = v1.set(0, 1, 0).applyQuaternion(this.q);
+    const fwd = v2.set(0, 0, 1).applyQuaternion(this.q);
+    const c = v3.copy(this.p).addScaledVector(this.pivotUp, PIVOT);
+    const below = (k, f = 0) => {
+      const x = c.x + up.x * k + fwd.x * f, z = c.z + up.z * k + fwd.z * f;
+      return c.y + up.y * k + fwd.y * f - height(x, z);
+    };
+    if (Math.min(below(0.75), below(0.25), below(-0.4)) < -0.05) {
+      this.crash('Wipeout');
+      return;
+    }
+    const feet = below(-PIVOT);
+    const skis = a.t > 0.15 ? Math.min(below(-PIVOT, 0.86), below(-PIVOT, -0.86)) : 1;
+    if (feet > 0 && skis > -0.4) return; // skis flex, so only a tip deep in the snow counts
+    // Put the physics point where the feet really are, and line the drawn body
+    // up with it so nothing jumps.
+    this.p.copy(c).addScaledVector(up, -PIVOT);
+    this.p.y = height(this.p.x, this.p.z);
+    this.pivotUp.copy(up);
+    this.land();
   }
 
   land() {
@@ -550,8 +833,8 @@ export class Skier {
     const align = fp.dot(vdir);
     const upDot = up.dot(n);
     const trick = nameTrick(a);
-    if (upDot < 0.55 || flat < 0.35 || Math.abs(align) < 0.6 || impact > 17) {
-      this.crash(impact > 17 ? 'Too hard' : 'Wipeout');
+    if (upDot < 0.55 || flat < 0.35 || Math.abs(align) < 0.6) {
+      this.crash('Wipeout');
       return;
     }
     this.switch = align < 0;
@@ -567,6 +850,16 @@ export class Skier {
     const clean = upDot > 0.92 && Math.abs(align) > 0.94;
     const sketchy = !!a.grab || upDot < 0.75 || Math.abs(align) < 0.8;
     this.air = null;
+    if (a.jump) {
+      const J = a.jump, past = jumpU(this.p.z) > JUMP.edge;
+      this.landAnim = { t: 0, kind: J.tele ? 'telemark' : J.q < 0.3 ? 'windmill' : 'stomp' };
+      this.emit('land', { trick, clean, sketchy, impact, airtime: a.t, jump: true });
+      this.emit('jumpLand', {
+        dist: past ? Math.round(jumpDistance(this.p.z) * 2) / 2 : 0,
+        takeoff: J.takeoffQ, flight: J.qT > 0 ? J.qSum / J.qT : 0, tele: J.tele,
+      });
+      return;
+    }
     if (a.t > 0.3) this.landAnim = { t: 0, kind: sketchy ? 'windmill' : 'stomp' };
     this.emit('land', { trick, clean, sketchy, impact, airtime: a.t });
   }
@@ -630,7 +923,7 @@ export class Skier {
     basisQuat(Y, fwd, this.q);
     const done = g.s < 0 || g.s > r.len || Math.abs(g.u) < 0.4;
     if (done || input.jumpReleased) {
-      if (input.jumpReleased) this.v.y += 4;
+      if (input.jumpReleased) this.v.y += 5.2;
       this.v.y = Math.max(this.v.y, 0.5);
       this.emit('grindEnd', { name: g.name, time: g.t });
       this.state = 'air';
@@ -640,16 +933,26 @@ export class Skier {
       const travel = new THREE.Vector3(Math.sin(g.yaw), 0, Math.cos(g.yaw));
       this.air = {
         t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
-        switchTakeoff: travel.dot(vh) < -0.5, grabs: [], grab: null, popped: true,
+        switchTakeoff: travel.dot(vh) < -0.5, grabs: [], grab: null, popped: true, board: this.board, spinSigned: 0,
         left: new THREE.Vector3().crossVectors(Y, vh), fromSlide: g.slide, pipe: false, side: 1,
       };
       this.p.y += 0.05;
+      this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
       this.grind = null;
     }
   }
 
+  // The body is three balls along its up axis: knees, middle and head. In the
+  // air it turns around its middle, just like the drawn model.
   checkObstacles() {
-    const o = obstacleHit(this.p.x, this.p.y, this.p.z);
+    let o = null;
+    const air = this.state === 'air';
+    const up = air ? v1.set(0, 1, 0).applyQuaternion(this.q) : normal(this.p.x, this.p.z, v1);
+    const c = v2.copy(this.p).addScaledVector(air ? this.pivotUp : up, PIVOT);
+    for (const k of [-0.6, 0, 0.55]) {
+      v3.copy(c).addScaledVector(up, k);
+      if ((o = obstacleHit(v3.x, v3.y, v3.z, 0.28))) break;
+    }
     if (!o) return false;
     const cx = o.kind === 'box' ? (o.x0 + o.x1) / 2 : o.x, cz = o.kind === 'box' ? (o.z0 + o.z1) / 2 : o.z;
     const away = new THREE.Vector3(this.p.x - cx, 0, this.p.z - cz);
@@ -665,7 +968,7 @@ export class Skier {
   crash(reason) {
     this.state = 'crash';
     this.crashT = 0;
-    this.air = this.grind = this.press = this.landAnim = null;
+    this.air = this.grind = this.press = this.landAnim = this.butter = null;
     this.wallF = null;
     this.tumbleAxis = new THREE.Vector3(Math.random() - 0.5, 0.3, Math.random() - 0.5).normalize();
     this.emit('crash', { reason });
@@ -723,7 +1026,12 @@ export class Skier {
         both((s, i) => T.hands[i].set(s * 0.65, hipY + 0.4, 0.05));
       }
       const L = this.landAnim;
-      if (L && L.kind === 'windmill') {
+      if (L && L.kind === 'telemark') {
+        // One ski forward, knees deep, arms out to the side.
+        T.skis[0].z += 0.38; T.skis[1].z -= 0.38; T.skis[1].y += 0.06;
+        T.crouch = Math.max(c, 0.6);
+        both((s, i) => T.hands[i].set(s * 0.75, hipY + 0.45, 0.1));
+      } else if (L && L.kind === 'windmill') {
         both((s, i) => T.hands[i].set(s * 0.6, hipY + 0.5 + 0.35 * Math.sin(L.t * 14 + s), 0.35 * Math.cos(L.t * 14 + s)));
       } else if (L) {
         both((s, i) => T.hands[i].set(s * 0.3, hipY + 0.1, 0.45));
@@ -738,7 +1046,19 @@ export class Skier {
     } else if (this.state === 'air') {
       const a = this.air, g = a.grab;
       both((s, i) => { T.skis[i].y += 0.18; T.hands[i].set(s * 0.5, hipY + 0.45, 0.2); T.poles[i].set(s * 0.4, -0.6, -0.6); });
-      if (g) {
+      if (a.jump) {
+        const J = a.jump;
+        T.rate = 10;
+        if (J.tele) {
+          T.skis[0].z += 0.35; T.skis[1].z -= 0.35;
+          both((s, i) => T.hands[i].set(s * 0.75, hipY + 0.4, 0.1));
+        } else {
+          // V-style: tips apart, lying forward, arms back along the body.
+          both((s, i) => { T.skis[i].ry += s * 0.32; T.skis[i].y -= 0.1; T.hands[i].set(s * 0.32, hipY - 0.05, -0.45); });
+          T.tx += 0.75; T.crouch = 0.12;
+        }
+        T.tz += (J.bal || 0) * 0.55; // wobbles show the balance
+      } else if (g) {
         const def = g.style ? STYLES[g.name] : GRABS[g.name];
         const k = Math.min(1, g.t / 0.12), tw = 1 + Math.min(1, g.t / 0.7) * 0.4; // tweak it the longer you hold
         T.rate = 22;
@@ -773,7 +1093,12 @@ export class Skier {
       this.groundQuat(target);
       q1.setFromAxisAngle(Z, this.switch ? -this.lean : this.lean);
       target.multiply(q1);
-      this.renderQ.slerp(target, 1 - Math.exp(-18 * dt));
+      if (this.butter) {
+        // Swing round to the new direction instead of snapping.
+        const k = Math.min(1, this.butter.t / 0.4), e = k * k * (3 - 2 * k);
+        target.multiply(q1.setFromAxisAngle(Y, this.butter.dir * Math.PI * (1 - e)));
+        this.renderQ.copy(target);
+      } else this.renderQ.slerp(target, 1 - Math.exp(-18 * dt));
     }
 
     // Blend the pose toward its targets.
@@ -785,7 +1110,12 @@ export class Skier {
       P.poles[i].lerp(T.poles[i], k);
     }
 
-    M.root.position.copy(this.p);
+    // Spin and flip around the middle of the body, not the feet. On the snow the
+    // pivot follows the body up, so the offset is zero there; in the air it stays
+    // put, and it eases back after landing so there's no pop.
+    const up = v1.set(0, 1, 0).applyQuaternion(this.renderQ);
+    if (this.state === 'ground' || this.state === 'grind') this.pivotUp.lerp(up, 1 - Math.exp(-10 * dt)).normalize();
+    M.root.position.copy(this.p).addScaledVector(this.pivotUp, PIVOT).addScaledVector(up, -PIVOT);
     M.root.quaternion.copy(this.renderQ);
     if (Math.abs(P.press) > 1e-3) {
       // Presses pivot on the tip or tail of the skis.
@@ -798,10 +1128,30 @@ export class Skier {
 
     const hipY = 0.97 - P.crouch * 0.42;
     M.hips.position.y = hipY;
-    M.torso.rotation.set(P.tx, P.ty, P.tz);
+    // On a board the shoulders lead a spin and twist back for a wind-up.
+    let lead = 0;
+    if (this.board) lead = this.state === 'air' && this.air ? Math.max(-0.6, Math.min(0.6, this.air.spinRate * 0.09)) : -(this.wind || 0) * 0.55;
+    this.lead = (this.lead || 0) + (lead - (this.lead || 0)) * (1 - Math.exp(-10 * dt));
+    M.torso.rotation.set(P.tx, P.ty + this.lead, P.tz);
     M.head.rotation.x = -0.1 - P.crouch * 0.45;
-    M.body.rotation.y = this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) : 0;
-    M.skis.forEach((ski, i) => {
+    // On a board the body stands sideways (left foot forward) and the head
+    // looks down the hill.
+    const yaw = this.board ? BOARD_YAW : 0;
+    M.body.rotation.y = yaw + (this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) * (this.board ? 0.4 : 1) : 0);
+    M.head.rotation.y = -yaw * 0.8;
+    if (this.board) {
+      // One board: it takes the average of the two ski poses, and each foot
+      // stands on its binding.
+      const a = P.skis[0], b = P.skis[1], B = M.board;
+      B.position.set(0, (a.y + b.y) / 2, (a.z + b.z) / 2);
+      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2);
+      B.updateMatrix();
+      M.skis.forEach((ski, i) => {
+        ski.position.set(0, 0, i ? -0.26 : 0.26).applyMatrix4(B.matrix);
+        ski.quaternion.copy(B.quaternion);
+        ski.updateMatrix();
+      });
+    } else M.skis.forEach((ski, i) => {
       const s = P.skis[i];
       ski.position.set(s.x, s.y, s.z);
       ski.rotation.set(s.rx, s.ry, s.rz);
@@ -813,7 +1163,8 @@ export class Skier {
       if (h.ski !== undefined) {
         const pt = new THREE.Vector3(h.x, 0.05, h.z).applyMatrix4(M.skis[h.ski].matrix);
         P.hands[i].lerp(pt, 1 - Math.exp(-30 * dt));
-      } else P.hands[i].lerp(h, k);
+      } else if (this.board) P.hands[i].lerp(v3.copy(h).applyAxisAngle(Y, yaw * 0.7), k);
+      else P.hands[i].lerp(h, k);
     }
     M.root.updateMatrixWorld(true);
 

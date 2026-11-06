@@ -1,9 +1,11 @@
 // Fresh Line: boot, game loop, camera, scoring and screens.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { buildTerrain, height, WORLD, dropIns, LANE } from './terrain.js';
-import { Skier } from './skier.js';
-import { Input, isTouch } from './input.js';
-import { initAudio, setMix, sfx } from './audio.js';
+import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill } from './terrain.js';
+import { Skier, showName } from './skier.js';
+import { Input, isTouch, keyHintsChanged } from './input.js';
+import { initAudio, setMix, sfx, setVolume } from './audio.js';
+import { initLobby, profile, saveProfile, flakesFor } from './lobby.js';
+import { Trail } from './trail.js';
 import { Spray } from './spray.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +17,7 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0xd9e6f3);
-scene.fog = new THREE.Fog(HORIZON, 120, 780);
+scene.fog = new THREE.Fog(HORIZON, 260, 1500);
 const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 4200);
 
 // Sky dome: deep blue overhead, a warm glow around the sun, drifting clouds.
@@ -70,14 +72,15 @@ const snowfall = (() => {
   scene.add(m);
   return m;
 })();
-scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x5d7394, 0.85));
-const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x4f6a96, 0.95));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
 sun.position.set(-40, 60, 70);
 scene.add(sun, sun.target);
 
 const world = buildTerrain(scene);
 const skier = new Skier(scene);
 const spray = new Spray(scene);
+const trail = new Trail(scene);
 
 let mode = 'menu';
 let dropIn = 'summit';
@@ -97,7 +100,7 @@ const input = new Input({
 // ---------- HUD ----------
 
 const hud = {
-  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), combo: $('combo'), comboPts: $('comboPts'),
+  score: $('score'), scoreBox: $('scoreBox'), best: $('best'), speed: $('speed'), speedMult: $('speedMult'), jumpHud: $('jumpHud'), jumpLabel: $('jumpLabel'), jumpMark: $('jumpMark'), combo: $('combo'), comboPts: $('comboPts'),
   live: $('live'), pop: $('pop'), popName: $('popName'), popPts: $('popPts'), popTag: $('popTag'),
 };
 let popTimer = 0;
@@ -119,22 +122,40 @@ function updateHud(dt) {
   hud.score.textContent = Math.round(shownScore).toLocaleString();
   hud.best.textContent = 'BEST ' + Math.max(best, run.score).toLocaleString();
   hud.speed.textContent = Math.round(skier.speed * 3.6);
+  const m = speedMult();
+  hud.speedMult.textContent = m > 1 ? '×' + m.toFixed(1) : '';
   if (run.combo.length) {
     hud.combo.textContent = run.combo.join('  ·  ');
-    hud.comboPts.textContent = run.comboPts.toLocaleString() + (run.combo.length > 1 ? '  ×' + run.combo.length : '');
+    hud.comboPts.textContent = run.comboPts.toLocaleString() + (run.combo.length > 1 ? '  ×' + comboMult() : '');
     hud.combo.parentElement.classList.add('on');
   } else hud.combo.parentElement.classList.remove('on');
   // Live read-out of the trick in progress
   let live = '';
   if (skier.state === 'air' && skier.air.t > 0.25) {
     const deg = Math.round(skier.air.total * 180 / Math.PI / 10) * 10;
-    live = (deg >= 90 ? deg + '°' : '') + (skier.air.grab ? '  ' + skier.air.grab.name.toUpperCase() : '');
+    live = (deg >= 90 ? deg + '°' : '') + (skier.air.grab ? '  ' + showName(skier.air.grab.name).toUpperCase() : '');
   } else if (skier.state === 'grind') live = skier.grind.name.toUpperCase();
   hud.live.textContent = live;
+  updateJumpHud();
   if (popTimer > 0 && (popTimer -= dt) <= 0) hud.pop.className = '';
 }
 
 // ---------- scoring ----------
+
+// Going faster pays: ×1 up to 40 km/h, then +0.1 for every 6 km/h, up to ×2.5.
+function speedMult() {
+  const kmh = skier.speed * 3.6;
+  return Math.min(2.5, Math.max(1, Math.round((1 + (kmh - 40) / 60) * 10) / 10));
+}
+const withSpeed = (pts, m) => Math.round(pts * m / 10) * 10;
+// Hang time pays too: ×1 up to 1 s in the air, +0.5 per extra second, up to ×2.5.
+const airMult = (t) => Math.min(2.5, Math.max(1, Math.round((1 + (t - 1) * 0.5) * 10) / 10));
+const airTag = (m) => (m > 1 ? 'AIR ×' + m.toFixed(1) : '');
+// Combos multiply by the number of tricks, up to ×10.
+const COMBO_MAX = 10;
+const comboMult = () => Math.min(COMBO_MAX, run.combo.length);
+const speedTag = (m) => (m > 1 ? 'SPEED ×' + m.toFixed(1) : '');
+const tags = (...t) => t.filter(Boolean).join('  ·  ');
 
 function addToCombo(name, pts) {
   run.combo.push(name);
@@ -146,48 +167,113 @@ function addToCombo(name, pts) {
 
 function bankCombo() {
   if (!run.combo.length) return;
-  const total = run.comboPts * run.combo.length;
+  const total = run.comboPts * comboMult();
   run.score += total;
   hud.scoreBox.classList.remove('bump');
   void hud.scoreBox.offsetWidth;
   hud.scoreBox.classList.add('bump');
-  if (run.combo.length > 1) showPop(run.combo.length + 'x COMBO', total, '', 'bank');
+  if (run.combo.length > 1) showPop(comboMult() + 'x COMBO', total, run.combo.length > COMBO_MAX ? 'MAX COMBO · ' + run.combo.length + ' TRICKS' : '', 'bank');
   sfx.bank();
   run.combo = []; run.comboPts = 0;
+}
+
+// Ski jump: distance points like real jumping (60 at the K point, 1.8 per
+// metre either side) plus up to 60 style points for takeoff, flight and
+// telemark, all ×10 to match the other scores.
+const grade = (q) => (q > 0.9 ? 'PERFECT' : q > 0.65 ? 'GOOD' : q > 0.3 ? 'OK' : 'POOR');
+function scoreJump(e) {
+  if (!e.dist) { showPop('NO DISTANCE', 0, 'Land past the takeoff edge', 'crash'); return; }
+  const distPts = Math.max(0, 60 + (e.dist - JUMP.K) * 1.8);
+  const style = 20 * e.takeoff + 20 * e.flight + 20 * (e.tele ? e.tele.q : 0);
+  const pts = Math.round((distPts + style) * 10 / 10) * 10;
+  run.score += pts;
+  run.tricks++;
+  const name = e.dist.toFixed(1) + ' m';
+  if (!run.bestTrick || pts > run.bestTrick.pts) run.bestTrick = { name: 'Ski jump ' + name, pts };
+  hud.scoreBox.classList.remove('bump');
+  void hud.scoreBox.offsetWidth;
+  hud.scoreBox.classList.add('bump');
+  const tags = [e.dist >= JUMP.HS ? 'HILL RECORD ZONE' : e.dist >= JUMP.K ? 'PAST K' : '',
+    'TAKEOFF ' + grade(e.takeoff), 'FLIGHT ' + grade(e.flight), e.tele ? 'TELEMARK ' + e.tele.grade : 'NO TELEMARK'];
+  showPop(name, pts, tags.filter(Boolean).join('  ·  '), e.dist >= JUMP.K ? 'perfect' : '');
+  popTimer = 4;
+  sfx.bank();
+}
+
+// The meters for the ski jump's three skill shots.
+function updateJumpHud() {
+  const el = hud.jumpHud;
+  let show = false;
+  const a = skier.air, J = a && a.jump;
+  if (skier.state === 'ground' && onJumpHill(skier.p.x, skier.p.z, 2) && jumpU(skier.p.z) < JUMP.edge) {
+    const d = JUMP.edge - jumpU(skier.p.z);
+    if (d < 45) {
+      show = true;
+      el.dataset.mode = 'takeoff';
+      hud.jumpLabel.textContent = input.jump ? 'RELEASE IN THE GREEN!' : 'HOLD JUMP · RELEASE AT THE EDGE';
+      hud.jumpMark.style.left = (100 - Math.min(45, d) / 45 * 100) + '%';
+    }
+  } else if (J) {
+    show = true;
+    if (J.tele) { el.dataset.mode = 'done'; hud.jumpLabel.textContent = 'TELEMARK ' + J.tele.grade; }
+    else if (J.h !== undefined && J.h < 6 && skier.v.y < 0 && J.t > 0.4) {
+      el.dataset.mode = 'tele';
+      hud.jumpLabel.textContent = 'TELEMARK! PRESS JUMP';
+      hud.jumpMark.style.left = (100 - Math.min(6, J.h) / 6 * 100) + '%';
+    } else {
+      el.dataset.mode = 'balance';
+      hud.jumpLabel.textContent = 'BALANCE · STEER TO STAY CENTRED';
+      hud.jumpMark.style.left = (50 + (J.bal || 0) * 50) + '%';
+    }
+  }
+  el.hidden = !show;
 }
 
 function handleEvents() {
   for (const e of skier.events) {
     if (e.type === 'takeoff' && e.popped) sfx.pop();
     if (e.type === 'grab') sfx.grab();
-    if (e.type === 'pressEnd' && e.time > 0.4) {
-      const pts = Math.round((100 + Math.min(e.time, 3) * 250) / 10) * 10;
+    if (e.type === 'butter') {
+      const m = speedMult();
+      const pts = withSpeed(150, m);
       addToCombo(e.name, pts);
-      showPop(e.name, pts, '');
+      showPop(e.name, pts, speedTag(m));
+      sfx.grab();
+    }
+    if (e.type === 'jumpLand') scoreJump(e);
+    if (e.type === 'pressEnd' && e.time > 0.4) {
+      const m = speedMult();
+      const pts = withSpeed(100 + Math.min(e.time, 3) * 250, m);
+      addToCombo(e.name, pts);
+      showPop(e.name, pts, speedTag(m));
     }
     if (e.type === 'grind') {
       sfx.grind();
-      if (e.airTrick && e.airTrick.name) addToCombo(e.airTrick.name, e.airTrick.points);
+      if (e.airTrick && e.airTrick.name) addToCombo(e.airTrick.name, withSpeed(e.airTrick.points, speedMult()));
       run.comboT = 99;
     }
     if (e.type === 'grindEnd') {
-      const pts = Math.round((200 + e.time * 300) / 10) * 10;
+      const m = speedMult();
+      const pts = withSpeed(200 + e.time * 300, m);
       if (e.time > 0.25) {
         addToCombo(e.name, pts);
-        showPop(e.name, pts, '');
+        showPop(e.name, pts, speedTag(m));
       }
     }
     if (e.type === 'land') {
       if (e.airtime > 0.2) sfx.land(e.impact);
       shake = Math.min(0.5, e.impact * 0.03);
       const t = e.trick;
-      if (t.name && (t.points > 120 || t.name !== 'Air')) {
+      if (!e.jump && t.name && (t.points > 120 || t.name !== 'Air')) {
+        const m = speedMult();
         let pts = t.points;
         let tag = '';
-        if (e.clean) { pts = Math.round(pts * 1.25 / 10) * 10; tag = 'PERFECT'; }
-        else if (e.sketchy) { pts = Math.round(pts * 0.7 / 10) * 10; tag = 'SKETCHY'; }
+        if (e.clean) { pts *= 1.25; tag = 'PERFECT'; }
+        else if (e.sketchy) { pts *= 0.7; tag = 'SKETCHY'; }
+        const am = airMult(e.airtime);
+        pts = withSpeed(pts * am, m);
         addToCombo(t.name, pts);
-        showPop(t.name, pts, tag, e.clean ? 'perfect' : '');
+        showPop(t.name, pts, tags(tag, airTag(am), speedTag(m)), e.clean ? 'perfect' : '');
         sfx.trick(Math.min(3, Math.floor(pts / 700)));
       }
       run.comboT = 2.6;
@@ -224,6 +310,7 @@ function updateCamera(dt, snap = false) {
   camPos.y += (want.y - camPos.y) * (1 - Math.exp(-(skier.state === 'air' ? 4 : 9) * dt));
   if (snap) camPos.copy(want);
   camera.position.copy(camPos);
+  if (shake > 0 && !settings.shake) shake = 0;
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake * 0.3;
     camera.position.y += (Math.random() - 0.5) * shake * 0.3;
@@ -240,19 +327,31 @@ function updateCamera(dt, snap = false) {
 
 // ---------- screens ----------
 
-const screens = ['menu', 'pauseScreen', 'finish'];
+const screens = ['pauseScreen', 'finish'];
 function show(id) {
   for (const s of screens) $(s).hidden = s !== id;
   $('hud').hidden = !(mode === 'play');
   document.body.classList.toggle('playing', mode === 'play');
+  if (id === 'lobby') lobby.show(); else lobby.hide();
+}
+
+// A run's points become snowflakes for the shop when the run ends.
+let paid = true;
+function payRun() {
+  if (paid) return 0;
+  paid = true;
+  bankCombo();
+  return lobby.award(run.score);
 }
 
 function startRun(where, quick = false) {
+  if (!quick) payRun();
   dropIn = where;
   const d = dropIns[where];
   skier.spawn(d.x, d.z, 0, d.speed);
   shownScore = 0;
   Object.assign(run, { score: 0, combo: [], comboPts: 0, comboT: 0, bestTrick: null, tricks: 0 });
+  paid = false;
   input.clear();
   mode = 'play';
   show(null);
@@ -276,31 +375,83 @@ function finishRun() {
   $('finBest').textContent = isBest ? 'NEW BEST!' : 'Best ' + best.toLocaleString();
   $('finTricks').textContent = run.tricks;
   $('finTop').textContent = run.bestTrick ? `${run.bestTrick.name} (${run.bestTrick.pts.toLocaleString()})` : '—';
+  const n = payRun();
+  $('finFlakes').textContent = n ? '+' + n.toLocaleString() + ' ❄' : '';
   show('finish');
 }
-
-for (const b of document.querySelectorAll('[data-drop]')) {
-  b.addEventListener('click', () => { initAudio(); startRun(b.dataset.drop); });
+function toLobby() {
+  payRun();
+  if (run.score > best) { best = run.score; store.set('best', best); }
+  mode = 'menu';
+  skier.spawn(LOBBY.x, LOBBY.z, 0);
+  show('lobby');
 }
+
+// Settings from the lobby.
+const settings = { shake: true };
+function applySettings(s) {
+  settings.shake = s.shake;
+  document.body.classList.toggle('nokeys', !s.keys);
+  renderer.setPixelRatio(s.quality === 'low' ? 1 : Math.min(devicePixelRatio, isTouch ? 2 : 1.5));
+  resize();
+  snowfall.visible = s.snowfall;
+  setVolume(s.volume);
+}
+keyHintsChanged((on) => { profile.settings.keys = on; saveProfile(); });
+
+let trailPreview = 'none';
+const lobby = initLobby({
+  skier,
+  setGear: (board) => { skier.setBoard(board); },
+  play: (where) => { initAudio(); startRun(where); },
+  best: () => best,
+  applySettings,
+  setTrailPreview: (id) => { trailPreview = id; trail.setStyle(id); },
+});
+
 $('resumeBtn').addEventListener('click', resume);
 $('restartBtn').addEventListener('click', () => startRun(dropIn));
-$('menuBtn').addEventListener('click', () => { mode = 'menu'; show('menu'); });
+$('menuBtn').addEventListener('click', toLobby);
 $('againBtn').addEventListener('click', () => { initAudio(); startRun(dropIn); });
-$('finMenuBtn').addEventListener('click', () => { mode = 'menu'; show('menu'); });
-$('menuBest').textContent = best ? 'Best run ' + best.toLocaleString() : '';
+$('finMenuBtn').addEventListener('click', toLobby);
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play') pause(); });
 
-// Menu backdrop: a slow orbit of the park while nobody is riding.
-skier.spawn(0, dropIns.summit.z, 0);
-let menuT = 0;
-function menuCamera(dt) {
-  menuT += dt * 0.05;
-  const z = 300 + Math.sin(menuT) * 120;
-  camera.position.set(Math.sin(menuT * 1.3) * 30 + 20, height(20, z) + 14, z - 30);
-  camera.lookAt(0, height(0, z + 40), z + 40);
-  camera.fov = innerWidth < innerHeight ? 80 : 60;
+// Lobby: the rider stands by the start hut and turns slowly for the camera;
+// drag to spin them round. An equipped trail circles them.
+const LOBBY = { x: 3, z: -84 };
+let lobbyT = 0, lobbyYaw = 0, dragX = null;
+addEventListener('pointerdown', (e) => { if (mode === 'menu' && e.target === canvas) dragX = e.clientX; });
+addEventListener('pointermove', (e) => { if (dragX !== null) { lobbyYaw += (e.clientX - dragX) * 0.012; dragX = e.clientX; } });
+addEventListener('pointerup', () => { dragX = null; });
+const _tp = new THREE.Vector3(), _ts = new THREE.Vector3();
+function lobbyScene(dt) {
+  lobbyT += dt;
+  if (dragX === null) lobbyYaw += dt * 0.25;
+  const gy = height(LOBBY.x, LOBBY.z);
+  skier.p.set(LOBBY.x, gy, LOBBY.z);
+  skier.v.set(0, 0, 0);
+  skier.state = 'ground';
+  skier.heading = lobbyYaw;
+  skier.crouch = 0.25; skier.lean = 0; skier.skid = 0;
+  // Camera in front of the rider, a little to the side so the UI has room.
+  const portrait = innerWidth < innerHeight;
+  const tab = lobby.tab();
+  // Shift the view so the rider stands left of the panels (the camera looks
+  // up the hill, so +x is screen right).
+  const panel = tab === 'locker' || tab === 'shop';
+  const side = panel ? (portrait ? 0 : 1.5) : 0.35;
+  const far = portrait ? 7 : 5.4;
+  camera.position.set(LOBBY.x + side, gy + 1.5, LOBBY.z + far);
+  camera.lookAt(LOBBY.x + side, gy + 1.0, LOBBY.z);
+  if (portrait && panel) { camera.position.y += 1.2; camera.lookAt(LOBBY.x, gy + 0.1, LOBBY.z); }
+  camera.fov = portrait ? 60 : 42;
   camera.updateProjectionMatrix();
   sky.position.copy(camera.position);
+  // Trail preview: a loop around the rider.
+  const a = lobbyT * 3.2;
+  _tp.set(LOBBY.x + Math.cos(a) * 0.95, gy + 0.9 + Math.sin(lobbyT * 2.1) * 0.45, LOBBY.z + Math.sin(a) * 0.95);
+  _ts.set(0, 1, 0);
+  trail.update(dt, _tp, _ts, trailPreview !== 'none', 0.12);
 }
 
 // ---------- loop ----------
@@ -331,6 +482,10 @@ function frame(now) {
     if (run.combo.length && skier.state === 'ground' && (run.comboT -= dt) <= 0) bankCombo();
     skier.render(dt);
     spray.emitFrom(skier, dt);
+    // Trail from the feet while flying or grinding.
+    _tp.copy(skier.model.root.position).addScaledVector(_ts.set(0, 1, 0).applyQuaternion(skier.renderQ), 0.08);
+    _ts.set(1, 0, 0).applyQuaternion(skier.renderQ);
+    trail.update(dt, _tp, _ts, skier.state === 'air' || skier.state === 'grind');
     updateCamera(dt);
     updateHud(dt);
     setMix(skier.speed, skier.scrub, skier.state === 'ground' || skier.state === 'crash', false);
@@ -338,7 +493,7 @@ function frame(now) {
     if (Math.abs(skier.p.x) > WORLD.half - 8) skier.p.x = Math.sign(skier.p.x) * (WORLD.half - 8);
   } else {
     setMix(0, 0, false, true);
-    if (mode === 'menu') menuCamera(dt);
+    if (mode === 'menu') lobbyScene(dt);
     skier.render(dt);
   }
   spray.update(dt);
@@ -348,7 +503,8 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-show('menu');
+lobby.wearEquipped();
+toLobby();
 requestAnimationFrame(frame);
 
 window.__ski = { skier, run, input, startRun, LANE, camDir };

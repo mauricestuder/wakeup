@@ -3,15 +3,33 @@
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('touch');
 const STICK_R = 58;
+// On a keyboard the touch buttons stay on screen with their key under them:
+// a button lights up while its key is held, H hides the key labels.
+const KEY_BTN = {
+  Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
+  KeyR: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyE: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
+};
+function lightKey(code, on) {
+  const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
+  if (el) el.classList.toggle('down', on);
+}
+let onKeyHints = null;
+export function keyHintsChanged(fn) { onKeyHints = fn; }
+function toggleKeyHints() {
+  const off = document.body.classList.toggle('nokeys');
+  if (onKeyHints) onKeyHints(!off);
+}
+
 const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const STYLE_KEYS = ['KeyK', 'KeyL'];
-const TUCK_KEYS = ['KeyE', 'ControlLeft'];
+const BUTTER_KEYS = ['KeyR', 'ControlLeft'];
 
 export class Input {
   constructor({ onPause, onReset }) {
     this.x = 0; this.y = 0;
-    this.jump = false; this.grab = false; this.style = false; this.tuck = false;
+    this.jump = false; this.grab = false; this.style = false; this.butter = false;
     this.jumpReleased = false;
+    this.roll = 0; this.touchRoll = 0; // -1 rolls left, 1 rolls right
     this.keys = new Set();
     this.stick = { x: 0, y: 0 };
     this.enabled = false;
@@ -26,21 +44,23 @@ export class Input {
     addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
+      lightKey(e.code, true);
+      if (e.code === 'KeyH' && !e.repeat) toggleKeyHints();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
-      if (e.code === 'KeyR') this.onReset();
+      if (e.code === 'KeyT') this.onReset();
       if (e.code === 'Space') { this.jump = true; e.preventDefault(); }
       if (GRAB_KEYS.includes(e.code)) this.grab = true;
       if (STYLE_KEYS.includes(e.code)) this.style = true;
-      if (TUCK_KEYS.includes(e.code)) this.tuck = true;
+      if (BUTTER_KEYS.includes(e.code) && !e.repeat) this.butter = true;
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
+      lightKey(e.code, false);
       if (e.code === 'Space' && this.jump) { this.jump = false; this.jumpReleased = true; }
       if (GRAB_KEYS.includes(e.code)) this.grab = false;
       if (STYLE_KEYS.includes(e.code)) this.style = false;
-      if (TUCK_KEYS.includes(e.code)) this.tuck = false;
     });
-    addEventListener('blur', () => { this.keys.clear(); this.jump = this.grab = this.style = this.tuck = false; });
+    addEventListener('blur', () => { this.keys.clear(); for (const el of document.querySelectorAll('[data-btn].down')) el.classList.remove('down'); this.jump = this.grab = this.style = false; });
   }
 
   initTouch() {
@@ -91,16 +111,18 @@ export class Input {
         if (act === 'jump') this.jump = true;
         if (act === 'grab') this.grab = true;
         if (act === 'style') this.style = true;
-        if (act === 'tuck') this.tuck = true;
+        if (act === 'butter') this.butter = true;
         if (act === 'pause') this.onPause();
         if (act === 'reset') this.onReset();
+        if (act === 'rollL') this.touchRoll = -1;
+        if (act === 'rollR') this.touchRoll = 1;
       };
       const up = () => {
         el.classList.remove('down');
         if (act === 'jump' && this.jump) { this.jump = false; this.jumpReleased = true; }
         if (act === 'grab') this.grab = false;
         if (act === 'style') this.style = false;
-        if (act === 'tuck') this.tuck = false;
+        if (act === 'rollL' || act === 'rollR') this.touchRoll = 0;
       };
       el.addEventListener('pointerdown', down);
       el.addEventListener('pointerup', up);
@@ -117,13 +139,19 @@ export class Input {
     if (x && y) { x *= 0.75; y *= 0.75; }
     this.x = Math.max(-1, Math.min(1, x + this.stick.x));
     this.y = Math.max(-1, Math.min(1, y + this.stick.y));
+    this.roll = Math.max(-1, Math.min(1, (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) + this.touchRoll));
+    if (!isTouch) { // the on-screen stick follows the keys
+      if (!this.knob) this.knob = document.getElementById('knob');
+      this.knob.style.transform = x || y ? `translate(${x * STICK_R}px, ${y * STICK_R}px)` : '';
+      this.knob.parentElement.classList.toggle('live', !!(x || y));
+    }
   }
 
   // Release events last one physics step.
-  consume() { this.jumpReleased = false; }
+  consume() { this.jumpReleased = this.butter = false; }
 
   clear() {
-    this.jump = this.grab = this.style = this.tuck = this.jumpReleased = false;
-    this.stick.x = this.stick.y = 0;
+    this.jump = this.grab = this.style = this.butter = this.jumpReleased = false;
+    this.stick.x = this.stick.y = this.touchRoll = this.roll = 0;
   }
 }

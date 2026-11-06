@@ -9,12 +9,15 @@
   <meta name="apple-mobile-web-app-title" content="Fresh Line">
   <meta name="theme-color" content="#0d1b2e">
   <meta name="description" content="Fresh Line: a freeski park and big-mountain game. Corks, flips, grabs and rails. Plays in the browser on iPhone, iPad and PC.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&display=swap">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <title>Fresh Line</title>
   <style>
     :root { --ink: #0d1b2e; --snow: #f4f8fc; --orange: #ff5a1f; --blue: #1e88e5; --gold: #ffcf33; --red: #ff3b3b;
+      --yel: #ffd21f; --disp: 'Anton', 'Impact', 'Arial Narrow', 'Helvetica Neue', sans-serif;
       --font: system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif; }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--snow);
@@ -53,6 +56,17 @@
       80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
     #popName { font-size: clamp(30px, 6vw, 54px); line-height: 1; }
     #popPts { font-size: clamp(22px, 4vw, 34px); color: var(--orange); margin-top: 4px; }
+    #jumpHud { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); width: min(360px, 70vw); text-align: center; }
+    #jumpLabel { font-size: 15px; letter-spacing: .08em; margin-bottom: 6px; }
+    #jumpBar { position: relative; height: 16px; border-radius: 999px; background: rgba(10,20,36,.6); border: 2px solid rgba(255,255,255,.6); overflow: hidden; }
+    #jumpBar .zone { position: absolute; top: 0; bottom: 0; background: #2ecc71; }
+    #jumpHud[data-mode="takeoff"] .zone { left: 96%; right: 0; }
+    #jumpHud[data-mode="balance"] .zone { left: 40%; right: 40%; }
+    #jumpHud[data-mode="tele"] .zone { left: 60%; right: 6%; }
+    #jumpHud[data-mode="done"] #jumpBar { display: none; }
+    #jumpMark { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; background: #fff; border-radius: 3px; box-shadow: 0 0 8px #fff; }
+    #speedMult { color: var(--orange); margin-left: 6px; }
+    #speedMult:empty { display: none; }
     #popTag { font-size: 15px; font-weight: 900; letter-spacing: .2em; margin-top: 4px; color: #7fd4ff; }
     #pop.perfect #popTag { color: var(--gold); }
     #pop.crash #popName { color: var(--red); }
@@ -62,7 +76,26 @@
     /* ---------- touch controls ---------- */
     #touchUI { position: fixed; inset: 0; z-index: 3; display: none; touch-action: none; }
     body.playing #touchUI { display: block; }
-    body:not(.touch) #touchUI .tc { display: none; }
+    /* On a keyboard the same layout shows, with each key under its button. */
+    body:not(.touch) #stickZone { pointer-events: none; }
+    #touchUI kbd { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); white-space: nowrap;
+      font: 800 11px var(--font); font-style: normal; letter-spacing: .02em; color: var(--snow); min-width: 22px; padding: 3px 7px;
+      border-radius: 6px; text-align: center; background: rgba(10,20,36,.55); border: 1px solid rgba(255,255,255,.3); border-bottom-width: 2px; }
+    #touchUI .stickKeys { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; }
+    #touchUI .stickKeys kbd { position: static; transform: none; display: inline-block; margin: 0 1px; }
+    #touchUI .stickKeys span { display: block; text-align: center; margin-top: 4px; font: 700 11px var(--font); color: var(--snow);
+      background: rgba(10,20,36,.55); border-radius: 999px; padding: 2px 9px;
+      text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+    body.nokeys #touchUI kbd, body.nokeys .stickKeys { display: none; }
+    body:not(.touch) #stick { opacity: .8; }
+    body:not(.touch) #stick.live { opacity: 1; }
+    /* With the key labels on (keyboard or touch), the buttons sit a bit higher
+       and further apart so every label fits under its button. */
+    body:not(.nokeys) #stick { top: calc(100% - 140px - env(safe-area-inset-bottom)); }
+    body:not(.nokeys) [data-btn="jump"] { right: calc(30px + env(safe-area-inset-right)); bottom: calc(44px + env(safe-area-inset-bottom)); }
+    body:not(.nokeys) [data-btn="grab"] { right: calc(150px + env(safe-area-inset-right)); bottom: calc(48px + env(safe-area-inset-bottom)); }
+    body:not(.nokeys) [data-btn="style"] { right: calc(140px + env(safe-area-inset-right)); bottom: calc(154px + env(safe-area-inset-bottom)); }
+    body:not(.nokeys) [data-btn="butter"] { right: calc(44px + env(safe-area-inset-right)); bottom: calc(172px + env(safe-area-inset-bottom)); }
     #stickZone { position: absolute; left: 0; top: 0; bottom: 0; width: 46%; touch-action: none; }
     #stick { position: absolute; left: calc(110px + env(safe-area-inset-left)); top: calc(100% - 120px - env(safe-area-inset-bottom));
       width: 126px; height: 126px; margin: -63px 0 0 -63px; border-radius: 50%; pointer-events: none;
@@ -81,8 +114,13 @@
       right: calc(128px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
     [data-btn="style"] { --c: var(--gold); width: 62px; height: 62px; font-size: 13px;
       right: calc(112px + env(safe-area-inset-right)); bottom: calc(108px + env(safe-area-inset-bottom)); }
-    [data-btn="tuck"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
+    [data-btn="butter"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
       right: calc(34px + env(safe-area-inset-right)); bottom: calc(128px + env(safe-area-inset-bottom)); }
+    /* Roll buttons: above the stick, to straighten up in the air. */
+    .btn.roll { --c: #c58cff; width: 50px; height: 50px; bottom: calc(232px + env(safe-area-inset-bottom)); }
+    [data-btn="rollL"] { left: calc(46px + env(safe-area-inset-left)); }
+    [data-btn="rollR"] { left: calc(116px + env(safe-area-inset-left)); }
+    @media (max-height: 420px) { .btn.roll { width: 44px; height: 44px; bottom: calc(238px + env(safe-area-inset-bottom)); } }
     [data-btn="pause"], [data-btn="reset"] { width: 42px; height: 42px; border-width: 2px; border-color: rgba(255,255,255,.5); }
     [data-btn="pause"] svg, [data-btn="reset"] svg { width: 18px; height: 18px; }
     [data-btn="pause"] { right: calc(14px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); }
@@ -91,7 +129,7 @@
       [data-btn="jump"] { width: 82px; height: 82px; }
       [data-btn="grab"] { width: 62px; height: 62px; right: calc(114px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); }
       [data-btn="style"] { width: 54px; height: 54px; right: calc(100px + env(safe-area-inset-right)); bottom: calc(94px + env(safe-area-inset-bottom)); }
-      [data-btn="tuck"] { width: 54px; height: 54px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(112px + env(safe-area-inset-bottom)); }
+      [data-btn="butter"] { width: 54px; height: 54px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(112px + env(safe-area-inset-bottom)); }
       #score { font-size: 50px; }
     }
 
@@ -105,7 +143,10 @@
     h1 span { color: var(--orange); }
     h2 { margin: 0 0 6px; font-size: clamp(36px, 8vw, 64px); }
     .tag { margin: 8px 0 18px; font-size: 16px; font-weight: 700; opacity: .9; }
-    .drops { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 640px; }
+    .gear { display: inline-flex; gap: 0; margin: 0 auto 12px; border-radius: 999px; background: rgba(10,20,36,.55); padding: 4px; }
+    .gear button { background: transparent; box-shadow: none; padding: 8px 20px; border-radius: 999px; font-size: 15px; }
+    .gear button.on { background: var(--orange); box-shadow: 0 3px 0 #b33a0c; }
+    .drops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 760px; }
     button { font: 900 italic 18px var(--font); text-transform: uppercase; color: #fff; background: var(--orange);
       border: 0; border-radius: 10px; padding: 12px 10px; cursor: pointer; box-shadow: 0 4px 0 #b83a0c; }
     button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b83a0c; }
@@ -115,12 +156,14 @@
     .controls { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; text-align: left; font-size: 13px;
       background: rgba(10,20,36,.68); border-radius: 12px; padding: 10px 16px; margin: 0 auto; max-width: 480px; }
     .controls b { color: var(--gold); font-weight: 800; }
-    body.touch .kb, body:not(.touch) .tch { display: none; }
+    body.touch .controls .kb, body:not(.touch) .tch { display: none; }
     .stack { display: grid; gap: 10px; max-width: 300px; margin: 14px auto 0; }
     #menuBest { margin-top: 10px; font-weight: 800; color: var(--gold); min-height: 1em; }
     .stats { display: grid; grid-template-columns: auto auto; gap: 4px 16px; justify-content: center; font-size: 16px; margin: 10px 0 6px; }
     .stats b { color: var(--gold); }
     #finScore { font-size: 54px; color: var(--gold); }
+    #finFlakes { font-size: 26px; color: #9fe8ff; margin-top: 4px; }
+    #finFlakes:empty { display: none; }
     @media (max-height: 460px) {
       h1 { font-size: 52px; }
       .tag { margin: 4px 0 10px; }
@@ -133,8 +176,177 @@
     details.how summary::-webkit-details-marker { display: none; }
     details.how summary:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     details.how[open] summary { margin-bottom: 8px; }
-    @media (max-width: 620px) { .drops { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 900px) { .drops { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 600px) { .drops { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 380px) { .drops { grid-template-columns: repeat(2, 1fr); } }
+      /* ---------- lobby ---------- */
+    #lobby { position: fixed; inset: 0; z-index: 10; pointer-events: none; font-family: var(--disp); color: #fff;
+      --pad: max(14px, env(safe-area-inset-left)); --padR: max(14px, env(safe-area-inset-right)); }
+    #lobby[hidden] { display: none; }
+    #lobby::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(120% 90% at 35% 55%, transparent 40%, rgba(8,14,40,.55) 100%),
+        linear-gradient(180deg, rgba(10,22,70,.75) 0%, rgba(10,22,70,0) 18%, rgba(10,22,70,0) 62%, rgba(14,10,60,.8) 100%); }
+    #lobby[data-tab="settings"]::before { background: linear-gradient(160deg, rgba(20,40,120,.92), rgba(40,12,90,.94)); }
+    #lobby button, #lobby input { pointer-events: auto; font-family: var(--disp); }
+    #lobby .pane, #lobby .topbar, #lobby .toast { position: absolute; }
+    #lobby .pane { inset: 0; }
+    #lobby .pane[hidden] { display: none; }
+    .flake { font-style: normal; color: #9fe8ff; text-shadow: 0 0 8px rgba(120,220,255,.8); margin-right: 4px; }
+
+    .topbar { left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 18px; z-index: 2;
+      padding: calc(8px + env(safe-area-inset-top)) var(--padR) 8px var(--pad);
+      background: linear-gradient(180deg, rgba(6,14,48,.85), rgba(6,14,48,0)); }
+    .logo { font-size: 26px; letter-spacing: .02em; font-style: italic; transform: skewX(-6deg); text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+    .logo span { color: var(--orange); }
+    .tabs { display: flex; gap: 4px; flex: 1; justify-content: center; }
+    .tabs button { background: none; box-shadow: none; border-radius: 0; padding: 8px 14px 6px; font-size: 22px; font-style: normal; letter-spacing: .04em;
+      color: rgba(255,255,255,.62); text-shadow: 0 2px 0 rgba(0,0,0,.35); border-bottom: 4px solid transparent; transition: color .12s; }
+    .tabs button:hover { color: #fff; }
+    .tabs button.on { color: #fff; border-bottom-color: var(--yel); }
+    .tabs button:active { transform: none; }
+    .wallet { display: flex; align-items: center; font-size: 22px; padding: 4px 14px 4px 10px; border-radius: 6px; transform: skewX(-8deg);
+      background: linear-gradient(180deg, rgba(20,40,110,.9), rgba(10,20,70,.9)); border: 2px solid rgba(159,232,255,.5); box-shadow: 0 3px 0 rgba(0,0,0,.35); }
+    .wallet > * { transform: skewX(8deg); }
+
+    /* play */
+    .player { position: absolute; left: var(--pad); bottom: calc(18px + env(safe-area-inset-bottom)); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+    .pname { font-size: 34px; letter-spacing: .02em; font-style: italic; transform: skewX(-6deg); }
+    .plook { font-family: var(--font); font-weight: 800; font-size: 13px; opacity: .85; text-transform: uppercase; letter-spacing: .06em; }
+    .pbest { font-family: var(--font); font-weight: 700; font-size: 13px; margin-top: 4px; opacity: .9; }
+    .pbest b { color: var(--yel); }
+    .playside { position: absolute; right: var(--padR); bottom: calc(18px + env(safe-area-inset-bottom)); width: min(320px, 40vw); display: grid; gap: 10px; }
+    .gearsw { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .gearsw button, .seg button { background: rgba(10,22,70,.75); box-shadow: 0 3px 0 rgba(0,0,0,.35); border-radius: 4px; font-size: 18px; font-style: normal;
+      padding: 8px; transform: skewX(-8deg); border: 2px solid rgba(255,255,255,.15); letter-spacing: .03em; }
+    .gearsw button.on, .seg button.on { background: #fff; color: #10204a; border-color: #fff; }
+    .modecard { text-align: left; display: grid; padding: 12px 16px; border-radius: 6px; transform: skewX(-6deg); border: 3px solid rgba(255,255,255,.85);
+      box-shadow: 0 5px 0 rgba(0,0,0,.35), inset 0 -40px 60px rgba(0,0,0,.25); font-style: normal; }
+    .modecard > * { transform: skewX(6deg); }
+    .modecard small { font-family: var(--font); font-size: 11px; font-weight: 800; letter-spacing: .1em; opacity: .85; text-transform: uppercase; }
+    .modecard b { font-size: 34px; line-height: 1.05; letter-spacing: .02em; font-weight: 400; }
+    .modecard span { font-family: var(--font); font-size: 13px; font-weight: 700; text-transform: none; opacity: .92; }
+    .playbtn { font-size: 46px; font-style: normal; letter-spacing: .04em; padding: 6px 10px 2px; border-radius: 6px; color: #13173a; transform: skewX(-6deg);
+      background: linear-gradient(180deg, #fff27a, #ffd21f 55%, #f5b800); box-shadow: 0 6px 0 #a87400, 0 0 30px rgba(255,214,31,.45); border: 3px solid #fff6b0; }
+    .playbtn:hover { filter: brightness(1.06); }
+    .playbtn:active { transform: skewX(-6deg) translateY(4px); box-shadow: 0 2px 0 #a87400; }
+    .modes { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6,10,40,.7); z-index: 3; padding: 16px; }
+    .modes[hidden] { display: none; }
+    .modesbox { width: min(820px, 100%); max-height: 100%; overflow-y: auto; }
+    .mhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .mhead h2 { font-size: 36px; font-weight: 400; font-style: italic; margin: 0; }
+    .modegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .modetile { display: grid; text-align: left; align-content: end; min-height: 110px; padding: 12px; border-radius: 6px; font-style: normal;
+      border: 3px solid rgba(255,255,255,.25); box-shadow: 0 4px 0 rgba(0,0,0,.35), inset 0 -50px 50px rgba(0,0,0,.25); }
+    .modetile.on { border-color: var(--yel); box-shadow: 0 4px 0 rgba(0,0,0,.35), 0 0 0 3px var(--yel); }
+    .modetile b { font-size: 28px; font-weight: 400; letter-spacing: .02em; }
+    .modetile span { font-family: var(--font); font-size: 12px; font-weight: 700; text-transform: none; opacity: .9; }
+    #lobby .close { background: rgba(255,255,255,.12); box-shadow: none; border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 18px; font-style: normal; }
+
+    /* locker + shop panels */
+    .sidepanel { position: absolute; right: var(--padR); top: calc(64px + env(safe-area-inset-top)); bottom: calc(14px + env(safe-area-inset-bottom));
+      width: min(560px, 56vw); overflow-y: auto; pointer-events: auto; padding: 4px 4px 12px; scrollbar-width: thin; }
+    .cats { display: flex; gap: 6px; margin-bottom: 8px; }
+    .cats button { flex: 1; font-size: 20px; font-style: normal; padding: 8px 4px; border-radius: 4px; transform: skewX(-8deg);
+      background: rgba(10,22,70,.78); box-shadow: 0 3px 0 rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,.15); }
+    .cats button.on { background: #fff; color: #10204a; }
+    .count { font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .8; margin: 0 2px 8px; }
+    #lobby .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+    #lobby .grid.feat { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .card { position: relative; display: grid; grid-template-rows: 1fr auto auto auto; text-align: left; padding: 0; border-radius: 4px; overflow: hidden;
+      min-height: 150px; font-style: normal; border: 3px solid var(--rc); box-shadow: 0 4px 0 rgba(0,0,0,.4);
+      background: radial-gradient(90% 80% at 50% 30%, color-mix(in srgb, var(--rc) 85%, #fff 15%), color-mix(in srgb, var(--rc) 55%, #000 45%)); }
+    .card::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(115deg, rgba(255,255,255,.07) 0 10px, transparent 10px 22px); }
+    .card.big { min-height: 210px; }
+    .card:hover { filter: brightness(1.1); }
+    .card:active { transform: translateY(2px); }
+    .card.sel { outline: 3px solid #fff; outline-offset: 2px; }
+    .card .ico { align-self: center; justify-self: center; margin: 10px 0 6px; }
+    .ico.emoji { font-size: 54px; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+    .card.big .ico.emoji { font-size: 84px; }
+    .ico.swatch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 58px; transform: rotate(-8deg); }
+    .ico.swatch span { width: 27px; height: 27px; border-radius: 6px; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+    .card.big .ico.swatch { width: 86px; } .card.big .ico.swatch span { width: 41px; height: 41px; }
+    .ico.bar { width: 78%; height: 22px; border-radius: 999px; transform: skewX(-20deg); box-shadow: 0 0 14px rgba(255,255,255,.35), 0 2px 4px rgba(0,0,0,.4); }
+    .card .name { background: rgba(8,12,40,.72); padding: 6px 8px 0; font-size: 19px; line-height: 1.05; letter-spacing: .02em; }
+    .card .kind { background: rgba(8,12,40,.72); padding: 0 8px 6px; font-family: var(--font); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--rc); filter: brightness(1.4); }
+    .card .price { background: rgba(4,6,24,.9); padding: 4px 8px; font-size: 17px; letter-spacing: .03em; }
+    .card .price.owned { color: #7dff9a; }
+    .card .check { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--yel); color: #13173a; display: grid; place-items: center; font-size: 15px; }
+    .card.locked .ico, .card.locked .name { opacity: .45; }
+    .card .lock { position: absolute; top: 6px; left: 6px; right: 6px; font-size: 14px; background: rgba(0,0,0,.55); border-radius: 3px; padding: 2px 6px; text-align: center; }
+    .shoptitle { font-size: 40px; font-weight: 400; font-style: italic; margin: 0 2px 4px; transform: skewX(-6deg); text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+    .shopsec h3 { font-size: 22px; font-weight: 400; margin: 12px 2px 6px; letter-spacing: .04em; }
+    .shopsec h3 small { font-family: var(--font); font-size: 11px; font-weight: 800; letter-spacing: .08em; opacity: .75; margin-left: 8px; }
+    .detail { position: absolute; left: var(--pad); bottom: calc(18px + env(safe-area-inset-bottom)); width: min(300px, 36vw); padding: 14px 16px; pointer-events: auto;
+      background: linear-gradient(180deg, rgba(10,18,60,.88), rgba(10,18,60,.95)); border-left: 6px solid var(--rc); border-radius: 4px; box-shadow: 0 6px 0 rgba(0,0,0,.35); }
+    .detail[hidden] { display: none; }
+    .detail .rar { font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--rc); filter: brightness(1.4); }
+    .detail .dname { font-size: 38px; line-height: 1; margin: 2px 0 4px; }
+    .detail .ddesc { font-family: var(--font); font-size: 13px; font-weight: 600; opacity: .85; margin-bottom: 10px; text-transform: none; }
+    .detail .buy { width: 100%; font-size: 24px; font-style: normal; color: #13173a; border-radius: 4px; padding: 8px; transform: skewX(-6deg);
+      background: linear-gradient(180deg, #fff27a, #ffd21f 55%, #f5b800); box-shadow: 0 4px 0 #a87400; }
+    .detail .buy.owned { background: #fff; box-shadow: 0 4px 0 #8a96b8; }
+    .detail .buy:disabled { filter: grayscale(.8) brightness(.7); cursor: not-allowed; }
+    .detail .short { font-family: var(--font); font-size: 12px; font-weight: 700; margin-top: 8px; opacity: .85; text-transform: none; }
+    .detail .close { position: absolute; top: 8px; right: 8px; width: 30px !important; height: 30px !important; font-size: 14px !important; }
+
+    /* settings */
+    .settings { position: absolute; left: var(--pad); right: var(--padR); top: calc(66px + env(safe-area-inset-top)); bottom: calc(14px + env(safe-area-inset-bottom));
+      display: grid; grid-template-columns: 200px 1fr; gap: 16px; pointer-events: auto; max-width: 980px; margin: 0 auto; }
+    .scats { display: grid; align-content: start; gap: 6px; }
+    .scats button { text-align: left; font-size: 22px; font-style: normal; padding: 10px 14px; border-radius: 4px; background: rgba(255,255,255,.08);
+      box-shadow: none; border-left: 5px solid transparent; letter-spacing: .03em; }
+    .scats button.on { background: rgba(255,255,255,.18); border-left-color: var(--yel); }
+    .sbody { overflow-y: auto; background: rgba(4,8,36,.45); border-radius: 6px; padding: 10px 18px 18px; }
+    .sbody h3 { font-size: 30px; font-weight: 400; margin: 4px 0 10px; letter-spacing: .03em; }
+    .sbody [hidden] { display: none; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; margin-bottom: 6px; border-radius: 4px;
+      background: rgba(255,255,255,.07); font-size: 20px; letter-spacing: .02em; }
+    .row:hover { background: rgba(255,255,255,.12); }
+    .row input#setName { font-size: 20px; background: rgba(0,0,0,.35); color: #fff; border: 2px solid rgba(255,255,255,.25); border-radius: 4px; padding: 6px 10px; width: 200px; text-transform: uppercase; }
+    .tog { min-width: 96px; font-size: 18px; font-style: normal; padding: 6px 12px; border-radius: 4px; background: rgba(0,0,0,.4); box-shadow: none; border: 2px solid rgba(255,255,255,.25); }
+    .tog.on { background: var(--yel); color: #13173a; border-color: var(--yel); }
+    .seg { display: flex; gap: 6px; }
+    .seg button { font-size: 16px; min-width: 76px; }
+    .vol { display: flex; align-items: center; gap: 12px; }
+    .vol input { width: min(260px, 32vw); accent-color: var(--yel); }
+    .vol b { min-width: 36px; text-align: right; font-weight: 400; }
+    .warn { font-size: 15px; font-style: normal; background: #c62828; box-shadow: 0 3px 0 #7f1414; border-radius: 4px; padding: 8px 12px; }
+    .sbody .controls { max-width: none; background: rgba(0,0,0,.25); font-family: var(--font); text-transform: none; }
+
+    .toast { left: 50%; top: calc(70px + env(safe-area-inset-top)); transform: translate(-50%, -20px); opacity: 0; pointer-events: none; z-index: 4;
+      font-size: 24px; padding: 8px 22px; border-radius: 4px; background: rgba(8,12,40,.9); border-bottom: 4px solid var(--rc); white-space: nowrap; transition: .25s; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 760px), (max-height: 500px) {
+      .logo { display: none; }
+      .tabs { justify-content: flex-start; }
+      .tabs button { font-size: 18px; padding: 6px 8px 4px; }
+      .wallet { font-size: 18px; }
+      .pname { font-size: 26px; }
+      .playbtn { font-size: 36px; }
+      .modecard b { font-size: 26px; }
+      .modecard { padding: 8px 12px; }
+      .gearsw button { font-size: 15px; padding: 6px; }
+      .sidepanel { top: calc(52px + env(safe-area-inset-top)); width: min(560px, 60vw); }
+      #lobby .grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+      .card { min-height: 120px; } .card .name { font-size: 15px; } .ico.emoji { font-size: 40px; }
+      .card.big { min-height: 150px; } .card.big .ico.emoji { font-size: 58px; }
+      .shoptitle { font-size: 28px; }
+      .settings { grid-template-columns: 130px 1fr; top: calc(52px + env(safe-area-inset-top)); gap: 10px; }
+      .scats button { font-size: 17px; padding: 8px 10px; }
+      .row { font-size: 16px; padding: 8px 10px; }
+      .detail .dname { font-size: 26px; }
+    }
+    @media (max-height: 500px) { .pbest, .plook { display: none; } .playside { gap: 6px; } .modecard small { display: none; } }
+    @media (max-width: 560px) and (min-height: 501px) {
+      .sidepanel { left: var(--pad); width: auto; top: 46vh; }
+      .detail { top: calc(60px + env(safe-area-inset-top)); bottom: auto; width: auto; right: var(--padR); }
+      .playside { width: min(300px, 70vw); }
+      .settings { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .scats { grid-auto-flow: column; overflow-x: auto; }
+    }
   </style>
 </head>
 <body>
@@ -143,38 +355,107 @@
   <div id="hud" hidden>
     <div id="scoreBox">
       <div id="score">0</div>
-      <div class="meta"><span class="chip" id="best">BEST 0</span><span class="chip"><b id="speed">0</b> KM/H</span></div>
+      <div class="meta"><span class="chip" id="best">BEST 0</span><span class="chip"><b id="speed">0</b> KM/H<b id="speedMult"></b></span></div>
     </div>
     <div id="comboBox" class="sh"><div id="combo"></div><div id="comboPts" class="heavy"></div></div>
     <div id="live" class="heavy sh"></div>
+    <div id="jumpHud" hidden><div id="jumpLabel" class="heavy sh"></div><div id="jumpBar"><i class="zone"></i><i id="jumpMark"></i></div></div>
     <div id="pop" class="sh"><div id="popName" class="heavy"></div><div id="popPts" class="heavy"></div><div id="popTag"></div></div>
   </div>
 
   <div id="touchUI">
-    <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div></div></div>
-    <div class="btn tc" data-btn="tuck">TUCK</div>
-    <div class="btn tc" data-btn="style">STYLE</div>
-    <div class="btn tc" data-btn="grab">GRAB</div>
-    <div class="btn tc" data-btn="jump">JUMP</div>
-    <div class="btn" data-btn="reset" title="Back to drop-in (R)"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg></div>
-    <div class="btn" data-btn="pause" title="Pause (Esc)"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></div>
+    <div id="stickZone" class="tc"><div id="stick"><div id="knob"></div>
+      <div class="stickKeys kb"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Steer · air: A/D spin, W/S flip</span></div></div></div>
+    <div class="btn roll" data-btn="rollL" title="Roll left (Q)"><svg viewBox="0 0 24 24"><path d="M5 13a7 7 0 1 0 3-6.3"/><path d="M8 2v5h5"/></svg><kbd class="kb">Q</kbd></div>
+    <div class="btn roll" data-btn="rollR" title="Roll right (E)"><svg viewBox="0 0 24 24"><path d="M19 13a7 7 0 1 1-3-6.3"/><path d="M16 2v5h-5"/></svg><kbd class="kb">E</kbd></div>
+    <div class="btn tc" data-btn="butter">180<kbd class="kb">R</kbd></div>
+    <div class="btn tc" data-btn="style">STYLE<kbd class="kb">K</kbd></div>
+    <div class="btn tc" data-btn="grab">GRAB<kbd class="kb">Shift</kbd></div>
+    <div class="btn tc" data-btn="jump">JUMP<kbd class="kb">Space</kbd></div>
+    <div class="btn" data-btn="reset" title="Back to drop-in (T)"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg><kbd class="kb">T</kbd></div>
+    <div class="btn" data-btn="pause" title="Pause (Esc)"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><kbd class="kb">Esc</kbd></div>
   </div>
 
-  <section id="menu" class="screen">
-    <div class="panel">
-      <h1 class="heavy sh">Fresh<span>Line</span></h1>
-      <p class="tag sh">Park laps, superpipe and big mountain. Corks, flips, grabs and rails.</p>
-      <div class="drops">
-        <button data-drop="summit">Summit<small>Full run</small></button>
-        <button data-drop="park" class="alt">Park<small>Kickers + rails</small></button>
-        <button data-drop="pro" class="alt">Pro Line<small>Step-up, hip, big air</small></button>
-        <button data-drop="pipe">Halfpipe<small>Superpipe airs</small></button>
-        <button data-drop="backcountry" class="dark">Backcountry<small>Trees + cliffs</small></button>
+  <section id="lobby" data-tab="play">
+    <header class="topbar">
+      <div class="logo">FRESH<span>LINE</span></div>
+      <nav class="tabs">
+        <button data-tab="play" class="on">Play</button>
+        <button data-tab="locker">Locker</button>
+        <button data-tab="shop">Shop</button>
+        <button data-tab="settings">Settings</button>
+      </nav>
+      <div class="wallet"><i class="flake">❄</i><b id="coins">0</b></div>
+    </header>
+
+    <div data-pane="play" class="pane">
+      <div class="player">
+        <div id="playerName" class="pname">RIDER</div>
+        <div id="playerLook" class="plook"></div>
+        <div id="playerBest" class="pbest"></div>
       </div>
-      <details class="how">
-        <summary>How to ride</summary>
-        <div class="controls">
-          <b class="tch">Joystick</b><span class="tch">Steer · up = tuck/skate · down = brake</span>
+      <div class="playside">
+        <div class="gearsw"><button data-gear="ski">Ski</button><button data-gear="board">Snowboard</button></div>
+        <button id="modeCard" class="modecard"><small>Mode · tap to change</small><b id="modeName">Park</b><span id="modeDesc"></span></button>
+        <button id="playBtn" class="playbtn">Play</button>
+      </div>
+      <div id="modes" class="modes" hidden>
+        <div class="modesbox">
+          <div class="mhead"><h2>Select mode</h2><button id="modesClose" class="close">✕</button></div>
+          <div class="modegrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div data-pane="locker" class="pane" hidden>
+      <div class="sidepanel">
+        <div class="cats">
+          <button data-cat="character" class="on">Character</button>
+          <button data-cat="skin">Outfit</button>
+          <button data-cat="trail">Trail</button>
+        </div>
+        <div id="lockerCount" class="count"></div>
+        <div id="lockerGrid" class="grid"></div>
+      </div>
+    </div>
+
+    <div data-pane="shop" class="pane" hidden>
+      <div class="sidepanel shop">
+        <h2 class="shoptitle">Item Shop</h2>
+        <div id="shopList"></div>
+      </div>
+      <div id="detail" class="detail" hidden></div>
+    </div>
+
+    <div data-pane="settings" class="pane" hidden>
+      <div class="settings">
+        <div class="scats">
+          <button data-scat="game" class="on">Game</button>
+          <button data-scat="video">Graphics</button>
+          <button data-scat="audio">Audio</button>
+          <button data-scat="controls">Controls</button>
+        </div>
+        <div class="sbody">
+          <div data-spane="game">
+            <h3>Game</h3>
+            <label class="row"><span>Player name</span><input id="setName" maxlength="14" spellcheck="false"></label>
+            <div class="row"><span>Key labels under buttons</span><button id="setKeys" class="tog"><b>ON</b></button></div>
+            <div class="row"><span>Camera shake</span><button id="setShake" class="tog"><b>ON</b></button></div>
+            <div class="row danger"><span>Reset progress</span><button id="setReset" class="warn">Erase snowflakes and items</button></div>
+          </div>
+          <div data-spane="video" hidden>
+            <h3>Graphics</h3>
+            <div class="row"><span>Quality</span><div class="seg"><button data-quality="low">Low</button><button data-quality="high">High</button></div></div>
+            <div class="row"><span>Falling snow</span><button id="setSnow" class="tog"><b>ON</b></button></div>
+          </div>
+          <div data-spane="audio" hidden>
+            <h3>Audio</h3>
+            <div class="row"><span>Volume</span><div class="vol"><input id="setVol" type="range" min="0" max="100"><b id="setVolV">80</b></div></div>
+          </div>
+          <div data-spane="controls" hidden>
+            <h3>How to ride</h3>
+            <div class="controls">
+              <b class="tch">Joystick</b><span class="tch">Steer · up = tuck/skate · down = brake</span>
           <b class="kb">WASD / Arrows</b><span class="kb">Steer · W = tuck/skate · S = brake</span>
           <b class="tch">Hold JUMP</b><span class="tch">Crouch, release to pop (time it on the lip)</span>
           <b class="kb">Hold Space</b><span class="kb">Crouch, release to pop (time it on the lip)</span>
@@ -183,15 +464,27 @@
           <b class="kb">Hold Shift / J</b><span class="kb">Grab · 8 directions + none: Safety, Mute, Tail, Japan, Nose, Blunt, Critical, Seatbelt, Truck Driver</span>
           <b class="tch">Hold STYLE</b><span class="tch">In the air: Iron Cross, Daffy (up), Backscratcher (down), Spread Eagle (sideways) · on snow: nose press, or tail press with stick down</span>
           <b class="kb">Hold K</b><span class="kb">In the air: Iron Cross, Daffy (W), Backscratcher (S), Spread Eagle (A/D) · on snow: nose press, or tail press with S</span>
-          <b class="tch">Hold TUCK</b><span class="tch">Tuck for speed, skate when slow</span>
-          <b class="kb">Hold E</b><span class="kb">Tuck for speed, skate when slow</span>
+          <b class="tch">180</b><span class="tch">On snow: butter a 180 and ride switch (stick right turns the other way) · tuck with the stick up</span>
+          <b class="kb">R</b><span class="kb">On snow: butter a 180 and ride switch (hold D to turn the other way) · tuck with W</span>
+          <b>Snowboard</b><span>Hold JUMP and the stick sideways before the lip to wind up, and leave the jump already spinning · board spins are smoother and carry further · Frontside / Backside</span>
+          <b>Ski Jump</b><span>Release JUMP right at the edge · steer to keep your balance centred in the air · press JUMP just before landing for a telemark</span>
+          <b class="tch">Roll buttons</b><span class="tch">In the air: roll left or right to straighten up if you're tilted</span>
+          <b class="kb">Q / E</b><span class="kb">In the air: roll left / right to straighten up if you're tilted</span>
+          <b class="kb">T</b><span class="kb">Back to the drop-in</span>
+          <b class="kb">H</b><span class="kb">Show or hide the key labels under the buttons</span>
           <b>Rails &amp; boxes</b><span>Jump onto them · JUMP to pop off</span>
           <b>Halfpipe</b><span>Steer up the walls · spin 180 to come back in forwards</span>
-          <b>Combos</b><span>Chain tricks within 2.5 s of landing to multiply</span>
+          <b>Combos</b><span>Chain tricks within 2.5 s of landing to multiply, up to ×10</span>
+          <b>Speed</b><span>Faster = more points: ×1 at 40 km/h up to ×2.5 at 130 km/h</span>
+          <b>Airtime</b><span>Longer in the air = more points: ×1 up to 1 s, up to ×2.5 at 4 s</span>
+          <b>Snowflakes ❄</b><span>Every run pays 1 ❄ per 20 points · spend them in the Shop</span>
+            </div>
+          </div>
         </div>
-      </details>
-      <div id="menuBest" class="sh"></div>
+      </div>
     </div>
+
+    <div id="toast" class="toast"></div>
   </section>
 
   <section id="pauseScreen" class="screen" hidden>
@@ -200,7 +493,7 @@
       <div class="stack">
         <button id="resumeBtn">Resume</button>
         <button id="restartBtn" class="alt">Restart run</button>
-        <button id="menuBtn" class="dark">Drop-in menu</button>
+        <button id="menuBtn" class="dark">Back to lobby</button>
       </div>
     </div>
   </section>
@@ -210,10 +503,11 @@
       <h2 class="heavy sh">Run complete</h2>
       <div id="finScore" class="heavy sh">0</div>
       <div id="finBest" class="heavy sh"></div>
+      <div id="finFlakes" class="heavy sh"></div>
       <div class="stats sh"><span>Tricks landed</span><b id="finTricks">0</b><span>Best trick</span><b id="finTop">—</b></div>
       <div class="stack">
         <button id="againBtn">Ride the lift up</button>
-        <button id="finMenuBtn" class="dark">Drop-in menu</button>
+        <button id="finMenuBtn" class="dark">Back to lobby</button>
       </div>
     </div>
   </section>
