@@ -1,7 +1,7 @@
 // Outfit textures: each outfit paints its jacket, pants and gear (skis or
 // board) with a pattern on a small canvas, plus a glow map for the parts
 // that light up. Every texture gets soft shading, fabric grain and seams so
-// the boxes read as clothing. The Aurora outfit is animated.
+// the boxes read as clothing.
 import * as THREE from '../../game/vendor/three.module.min.js';
 
 const S = 128;
@@ -134,35 +134,7 @@ const PATTERNS = {
       }
     }
   },
-  // Animated: flowing curtains of light; t is time in seconds.
-  aurora(g, e, c, t = 0) {
-    const gr = g.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, '#0a0f2e'); gr.addColorStop(1, '#170a33');
-    g.fillStyle = gr; g.fillRect(0, 0, S, S);
-    e.fillStyle = '#000'; e.fillRect(0, 0, S, S);
-    const cols = ['#2bffb1', '#29d4ff', '#b24dff', '#ff4dc4'];
-    for (let b = 0; b < 4; b++) {
-      for (const [ctx, a] of [[g, 0.75], [e, 0.85]]) {
-        ctx.globalAlpha = a;
-        ctx.fillStyle = cols[b];
-        ctx.beginPath();
-        for (let x = 0; x <= S; x += 4) {
-          const y = 18 + b * 28 + Math.sin(x * 0.05 + t * (1.1 + b * 0.3) + b * 2) * 12 + Math.sin(x * 0.11 - t * 0.7) * 2.5;
-          ctx.lineTo(x, y);
-        }
-        for (let x = S; x >= 0; x -= 4) {
-          const y = 18 + b * 28 + Math.sin(x * 0.05 + t * (1.1 + b * 0.3) + b * 2) * 12 + Math.sin(x * 0.11 - t * 0.7) * 2.5 + 12 + 6 * Math.sin(x * 0.04 + t * 1.5);
-          ctx.lineTo(x, y);
-        }
-        ctx.fill();
-      }
-    }
-    g.globalAlpha = e.globalAlpha = 1;
-    const r = rnd(17);
-    for (let i = 0; i < 24; i++) {
-      const x = r() * S, y = r() * S, tw = 0.5 + 0.5 * Math.sin(t * 4 + i);
-      for (const ctx of [g, e]) { ctx.fillStyle = `rgba(255,255,255,${tw})`; ctx.fillRect(x, y, 2, 2); }
-    }
-  },
+  void(g, e) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); }, // pure black, no shading
 };
 
 // Shading, grain and seams on top of a pattern so it reads as fabric.
@@ -195,28 +167,22 @@ function paint(skin, part, cv, ev, t) {
   e.fillStyle = '#000'; e.fillRect(0, 0, S, S);
   const pat = PATTERNS[skin.pat?.[part]] || PATTERNS.solid;
   pat(g, e, partColors(skin, part), t);
-  finish(g, part);
+  if (!skin.flat) finish(g, part);
 }
 
 const cache = new Map();
-// { map, glow, live } for an outfit's part; live parts redraw over time.
+// { map, glow } textures for an outfit part, made once and cached.
 export function partTextures(id, skin, part) {
   const k = id + ':' + part;
   if (cache.has(k)) return cache.get(k);
   const cv = canvas(), ev = canvas();
   paint(skin, part, cv, ev, 0);
   const mk = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
-  const glows = skin.pat?.[part] === 'aurora' || ['stars', 'circuit', 'drip', 'flames', 'sparkle', 'band'].includes(skin.pat?.[part]) && skin.glow?.includes(part);
-  const out = { map: mk(cv), glow: glows ? mk(ev) : null, live: skin.pat?.[part] === 'aurora', cv, ev, skin, part };
+  const glows = ['stars', 'circuit', 'drip', 'flames', 'sparkle', 'band'].includes(skin.pat?.[part]) && skin.glow?.includes(part);
+  const out = { map: mk(cv), glow: glows ? mk(ev) : null };
   cache.set(k, out);
   return out;
 }
-export function repaint(tx, t) {
-  paint(tx.skin, tx.part, tx.cv, tx.ev, t);
-  tx.map.needsUpdate = true;
-  if (tx.glow) tx.glow.needsUpdate = true;
-}
-
 // A small drawn figure in the outfit, for shop and locker cards.
 const icons = new Map();
 export function outfitIcon(id, skin) {

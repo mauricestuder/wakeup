@@ -12,6 +12,7 @@ export const TRAIL_STYLES = {
   neon: { add: false, col: (k, i, c) => c.setHSL(0.83 + 0.06 * Math.sin(i * 0.4), 1, 0.52) },
   rainbow: { add: false, col: (k, i, c, t) => c.setHSL((i * 0.035 + t * 0.4) % 1, 1, 0.5) },
   shadow: { add: false, col: (k, i, c) => c.setRGB(0.18 + 0.12 * k, 0.08, 0.28 + 0.1 * k) },
+  void: { add: false, alpha: 0.9, col: (k, i, c) => c.setRGB(0, 0, 0) },
   gold: { add: false, col: (k, i, c, t) => c.setRGB(1, 0.7, 0.1).multiplyScalar(0.75 + 0.5 * Math.max(0, Math.sin(i * 1.7 + t * 18))) },
 };
 
@@ -59,7 +60,7 @@ export class Trail {
       P.setXYZ(j * 2, q.p.x + q.s.x * w, q.p.y + q.s.y * w, q.p.z + q.s.z * w);
       P.setXYZ(j * 2 + 1, q.p.x - q.s.x * w, q.p.y - q.s.y * w, q.p.z - q.s.z * w);
       this.style.col(k, j, c, this.t);
-      const a = j < n ? (1 - k) * (1 - k) * 0.55 : 0;
+      const a = j < n ? (1 - k) * (1 - k) * (this.style.alpha ?? 0.55) : 0;
       C.setXYZW(j * 2, c.r, c.g, c.b, a);
       C.setXYZW(j * 2 + 1, c.r, c.g, c.b, a);
     }

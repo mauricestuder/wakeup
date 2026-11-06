@@ -496,7 +496,6 @@ function frame(now) {
     if (mode === 'menu') lobbyScene(dt);
     skier.render(dt);
   }
-  skier.tickLook(dt);
   spray.update(dt);
   sky.material.uniforms.time.value += dt;
   snowfall.material.uniforms.time.value += dt;

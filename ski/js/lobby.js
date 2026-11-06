@@ -11,12 +11,13 @@ export const RARITY = {
   rare: { name: 'Rare', c: '#2f8cff' },
   epic: { name: 'Epic', c: '#a64dff' },
   legendary: { name: 'Legendary', c: '#ff9324' },
-  mythic: { name: 'Mythic', c: '#ff2f8e' },
+  mythic: { name: 'Mythic', c: '#d8d8d8' },
 };
 
 // Outfit fields: jacket, pants, gear (skis/board), accent (zip, stripe), trim
 // (collar, cuffs, belt, gaiters), helmet, lens; pat = pattern per part, alt =
-// second pattern colour per part, glow = parts that light up, fx = effects.
+// second pattern colour per part, glow = parts that light up, flat = no
+// shading. grants = items that come with it (a bundle).
 export const ITEMS = [
   // Characters (the head)
   { id: 'rider', type: 'character', name: 'Rider', rarity: 'common', price: 0, icon: '⛑️', desc: 'Helmet on, goggles down.' },
@@ -70,9 +71,10 @@ export const ITEMS = [
   { id: 'gold', type: 'skin', name: 'Golden Legend', rarity: 'legendary', price: 30000, desc: 'Polished gold. Everyone will look.',
     skin: { jacket: 0xffc933, pants: 0x3a2c0c, gear: 0xffc933, accent: 0xfff3b0, trim: 0xffe082, helmet: 0xffd54f, lens: 0x3a2c0c,
       pat: { jacket: 'sparkle', gear: 'sparkle' }, glow: ['jacket', 'gear'], glowK: 0.5 } },
-  { id: 'aurora', type: 'skin', name: 'Aurora Spirit', rarity: 'mythic', price: 100000, desc: 'Living northern lights, a glowing halo and ice shards that circle you. The rarest thing on the mountain.',
-    skin: { jacket: 0x0a0f2e, pants: 0x0a0f2e, gear: 0x0a0f2e, accent: 0x2bffb1, trim: 0x29d4ff, helmet: 0xe0fbff, lens: 0x2bffb1,
-      pat: { jacket: 'aurora', pants: 'aurora', gear: 'aurora' }, glow: ['jacket', 'pants', 'gear', 'accent', 'trim'], glowK: 1, fx: 'aurora' } },
+  { id: 'void', type: 'skin', name: 'Void', rarity: 'mythic', price: 1000000000, grants: ['trail:void'],
+    desc: 'Pure darkness. No colour, no shine, no light. Comes with the Void Trail.',
+    skin: { jacket: 0x000000, pants: 0x000000, gear: 0x000000, accent: 0x000000, trim: 0x000000, helmet: 0x000000, lens: 0x000000,
+      pat: { jacket: 'void', pants: 'void', gear: 'void' }, flat: true } },
   // Trails
   { id: 'none', type: 'trail', name: 'No Trail', rarity: 'common', price: 0, bar: ['#3a4658', '#3a4658'] },
   { id: 'frost', type: 'trail', name: 'Frost', rarity: 'uncommon', price: 2000, bar: ['#ffffff', '#9fe8ff'] },
@@ -81,6 +83,8 @@ export const ITEMS = [
   { id: 'shadow', type: 'trail', name: 'Shadow', rarity: 'epic', price: 12000, bar: ['#2a1640', '#0a0412'] },
   { id: 'rainbow', type: 'trail', name: 'Rainbow', rarity: 'epic', price: 12000, bar: ['#ff4d4d', '#ffd84d', '#4dff88', '#4dc3ff', '#b84dff'] },
   { id: 'goldtrail', type: 'trail', name: 'Gold Dust', rarity: 'legendary', price: 25000, bar: ['#fff3b0', '#ffb300'], tid: 'gold' },
+  { id: 'void', type: 'trail', name: 'Void Trail', rarity: 'mythic', price: 1000000000, bar: ['#000', '#000'], grants: ['skin:void'],
+    desc: 'A line of pure darkness. Comes with the Void outfit.' },
 ];
 
 const byKey = (type, id) => ITEMS.find((i) => i.type === type && i.id === id);
@@ -267,11 +271,11 @@ export function initLobby(api) {
       box.append(s);
     };
     const hrs = 24 - new Date().getHours();
-    sec('Mythic <small>one of a kind</small>', ITEMS.filter((i) => i.rarity === 'mythic'), true);
+    sec('Mythic <small>one of a kind</small>', ITEMS.filter((i) => i.rarity === 'mythic' && i.type === 'skin'), true);
     sec(`Featured <small>new in ${hrs} h</small>`, featured(), true);
     sec('Characters', ITEMS.filter((i) => i.type === 'character' && i.price));
     sec('Outfits', ITEMS.filter((i) => i.type === 'skin' && i.price && i.rarity !== 'mythic'));
-    sec('Trails', ITEMS.filter((i) => i.type === 'trail' && i.price));
+    sec('Trails', ITEMS.filter((i) => i.type === 'trail' && i.price && i.rarity !== 'mythic'));
     drawDetail();
   }
   function select(it) {
@@ -298,10 +302,11 @@ export function initLobby(api) {
       if (act.dataset.act === 'buy') {
         if (profile.coins < it.price) return;
         profile.coins -= it.price;
-        profile.owned.push(key(it));
+        profile.owned.push(key(it), ...(it.grants || []));
         toast(`Unlocked ${it.name}!`, r.c);
       }
       profile.equip[it.type] = it.id;
+      for (const g of it.grants || []) { const [t, id] = g.split(':'); profile.equip[t] = id; }
       saveProfile(); refreshCoins(); wearEquipped(); preview(it); drawShop();
     });
   }
@@ -339,6 +344,18 @@ export function initLobby(api) {
     if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = 'Tap again to erase everything'; return; }
     localStorage.removeItem(SAVE); localStorage.removeItem('freshline.best'); location.reload();
   });
+
+  // ----- cheats -----
+  const give = (n) => {
+    profile.coins = Math.max(0, Math.min(1e12, profile.coins + n)); saveProfile(); refreshCoins();
+    toast(n >= 0 ? `Cheat: +${fmt(n)} ${FLAKE}` : 'Cheat: snowflakes reset');
+  };
+  for (const b of root.querySelectorAll('[data-give]')) b.addEventListener('click', () => give(+b.dataset.give));
+  $('#cheatGive', root).addEventListener('click', () => {
+    const n = Math.floor(+$('#cheatAmt', root).value.replace(/[^0-9]/g, '')) || 0;
+    if (n > 0) give(n);
+  });
+  $('#cheatZero', root).addEventListener('click', () => give(-profile.coins));
 
   // ----- toast -----
   let toastT = null;

@@ -1,6 +1,6 @@
 // The skier: a small rigged model, ground/air/rail physics and trick tracking.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { partTextures, repaint } from './skins.js';
+import { partTextures } from './skins.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
@@ -14,7 +14,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
 const PIVOT = 0.85; // height of the body's centre above the feet
-const BOARD_YAW = -1.35; // a snowboarder's body faces this far round from the board
+const BOARD_YAW = -1.1; // a snowboarder's body faces this far round from the board
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -101,8 +101,7 @@ function buildModel() {
   const collar = mb(0.3, 0.07, 0.2, mats.trim, 0.585);
   const belt = mb(0.42, 0.06, 0.27, mats.trim, 0.03);
   const hood = mb(0.26, 0.12, 0.08, mats.jacket, 0.54); hood.position.z = -0.15;
-  const fx = new THREE.Group(); // effects some outfits add (halo, shards)
-  torso.add(zip, pack, collar, belt, hood, fx);
+  torso.add(zip, pack, collar, belt, hood);
   const head = new THREE.Group();
   head.position.y = 0.66;
   torso.add(head);
@@ -123,7 +122,7 @@ function buildModel() {
     torso.add(upper);
     arms.push({ upper, fore, pole, side });
   }
-  const model = { root, body, hips, torso, legs, arms, skis, head, board, mats, pack, fx };
+  const model = { root, body, hips, torso, legs, arms, skis, head, board, mats, pack };
   setHead(model, 'rider');
   return model;
 }
@@ -181,25 +180,6 @@ const HEAD_MATS = (() => {
     skinTone: L(0xe0ac85), fur: L(0x8a5a36), inner: L(0xe8b49a), beak: L(0xff9b1a), metal: L(0x9aa6b4), glow: L(0x00e5ff, 0x00b8d4),
     yface: L(0x8fa3b8), yfur: L(0xf2f5fa), horn: L(0xe8dcc0), visor: L(0xffc94a, 0x7a5200) };
 })();
-function setFx(model, kind) {
-  const fx = model.fx;
-  while (fx.children.length) fx.remove(fx.children[0]);
-  fx.userData = {};
-  if (kind !== 'aurora') return;
-  // A glowing ring above the head and ice shards circling the rider.
-  const haloMat = new THREE.MeshBasicMaterial({ color: 0x5fffd0, transparent: true, opacity: 0.95 });
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.018, 8, 40), haloMat);
-  halo.rotation.x = Math.PI / 2; halo.position.y = 1.0;
-  const shardMat = new THREE.MeshLambertMaterial({ color: 0xbff6ff, emissive: 0x4fd8ff, emissiveIntensity: 0.9, transparent: true, opacity: 0.9 });
-  const shards = [];
-  for (let i = 0; i < 4; i++) {
-    const sh = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), shardMat);
-    sh.scale.y = 1.8;
-    shards.push(sh);
-  }
-  fx.add(halo, ...shards);
-  fx.userData = { halo, haloMat, shards };
-}
 function setHead(model, id) {
   const h = model.head, p = model.pack;
   while (h.children.length) h.remove(h.children[0]);
@@ -403,30 +383,7 @@ export class Skier {
     HEAD_MATS.helmet.color.setHex(skin.helmet ?? 0xf2f2f2);
     HEAD_MATS.lens.color.setHex(skin.lens ?? 0xffb02e);
     HEAD_MATS.lens.emissive.setHex(skin.lens ?? 0xffb02e).multiplyScalar(0.33);
-    this.live = ['jacket', 'pants', 'gear'].map((k) => partTextures(skinId, skin, k)).filter((t) => t.live);
-    this.lookT = 0;
-    setFx(this.model, skin.fx);
     if (this.model.character !== character) setHead(this.model, character);
-  }
-
-  // Animated outfits: redraw live textures (20 times a second) and move effects.
-  tickLook(dt) {
-    this.lookT = (this.lookT || 0) + dt;
-    if (this.live?.length && (this.lookAcc = (this.lookAcc || 0) + dt) > 0.05) {
-      this.lookAcc = 0;
-      for (const tx of this.live) repaint(tx, this.lookT);
-    }
-    const fx = this.model.fx, t = this.lookT;
-    if (fx.userData.halo) {
-      fx.userData.halo.rotation.z = t * 0.8;
-      fx.userData.halo.position.y = 0.95 + Math.sin(t * 2) * 0.025;
-      fx.userData.haloMat.color.setHSL((0.45 + 0.12 * Math.sin(t * 0.7)) % 1, 1, 0.55);
-      fx.userData.shards.forEach((sh, i) => {
-        const a = t * 1.6 + (i / fx.userData.shards.length) * Math.PI * 2;
-        sh.position.set(Math.cos(a) * 0.42, 0.35 + Math.sin(a * 2 + i) * 0.12, Math.sin(a) * 0.42);
-        sh.rotation.set(t * 2 + i, t * 3, 0);
-      });
-    }
   }
 
   spawn(x, z, heading = 0, speed = 0) {
@@ -1136,7 +1093,10 @@ export class Skier {
       this.renderQ.premultiply(q1);
     } else {
       this.groundQuat(target);
-      q1.setFromAxisAngle(Z, this.switch ? -this.lean : this.lean);
+      // On a board the rider stays almost upright and the board tips on
+      // its edge, so a left turn looks and feels like a right turn.
+      const lk = this.board ? 0.3 : 1;
+      q1.setFromAxisAngle(Z, (this.switch ? -this.lean : this.lean) * lk);
       target.multiply(q1);
       if (this.butter) {
         // Swing round to the new direction instead of snapping.
@@ -1189,7 +1149,8 @@ export class Skier {
       // stands on its binding.
       const a = P.skis[0], b = P.skis[1], B = M.board;
       B.position.set(0, (a.y + b.y) / 2, (a.z + b.z) / 2);
-      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2);
+      const edge = this.state === 'ground' ? (this.switch ? -this.lean : this.lean) * 0.9 : 0;
+      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2 + edge);
       B.updateMatrix();
       M.skis.forEach((ski, i) => {
         ski.position.set(0, 0, i ? -0.26 : 0.26).applyMatrix4(B.matrix);

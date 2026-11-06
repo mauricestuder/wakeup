@@ -260,12 +260,14 @@
     .card.big { min-height: 210px; }
     .ico.fig { width: 84px; height: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.4)); }
     .card.big .ico.fig { width: 130px; height: 130px; }
-    .card.r-mythic { border-color: transparent; background:
-      radial-gradient(90% 80% at 50% 30%, rgba(80,255,200,.35), rgba(20,10,60,.95)) padding-box,
-      linear-gradient(120deg, #2bffb1, #29d4ff, #b24dff, #ff4dc4, #2bffb1) border-box; background-size: 100% 100%, 300% 100%;
-      animation: myth 4s linear infinite; box-shadow: 0 0 22px rgba(120,255,220,.45), 0 4px 0 rgba(0,0,0,.4); }
-    .card.r-mythic .kind { color: #7dffe0; }
-    @keyframes myth { to { background-position: 0 0, 300% 0; } }
+    .card.r-mythic { border-color: #000; background: radial-gradient(90% 80% at 50% 35%, #1c1c1c, #000); box-shadow: 0 0 0 1px rgba(255,255,255,.18), 0 4px 0 rgba(0,0,0,.5); }
+    .card.r-mythic::before { background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.07) 50%, transparent 60%) 0 0 / 250% 100%; animation: myth 6s ease-in-out infinite; }
+    .card.r-mythic .ico.fig { filter: drop-shadow(0 0 1px rgba(255,255,255,.6)) drop-shadow(0 0 10px rgba(255,255,255,.18)); }
+    .card.r-mythic .kind { color: #bbb; filter: none; }
+    @keyframes myth { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+    .scats .cheat { color: #ffcf33; }
+    .givebox { display: flex; gap: 8px; align-items: center; }
+    input.amt { font-size: 18px; width: 150px; background: rgba(0,0,0,.35); color: #fff; border: 2px solid rgba(255,255,255,.25); border-radius: 4px; padding: 6px 10px; }
     .card:hover { filter: brightness(1.1); }
     .card:active { transform: translateY(2px); }
     .card.sel { outline: 3px solid #fff; outline-offset: 2px; }
@@ -442,6 +444,7 @@
           <button data-scat="video">Graphics</button>
           <button data-scat="audio">Audio</button>
           <button data-scat="controls">Controls</button>
+          <button data-scat="cheats" class="cheat">Cheats</button>
         </div>
         <div class="sbody">
           <div data-spane="game">
@@ -459,6 +462,12 @@
           <div data-spane="audio" hidden>
             <h3>Audio</h3>
             <div class="row"><span>Volume</span><div class="vol"><input id="setVol" type="range" min="0" max="100"><b id="setVolV">80</b></div></div>
+          </div>
+          <div data-spane="cheats" hidden>
+            <h3>Cheats</h3>
+            <div class="row"><span>Quick snowflakes</span><div class="seg gives"><button data-give="10000">+10K</button><button data-give="1000000">+1M</button><button data-give="1000000000">+1B</button></div></div>
+            <div class="row"><span>Give yourself</span><div class="givebox"><input id="cheatAmt" inputmode="numeric" placeholder="Amount" class="amt"><button id="cheatGive" class="tog on"><b>GIVE</b></button></div></div>
+            <div class="row danger"><span>Snowflakes</span><button id="cheatZero" class="warn">Set to 0</button></div>
           </div>
           <div data-spane="controls" hidden>
             <h3>How to ride</h3>
