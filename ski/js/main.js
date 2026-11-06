@@ -451,7 +451,7 @@ function lobbyScene(dt) {
   const a = lobbyT * 3.2;
   _tp.set(LOBBY.x + Math.cos(a) * 0.95, gy + 0.9 + Math.sin(lobbyT * 2.1) * 0.45, LOBBY.z + Math.sin(a) * 0.95);
   _ts.set(0, 1, 0);
-  trail.update(dt, _tp, _ts, trailPreview !== 'none', 0.12);
+  trail.update(dt, _tp, _ts, trailPreview !== 'none', 0.03);
 }
 
 // ---------- loop ----------

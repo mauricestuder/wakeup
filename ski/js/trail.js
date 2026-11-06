@@ -1,7 +1,7 @@
 // Trails: a ribbon that streams from the rider's feet in the air and fades.
 import * as THREE from '../../game/vendor/three.module.min.js';
 
-const MAX = 90, LIFE = 0.7;
+const MAX = 90, LIFE = 0.55;
 
 // How each trail colours a point: k is 0 at the rider and 1 at the tail end,
 // i counts points so patterns can move along the ribbon.
@@ -40,7 +40,7 @@ export class Trail {
   }
 
   // pos: where the ribbon starts, side: unit vector across it, on: emitting.
-  update(dt, pos, side, on, width = 0.32) {
+  update(dt, pos, side, on, width = 0.05) {
     this.t += dt;
     for (const p of this.pts) p.age += dt;
     while (this.pts.length && this.pts[0].age > LIFE) this.pts.shift();
@@ -55,11 +55,11 @@ export class Trail {
     const c = new THREE.Color();
     for (let j = 0; j < MAX; j++) {
       const q = this.pts[Math.min(j, n - 1)];
-      const k = q.age / LIFE, w = 1 - k * 0.6;
+      const k = q.age / LIFE, w = 1 - k * 0.8;
       P.setXYZ(j * 2, q.p.x + q.s.x * w, q.p.y + q.s.y * w, q.p.z + q.s.z * w);
       P.setXYZ(j * 2 + 1, q.p.x - q.s.x * w, q.p.y - q.s.y * w, q.p.z - q.s.z * w);
       this.style.col(k, j, c, this.t);
-      const a = j < n ? (1 - k) * 0.9 : 0;
+      const a = j < n ? (1 - k) * (1 - k) * 0.55 : 0;
       C.setXYZW(j * 2, c.r, c.g, c.b, a);
       C.setXYZW(j * 2 + 1, c.r, c.g, c.b, a);
     }
