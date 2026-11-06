@@ -258,6 +258,14 @@
     .card::before { content: ''; position: absolute; inset: 0; pointer-events: none;
       background: repeating-linear-gradient(115deg, rgba(255,255,255,.07) 0 10px, transparent 10px 22px); }
     .card.big { min-height: 210px; }
+    .ico.fig { width: 84px; height: 84px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.4)); }
+    .card.big .ico.fig { width: 130px; height: 130px; }
+    .card.r-mythic { border-color: transparent; background:
+      radial-gradient(90% 80% at 50% 30%, rgba(80,255,200,.35), rgba(20,10,60,.95)) padding-box,
+      linear-gradient(120deg, #2bffb1, #29d4ff, #b24dff, #ff4dc4, #2bffb1) border-box; background-size: 100% 100%, 300% 100%;
+      animation: myth 4s linear infinite; box-shadow: 0 0 22px rgba(120,255,220,.45), 0 4px 0 rgba(0,0,0,.4); }
+    .card.r-mythic .kind { color: #7dffe0; }
+    @keyframes myth { to { background-position: 0 0, 300% 0; } }
     .card:hover { filter: brightness(1.1); }
     .card:active { transform: translateY(2px); }
     .card.sel { outline: 3px solid #fff; outline-offset: 2px; }

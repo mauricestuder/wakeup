@@ -1,5 +1,6 @@
 // The skier: a small rigged model, ground/air/rail physics and trick tracking.
 import * as THREE from '../../game/vendor/three.module.min.js';
+import { partTextures, repaint } from './skins.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
@@ -43,7 +44,7 @@ function buildModel() {
   root.add(body);
   // Shared materials by role, so a skin can recolour the whole rider at once.
   const L = (color) => new THREE.MeshLambertMaterial({ color });
-  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da) };
+  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da), trim: L(0x15181c) };
   const mb = (w, h, d, mat, y = 0) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y, 0), mat);
 
   const skis = [];
@@ -87,7 +88,7 @@ function buildModel() {
     thigh.add(mb(0.15, 0.46, 0.17, mats.pants, -0.23));
     const shin = new THREE.Group();
     shin.position.y = -0.46;
-    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23));
+    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23), mb(0.155, 0.07, 0.175, mats.trim, -0.42));
     thigh.add(shin);
     hips.add(thigh);
     legs.push({ thigh, shin, side });
@@ -97,7 +98,11 @@ function buildModel() {
   torso.add(mb(0.4, 0.56, 0.25, mats.jacket, 0.28));
   const zip = mb(0.03, 0.5, 0.01, mats.accent, 0.28); zip.position.z = 0.13;
   const pack = new THREE.Group(); // extras some characters wear on the back
-  torso.add(zip, pack);
+  const collar = mb(0.3, 0.07, 0.2, mats.trim, 0.585);
+  const belt = mb(0.42, 0.06, 0.27, mats.trim, 0.03);
+  const hood = mb(0.26, 0.12, 0.08, mats.jacket, 0.54); hood.position.z = -0.15;
+  const fx = new THREE.Group(); // effects some outfits add (halo, shards)
+  torso.add(zip, pack, collar, belt, hood, fx);
   const head = new THREE.Group();
   head.position.y = 0.66;
   torso.add(head);
@@ -108,7 +113,7 @@ function buildModel() {
     upper.add(mb(0.12, 0.34, 0.13, mats.jacket, -0.17));
     const fore = new THREE.Group();
     fore.position.y = -0.34;
-    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16));
+    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16), mb(0.125, 0.06, 0.135, mats.trim, -0.29));
     fore.add(mb(0.11, 0.1, 0.12, mats.dark, -0.36));
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 5).translate(0, -0.5, 0), mats.pole);
     pole.position.y = -0.36;
@@ -118,7 +123,7 @@ function buildModel() {
     torso.add(upper);
     arms.push({ upper, fore, pole, side });
   }
-  const model = { root, body, hips, torso, legs, arms, skis, head, board, mats, pack };
+  const model = { root, body, hips, torso, legs, arms, skis, head, board, mats, pack, fx };
   setHead(model, 'rider');
   return model;
 }
@@ -150,11 +155,6 @@ const HEADS = {
     h.add(at(cone(0.04, 0.12, m.beak), 0, -0.02, 0.19));
     for (const s of [1, -1]) h.add(at(sphere(0.022, m.black), s * 0.05, 0.04, 0.135));
   },
-  robot: (h, m) => {
-    h.add(box3(0.26, 0.24, 0.24, m.metal), at(box3(0.22, 0.07, 0.02, m.glow), 0, 0.02, 0.125));
-    h.add(at(box3(0.02, 0.12, 0.02, m.metal), 0.07, 0.17, 0), at(sphere(0.03, m.glow), 0.07, 0.24, 0));
-    for (const s of [1, -1]) h.add(at(box3(0.03, 0.08, 0.08, m.dark), s * 0.145, 0, 0));
-  },
   yeti: (h, m) => {
     h.add(squash(ico(0.17, m.yfur), 1.05, 1, 1), at(squash(sphere(0.1, m.yface), 1, 0.9, 0.6), 0, -0.02, 0.1));
     for (const s of [1, -1]) {
@@ -162,15 +162,8 @@ const HEADS = {
       h.add(horn, at(sphere(0.02, m.black), s * 0.04, 0.02, 0.17));
     }
   },
-  astro: (h, m) => {
-    h.add(sphere(0.19, m.white), at(squash(sphere(0.15, m.visor), 1, 0.8, 0.6), 0, 0, 0.1));
-    h.add(at(box3(0.05, 0.05, 0.05, m.glow), 0.17, 0.06, 0));
-  },
 };
-const PACKS = {
-  astro: (p, m) => { p.add(at(box3(0.3, 0.36, 0.14, m.white), 0, 0.3, -0.19)); },
-  robot: (p, m) => { p.add(at(box3(0.22, 0.3, 0.1, m.metal), 0, 0.3, -0.17), at(box3(0.06, 0.06, 0.02, m.glow), 0, 0.36, -0.225)); },
-};
+const PACKS = {};
 const box3 = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const sphere = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
 const ico = (r, mat) => new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), mat);
@@ -188,6 +181,25 @@ const HEAD_MATS = (() => {
     skinTone: L(0xe0ac85), fur: L(0x8a5a36), inner: L(0xe8b49a), beak: L(0xff9b1a), metal: L(0x9aa6b4), glow: L(0x00e5ff, 0x00b8d4),
     yface: L(0x8fa3b8), yfur: L(0xf2f5fa), horn: L(0xe8dcc0), visor: L(0xffc94a, 0x7a5200) };
 })();
+function setFx(model, kind) {
+  const fx = model.fx;
+  while (fx.children.length) fx.remove(fx.children[0]);
+  fx.userData = {};
+  if (kind !== 'aurora') return;
+  // A glowing ring above the head and ice shards circling the rider.
+  const haloMat = new THREE.MeshBasicMaterial({ color: 0x5fffd0, transparent: true, opacity: 0.95 });
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.018, 8, 40), haloMat);
+  halo.rotation.x = Math.PI / 2; halo.position.y = 1.0;
+  const shardMat = new THREE.MeshLambertMaterial({ color: 0xbff6ff, emissive: 0x4fd8ff, emissiveIntensity: 0.9, transparent: true, opacity: 0.9 });
+  const shards = [];
+  for (let i = 0; i < 4; i++) {
+    const sh = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), shardMat);
+    sh.scale.y = 1.8;
+    shards.push(sh);
+  }
+  fx.add(halo, ...shards);
+  fx.userData = { halo, haloMat, shards };
+}
 function setHead(model, id) {
   const h = model.head, p = model.pack;
   while (h.children.length) h.remove(h.children[0]);
@@ -374,14 +386,47 @@ export class Skier {
 
   // Looks from the locker: skin colours { jacket, pants, gear, accent, glow }
   // and a character id for the head.
-  applyLook(skin, character) {
+  applyLook(skin, character, skinId = 'x') {
     const m = this.model.mats;
-    for (const k of ['jacket', 'pants', 'gear', 'accent']) {
-      m[k].color.setHex(skin[k]);
-      m[k].emissive.setHex(0);
+    for (const k of ['jacket', 'pants', 'gear', 'accent', 'trim']) {
+      const mat = m[k];
+      const tx = k === 'accent' || k === 'trim' ? null : partTextures(skinId, skin, k);
+      const hadMap = !!mat.map, hadGlow = !!mat.emissiveMap;
+      mat.map = tx ? tx.map : null;
+      mat.emissiveMap = tx && tx.glow ? tx.glow : null;
+      mat.color.setHex(tx ? 0xffffff : k === 'trim' ? (skin.trim ?? 0x15181c) : skin[k]);
+      mat.emissive.setHex(mat.emissiveMap ? 0xffffff : 0);
+      mat.emissiveIntensity = mat.emissiveMap ? (skin.glowK ?? 0.8) : 1;
+      if (!mat.emissiveMap && skin.glow?.includes(k)) mat.emissive.setHex(k === 'trim' ? skin.trim : skin[k]).multiplyScalar(0.35);
+      if (hadMap !== !!mat.map || hadGlow !== !!mat.emissiveMap) mat.needsUpdate = true;
     }
-    if (skin.glow) for (const k of skin.glow) m[k].emissive.copy(m[k].color).multiplyScalar(0.35);
+    HEAD_MATS.helmet.color.setHex(skin.helmet ?? 0xf2f2f2);
+    HEAD_MATS.lens.color.setHex(skin.lens ?? 0xffb02e);
+    HEAD_MATS.lens.emissive.setHex(skin.lens ?? 0xffb02e).multiplyScalar(0.33);
+    this.live = ['jacket', 'pants', 'gear'].map((k) => partTextures(skinId, skin, k)).filter((t) => t.live);
+    this.lookT = 0;
+    setFx(this.model, skin.fx);
     if (this.model.character !== character) setHead(this.model, character);
+  }
+
+  // Animated outfits: redraw live textures (20 times a second) and move effects.
+  tickLook(dt) {
+    this.lookT = (this.lookT || 0) + dt;
+    if (this.live?.length && (this.lookAcc = (this.lookAcc || 0) + dt) > 0.05) {
+      this.lookAcc = 0;
+      for (const tx of this.live) repaint(tx, this.lookT);
+    }
+    const fx = this.model.fx, t = this.lookT;
+    if (fx.userData.halo) {
+      fx.userData.halo.rotation.z = t * 0.8;
+      fx.userData.halo.position.y = 0.95 + Math.sin(t * 2) * 0.025;
+      fx.userData.haloMat.color.setHSL((0.45 + 0.12 * Math.sin(t * 0.7)) % 1, 1, 0.55);
+      fx.userData.shards.forEach((sh, i) => {
+        const a = t * 1.6 + (i / fx.userData.shards.length) * Math.PI * 2;
+        sh.position.set(Math.cos(a) * 0.42, 0.35 + Math.sin(a * 2 + i) * 0.12, Math.sin(a) * 0.42);
+        sh.rotation.set(t * 2 + i, t * 3, 0);
+      });
+    }
   }
 
   spawn(x, z, heading = 0, speed = 0) {
