@@ -124,5 +124,7 @@ fill an XI (6 formations, 3 rerolls, Classic or Blind mode). Then try to win all
 matches: three group games, the Round of 16, the quarter-final, the semi-final and the final.
 
 Open `/seven/` on the same server (e.g. `https://mauricestuder.github.io/wakeup/seven/`).
+After the first visit it works fully offline (`seven/sw.js` caches every file; bump
+`CACHE` there when you add a file).
 The squads are in `seven/js/data.js`, about 40 squads from 1954 to 2022. The match odds are in
 `seven/js/sim.js`.
