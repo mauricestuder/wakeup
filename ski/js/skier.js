@@ -3,7 +3,7 @@ import * as THREE from '../../game/vendor/three.module.min.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
-const ROLL_MAX = 4;     // rad/s, rolling with Q / R
+const ROLL_MAX = 4;     // rad/s, rolling with Q / E
 const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
 const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
@@ -513,7 +513,7 @@ export class Skier {
     const ks = 1 - Math.exp(-(Math.abs(spinT) > Math.abs(a.spinRate) ? 7 : 9) * dt);
     a.spinRate += (spinT - a.spinRate) * ks;
     a.flipRate += (flipT - a.flipRate) * k;
-    // Roll (Q / R): turn around the skier's own forward axis, to straighten up.
+    // Roll (Q / E): turn around the skier's own forward axis, to straighten up.
     const roll = a.jump ? 0 : (input.roll || 0);
     a.rollRate = (a.rollRate || 0) + (roll * ROLL_MAX - (a.rollRate || 0)) * k;
 

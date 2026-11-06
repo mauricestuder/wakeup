@@ -7,7 +7,7 @@ const STICK_R = 58;
 // a button lights up while its key is held, H hides the key labels.
 const KEY_BTN = {
   Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
-  KeyE: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyR: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
+  KeyR: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyE: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
 };
 function lightKey(code, on) {
   const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
@@ -21,7 +21,7 @@ try { if (localStorage.getItem('freshline.nokeys')) document.body.classList.add(
 
 const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const STYLE_KEYS = ['KeyK', 'KeyL'];
-const BUTTER_KEYS = ['KeyE', 'ControlLeft'];
+const BUTTER_KEYS = ['KeyR', 'ControlLeft'];
 
 export class Input {
   constructor({ onPause, onReset }) {
@@ -138,7 +138,7 @@ export class Input {
     if (x && y) { x *= 0.75; y *= 0.75; }
     this.x = Math.max(-1, Math.min(1, x + this.stick.x));
     this.y = Math.max(-1, Math.min(1, y + this.stick.y));
-    this.roll = Math.max(-1, Math.min(1, (k.has('KeyR') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) + this.touchRoll));
+    this.roll = Math.max(-1, Math.min(1, (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) + this.touchRoll));
     if (!isTouch) { // the on-screen stick follows the keys
       if (!this.knob) this.knob = document.getElementById('knob');
       this.knob.style.transform = x || y ? `translate(${x * STICK_R}px, ${y * STICK_R}px)` : '';
