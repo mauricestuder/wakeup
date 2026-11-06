@@ -13,6 +13,7 @@ const TYPES = {
 };
 
 const MAX_ALIVE = 24;
+const LOOKS_PER_TYPE = 8;
 
 export function roundHp(r) { return r < 10 ? 150 + 100 * (r - 1) : 1050 * Math.pow(1.1, r - 9); }
 export function roundCount(r) { return 4 + 2 * r + Math.floor(0.3 * r * r); }
@@ -51,6 +52,9 @@ export class Enemies {
       leather: lambert(0x4a2c14),
       paper: lambert(0xe9e4d4),
       gold: lambert(0xd4a017),
+      bone: lambert(0xd8d0b0),
+      cash: lambert(0x3f8f3a),
+      felt: lambert(0x3a3226),
       red: lambert(0xb3121b),
       invoice: lambert(0xff5a4a, { emissive: 0x401010 }),
       visor: lambert(0x1e9e4a, { transparent: true, opacity: 0.75 }),
@@ -59,15 +63,19 @@ export class Enemies {
       dollar: new THREE.MeshBasicMaterial({ map: T.labelTex('$', { w: 64, h: 64, bg: null, fg: '#21ff7a', font: 'bold 56px sans-serif' }), transparent: true }),
       kinds: {},
     };
-    const hair = { debt: 0x17120e, tax: 0xa3a594, shark: 0xe6e2d8, collector: 0x1a1a1a };
+    // 8 looks per type (skin, hair, face, suit); each enemy picks one at random.
     for (const [k, t] of Object.entries(TYPES)) {
-      this.shared.kinds[k] = {
-        skin: lambert(t.skin, { emissive: 0x161616 }), pants: lambert(t.pants), hair: lambert(hair[k]),
-        // a faint self-glow keeps the faces readable in the dark
-        face: (() => { const m = T.npcFace(k); return lambert(0xffffff, { map: m, emissive: 0x3a3a3a, emissiveMap: m }); })(),
-        front: T.npcSuit(k),
-        eye: new THREE.MeshBasicMaterial({ color: t.eye }),
-      };
+      this.shared.kinds[k] = Array.from({ length: LOOKS_PER_TYPE }, (_, n) => {
+        const look = T.npcLook(k, n), face = T.npcFace(k, look);
+        return {
+          look, suit: new THREE.Color(look.suit),
+          skin: lambert(look.skin, { emissive: 0x161616 }), pants: lambert(look.pants), hair: lambert(look.hairCol),
+          // a faint self-glow keeps the faces readable in the dark
+          face: lambert(0xffffff, { map: face, emissive: 0x3a3a3a, emissiveMap: face }),
+          front: T.npcSuit(k, look),
+          eye: new THREE.MeshBasicMaterial({ color: t.eye }),
+        };
+      });
     }
   }
 
@@ -165,59 +173,91 @@ export class Enemies {
 
   build(type) {
     const t = TYPES[type];
-    const s = this.shared, k = s.kinds[type];
+    const s = this.shared, kinds = s.kinds[type];
+    const k = kinds[Math.floor(Math.random() * kinds.length)], look = k.look;
+    const rnd = Math.random;
     const g = new THREE.Group();
     // Per-enemy suit materials so a hit can flash just this one.
-    const suitMat = new THREE.MeshLambertMaterial({ color: t.suit });
+    const suitMat = new THREE.MeshLambertMaterial({ color: k.suit });
     const frontMat = new THREE.MeshLambertMaterial({ map: k.front });
     const mesh = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+    const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
     const inner = new THREE.Group();
     g.add(inner);
     // Box faces: +x, -x, +y, -y, +z (front), -z
     const body = mesh(this.geo.body, [suitMat, suitMat, suitMat, suitMat, frontMat, suitMat], 0, 1.15, 0, inner);
-    const head = mesh(this.geo.head, [k.skin, k.skin, type === 'tax' ? k.skin : k.hair, k.skin, k.face, type === 'tax' ? k.skin : k.hair], 0, 1.76, 0, inner);
+    const top = look.hairTop ? k.hair : k.skin, back = look.hairBack ? k.hair : k.skin;
+    const head = mesh(this.geo.head, [k.skin, k.skin, top, k.skin, k.face, back], 0, 1.76, 0, inner);
+    head.rotation.z = (rnd() - 0.5) * 0.25; // heads loll at different angles
     mesh(this.geo.eye, k.eye, -0.09, 1.8, 0.195, inner);
     mesh(this.geo.eye, k.eye, 0.09, 1.8, 0.195, inner);
+    if (look.hair === 'mohawk') mesh(box(0.08, 0.14, 0.34), k.hair, 0, 2.02, 0, inner);
+    if (look.hair === 'mullet') mesh(box(0.3, 0.2, 0.04), k.hair, 0, 1.62, -0.2, inner);
 
+    const shortSleeves = type === 'tax' && rnd() < 0.7; // most auditors roll their sleeves up
     const arm = (x) => {
       const a = new THREE.Group(); a.position.set(x, 1.48, 0); inner.add(a);
-      mesh(this.geo.sleeve, type === 'tax' ? k.skin : suitMat, 0, -0.28, 0, a); // auditors wear short sleeves
-      mesh(this.geo.hand, k.skin, 0, -0.62, 0, a);
+      mesh(this.geo.sleeve, shortSleeves ? k.skin : suitMat, 0, -0.28, 0, a);
+      if (rnd() < 0.12) mesh(box(0.1, 0.12, 0.1), s.bone, 0, -0.62, 0, a); // hand rotted down to the bone
+      else mesh(this.geo.hand, k.skin, 0, -0.62, 0, a);
       return a;
     };
     const armL = arm(-0.4), armR = arm(0.4);
-    armL.rotation.x = armR.rotation.x = -1.35; // zombie arms reaching forward
+    const armOff = [(rnd() - 0.5) * 0.35, (rnd() - 0.5) * 0.35]; // arms never quite in sync
+    armL.rotation.x = -1.35 + armOff[0]; // zombie arms reaching forward
+    armR.rotation.x = -1.35 + armOff[1];
     const leg = (x) => {
       const l = new THREE.Group(); l.position.set(x, 0.75, 0); inner.add(l);
       mesh(this.geo.leg, k.pants, 0, -0.33, 0, l);
-      mesh(this.geo.shoe, s.black, 0, -0.7, 0.05, l);
+      mesh(this.geo.shoe, rnd() < 0.15 ? s.leather : s.black, 0, -0.7, 0.05, l);
       return l;
     };
     const legL = leg(-0.16), legR = leg(0.16);
 
     if (type === 'debt') {
-      const bc = mesh(this.geo.case, s.leather, 0.02, -0.72, 0, armR); // briefcase
-      mesh(new THREE.BoxGeometry(0.04, 0.06, 0.12), s.gold, 0.06, 0.12, 0, bc);
+      const r = rnd();
+      if (r < 0.55) {
+        const bc = mesh(this.geo.case, s.leather, 0.02, -0.72, 0, armR); // briefcase
+        mesh(box(0.04, 0.06, 0.12), s.gold, 0.06, 0.12, 0, bc);
+      } else if (r < 0.8) {
+        mesh(box(0.06, 0.12, 0.24), s.cash, 0, -0.74, 0, armR); // a fistful of cash
+      } else mesh(box(0.04, 0.3, 0.22), s.paper, 0, -0.72, 0, armL); // contract
+      if (rnd() < 0.3) { mesh(this.geo.brim, s.felt, 0, 1.98, 0, inner); mesh(box(0.34, 0.12, 0.34), s.felt, 0, 2.05, 0, inner); } // cheap fedora
     } else if (type === 'tax') {
-      mesh(this.geo.visor, s.visor, 0, 1.93, 0.14, inner);
-      const cb = mesh(this.geo.board, s.leather, 0, -0.72, 0, armL); // clipboard
-      mesh(new THREE.BoxGeometry(0.01, 0.34, 0.26), s.paper, 0.02, -0.01, 0, cb);
+      if (rnd() < 0.7) mesh(this.geo.visor, s.visor, 0, 1.93, 0.14, inner);
+      const cb = mesh(this.geo.board, s.leather, 0, -0.72, 0, rnd() < 0.5 ? armL : armR); // clipboard
+      mesh(box(0.01, 0.34, 0.26), s.paper, 0.02, -0.01, 0, cb);
+      if (rnd() < 0.4) mesh(box(0.08, 0.07, 0.08), s.paper, 0, -0.72, 0.02, cb.parent === armL ? armR : armL); // coffee cup
     } else if (type === 'collector') {
-      mesh(new THREE.BoxGeometry(0.43, 0.1, 0.41), s.black, 0, 2.0, 0, inner); // beanie
-      const pad = mesh(new THREE.BoxGeometry(0.05, 0.28, 0.22), s.invoice, 0, -0.74, 0, armR); // invoice pad
-      pad.rotation.x = 0.3;
+      const hat = look.hair === 'mohawk' ? 9 : rnd();
+      if (hat < 0.45) mesh(box(0.43, 0.1, 0.41), s.black, 0, 2.0, 0, inner); // beanie
+      else if (hat < 0.75) { mesh(box(0.42, 0.08, 0.4), s.red, 0, 1.99, 0, inner); mesh(box(0.38, 0.02, 0.18), s.red, 0, 1.96, 0.27, inner); } // cap
+      if (rnd() < 0.6) { const pad = mesh(box(0.05, 0.28, 0.22), s.invoice, 0, -0.74, 0, armR); pad.rotation.x = 0.3; } // invoice pad
+      else mesh(box(0.06, 0.06, 0.5), s.black, 0, -0.7, 0.18, armR); // crowbar
     } else {
-      mesh(this.geo.brim, s.black, 0, 1.98, 0, inner);
-      mesh(this.geo.hat, s.black, 0, 2.15, 0, inner);
-      mesh(this.geo.band, s.red, 0, 2.03, 0, inner);
-      mesh(this.geo.cigar, s.leather, 0.07, 1.66, 0.26, inner);
-      mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), s.ember, 0.07, 1.66, 0.345, inner);
+      if (rnd() < 0.6) { // top hat
+        mesh(this.geo.brim, s.black, 0, 1.98, 0, inner);
+        mesh(this.geo.hat, s.black, 0, 2.15, 0, inner);
+        mesh(this.geo.band, rnd() < 0.5 ? s.red : s.gold, 0, 2.03, 0, inner);
+      } else if (look.hairTop || rnd() < 0.5) { // bowler
+        mesh(this.geo.brim, s.black, 0, 1.98, 0, inner);
+        mesh(new THREE.SphereGeometry(0.19, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), s.black, 0, 1.99, 0, inner);
+      }
+      if (rnd() < 0.7) {
+        mesh(this.geo.cigar, s.leather, 0.07, 1.66, 0.26, inner);
+        mesh(box(0.04, 0.04, 0.02), s.ember, 0.07, 1.66, 0.345, inner);
+      }
+      if (rnd() < 0.5) mesh(box(0.12, 0.42, 0.06), s.gold, 0, -0.72, 0.04, armL); // gold cane
     }
     inner.scale.setScalar(t.scale);
+    // Different builds: lanky, stocky, hunched. Height stays put so headshots line up.
+    inner.scale.x *= 0.9 + rnd() * 0.25;
+    inner.scale.z *= 0.92 + rnd() * 0.2;
     if (type === 'shark') inner.scale.x *= 1.15; // portly
+    inner.rotation.x = rnd() * 0.08;
     this.game.scene.add(g);
-    return { group: g, inner, body, head, armL, armR, legL, legR, flashMats: [suitMat, frontMat] };
+    return { group: g, inner, body, head, armL, armR, legL, legR, armOff, flashMats: [suitMat, frontMat] };
   }
 
   // ---------- AI ----------
@@ -277,7 +317,8 @@ export class Enemies {
       e.attackCd = Math.max(0, e.attackCd - dt);
 
       if (e.def.ranged && this.rangedAttack(e, dt, distP, eArea === pArea)) continue;
-      e.armL.rotation.x = e.armR.rotation.x = -1.35 + Math.sin(e.t * 3) * 0.1;
+      e.armL.rotation.x = -1.35 + e.armOff[0] + Math.sin(e.t * 3) * 0.1;
+      e.armR.rotation.x = -1.35 + e.armOff[1] + Math.sin(e.t * 3 + 0.8) * 0.1;
 
       let tx = player.pos.x, tz = player.pos.z;
       if (eArea !== pArea) {

@@ -243,98 +243,227 @@ export function labelTex(text, { w = 512, h = 128, bg = '#111', fg = '#f5d76e', 
   });
 }
 
+// Every enemy type has several looks so the horde doesn't feel copy-pasted.
+// A look is a plain description (colours, hair, face, wounds, props); the
+// face and suit textures and the 3D model are built from it.
+const SKINS = ['#8fa07a', '#a3a594', '#b49a8a', '#7f8f6f', '#9a8f9e', '#6f7f63', '#b8b49c', '#8a7a64', '#7d8c8f', '#a08070'];
+const LOOKS = {
+  debt: {
+    skins: SKINS, suits: ['#6b4a2b', '#8a6d1f', '#2f5a5a', '#5e2730', '#55575c', '#5b7290', '#4a5a2a'],
+    pants: ['#3b2a1a', '#2a2a2e', '#3a3226', '#1f2a33'], shirts: ['#e8e2d0', '#d9e4ec', '#efe2b8', '#e6cfd2'],
+    ties: ['#c62828', '#2e7d32', '#f9a825', '#6a1b9a', '#1565c0', '#e65100'],
+    hair: ['slick', 'combover', 'bald', 'mullet', 'messy', 'slick'], hairCol: ['#17120e', '#3b2414', '#6b4a2b', '#c9a85a', '#2a2a2a', '#7a3a1a'],
+    mouths: ['grin', 'grin', 'jaw', 'stitch', 'scream'], patterns: ['plaid', 'pin', 'check', 'plain'],
+    glasses: 0.25, beard: 0.35,
+  },
+  tax: {
+    skins: SKINS, suits: ['#d8d4c4', '#b9c6d2', '#c3cfb6', '#d6bcbc', '#bdbdb5', '#d8cfa8'],
+    pants: ['#3a3d45', '#4a4436', '#2b2f3a', '#3a2f2a'], shirts: ['#d8d4c4'],
+    ties: ['#2b2f3a', '#5a1020', '#1b3a2a', '#3a2a10', '#1d3b6e'],
+    hair: ['sides', 'combover', 'bald', 'bowl', 'sides'], hairCol: ['#8c8c86', '#5a5a54', '#bdbab0', '#3b2a1a', '#17120e'],
+    mouths: ['frown', 'frown', 'scream', 'stitch', 'jaw'], patterns: ['plain', 'pin', 'plain'],
+    glasses: 0.75, beard: 0.2,
+  },
+  shark: {
+    skins: ['#b49a8a', '#a3a594', '#9a8f9e', '#b8b49c', '#a08070'], suits: ['#1d2238', '#121212', '#2a2a30', '#173022', '#2c1838', '#3a2a1a'],
+    pants: ['#14172a', '#0e0e0e', '#1a1a20'], shirts: ['#e8e2d0', '#f0ece2'],
+    ties: ['#5a1020', '#1a3a5a', '#3a3a3a', '#5a4a10'], waist: ['#5a1020', '#3a2a10', '#1a3a2a', '#4a4a52', '#2a1a40'],
+    hair: ['white', 'white', 'bald', 'sides', 'slick'], hairCol: ['#e6e2d8', '#bdbab0', '#8c8c86', '#e6e2d8'],
+    mouths: ['stache', 'stache', 'sneer', 'stache'], patterns: ['plain', 'pin'],
+    glasses: 0.7, beard: 0,
+  },
+  collector: {
+    skins: SKINS, suits: ['#5a0f12', '#1e1e1e', '#3a4226', '#24344e', '#3b2617', '#4a1a3a'],
+    pants: ['#1a1a1a', '#20262e', '#2a241c', '#2a3a4a'], shirts: ['#111111', '#3a3a3a', '#e8e2d0', '#5a1a1a'],
+    ties: ['#c0c0c0', '#d4a017'],
+    hair: ['buzz', 'buzz', 'shaved', 'mohawk', 'messy'], hairCol: ['#1a1a1a', '#3b2414', '#7a1c1c', '#c9a85a', '#2a2a2a'],
+    mouths: ['gold', 'gold', 'jaw', 'scream', 'stitch'], patterns: ['plain', 'plain', 'check'],
+    glasses: 0.55, beard: 0.45,
+  },
+};
+const STAMPS = ['PAST DUE', 'OVERDUE', 'FINAL', 'DEFAULT', 'NO CREDIT'];
+const KIND_SEED = { debt: 11, tax: 23, shark: 37, collector: 51 };
+
+export function npcLook(kind, n = 0) {
+  // Small neighbouring seeds give near-identical first numbers, so scramble and warm up.
+  const r = rng((KIND_SEED[kind] * 1000 + n * 7919 + 1) * 48271 % 2147483646 + 1);
+  for (let i = 0; i < 6; i++) r();
+  const L = LOOKS[kind], pick = a => a[Math.floor(r() * a.length)];
+  const look = {
+    kind, skin: pick(L.skins), suit: pick(L.suits), pants: pick(L.pants), shirt: pick(L.shirts), tie: pick(L.ties),
+    waist: L.waist ? pick(L.waist) : null, hair: pick(L.hair), hairCol: pick(L.hairCol), mouth: pick(L.mouths),
+    pattern: pick(L.patterns), glasses: r() < L.glasses, beard: r() < L.beard ? (r() < 0.5 ? 'stubble' : 'beard') : null,
+    wound: pick(['none', 'none', 'bite', 'skull', 'cuts', 'bandage', 'rot']), torn: r() < 0.35,
+    blood: 1 + Math.floor(r() * 5), stamp: pick(STAMPS), seed: Math.floor(r() * 1e6) + 1,
+  };
+  if (n === 0) { // the first look of each type stays close to the original design
+    Object.assign(look, { skin: L.skins[kind === 'shark' ? 0 : ['debt', 'tax', 'shark', 'collector'].indexOf(kind) % SKINS.length],
+      suit: L.suits[0], pants: L.pants[0], shirt: L.shirts[0], tie: L.ties[0], waist: L.waist ? L.waist[0] : null,
+      hair: L.hair[0], hairCol: L.hairCol[0], mouth: L.mouths[0], pattern: L.patterns[0], glasses: L.glasses > 0.5, beard: null, wound: 'none', torn: false });
+  }
+  // which head faces show hair (top, back)
+  look.hairTop = !['bald', 'sides', 'shaved'].includes(look.hair);
+  look.hairBack = look.hair !== 'bald' && look.hair !== 'shaved';
+  return look;
+}
+
 // Zombie faces for the enemies. The glowing eyes are separate meshes, so
 // only sockets are drawn here.
-export function npcFace(kind) {
+export function npcFace(kind, look = npcLook(kind, 0)) {
   return tex(128, 128, (g, w, h) => {
-    const skin = { debt: '#8fa07a', tax: '#a3a594', shark: '#b49a8a', collector: '#7f8f6f' }[kind];
+    const r = rng(look.seed);
+    const L = look, skin = L.skin;
     g.fillStyle = skin; g.fillRect(0, 0, w, h);
-    // rotten blotches
+    // rotten blotches, different on every look
     g.fillStyle = 'rgba(60,80,40,.35)';
-    g.fillRect(14, 70, 18, 12); g.fillRect(100, 92, 14, 18);
-    if (kind === 'debt') { // slicked-back hair with a side part
-      g.fillStyle = '#17120e'; g.fillRect(0, 0, w, 26); g.fillRect(0, 26, 10, 22); g.fillRect(118, 26, 10, 22);
-      g.fillStyle = skin; g.fillRect(40, 18, 4, 8);
-    } else if (kind === 'tax') { // bald top, grey sides
-      g.fillStyle = '#8c8c86'; g.fillRect(0, 22, 12, 34); g.fillRect(116, 22, 12, 34);
-    } else if (kind === 'collector') { // buzz cut and a scar
-      g.fillStyle = '#1a1a1a'; g.fillRect(0, 0, w, 12);
-      g.fillStyle = '#5a1a1a'; g.fillRect(96, 20, 4, 40); g.fillRect(90, 30, 16, 3); g.fillRect(90, 44, 16, 3);
-    } else { // white hair
-      g.fillStyle = '#e6e2d8'; g.fillRect(0, 0, w, 16); g.fillRect(0, 16, 14, 40); g.fillRect(114, 16, 14, 40);
+    for (let i = 0; i < 2 + r() * 3; i++) g.fillRect(r() * 110, 60 + r() * 55, 8 + r() * 14, 6 + r() * 12);
+    if (L.wound === 'rot') { g.fillStyle = 'rgba(70,90,30,.6)'; g.fillRect(70, 60, 40, 30); g.fillStyle = 'rgba(30,40,10,.6)'; g.fillRect(78, 66, 20, 14); }
+
+    // hair
+    g.fillStyle = L.hairCol;
+    switch (L.hair) {
+      case 'slick': g.fillRect(0, 0, w, 26); g.fillRect(0, 26, 10, 22); g.fillRect(118, 26, 10, 22); g.fillStyle = skin; g.fillRect(40, 18, 4, 8); break;
+      case 'combover': g.fillRect(0, 0, w, 12); for (let x = 0; x < 110; x += 9) g.fillRect(x, 12, 6, 6 + (x % 18 ? 4 : 10)); g.fillRect(0, 22, 12, 30); g.fillRect(116, 22, 12, 30); break;
+      case 'bald': g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(30, 4, 40, 10); break; // shiny scalp
+      case 'mullet': g.fillRect(0, 0, w, 20); g.fillRect(0, 20, 14, 60); g.fillRect(114, 20, 14, 60); break;
+      case 'messy': g.fillRect(0, 0, w, 20); for (let x = 0; x < w; x += 12) g.fillRect(x, 20, 8, 4 + (r() * 14 | 0)); g.fillRect(0, 20, 10, 30); g.fillRect(118, 20, 10, 30); break;
+      case 'sides': g.fillRect(0, 22, 12, 34); g.fillRect(116, 22, 12, 34); break;
+      case 'bowl': g.fillRect(0, 0, w, 30); g.fillRect(0, 30, 16, 14); g.fillRect(112, 30, 16, 14); break;
+      case 'white': g.fillRect(0, 0, w, 16); g.fillRect(0, 16, 14, 40); g.fillRect(114, 16, 14, 40); break;
+      case 'buzz': g.fillRect(0, 0, w, 12); break;
+      case 'shaved': g.fillStyle = 'rgba(20,20,20,.25)'; g.fillRect(0, 0, w, 10); break;
+      case 'mohawk': g.fillRect(48, 0, 32, 14); break;
     }
+
+    // wounds on the forehead and cheeks
+    if (L.wound === 'skull') { g.fillStyle = '#5a1a1a'; g.fillRect(70, 8, 36, 26); g.fillStyle = '#e8e0c8'; g.fillRect(76, 12, 24, 16); }
+    if (L.wound === 'bandage') {
+      g.fillStyle = '#e6e0cc'; g.fillRect(0, 26, w, 12); g.fillStyle = '#8a1a1a'; g.fillRect(84, 27, 16, 9);
+    }
+    if (L.wound === 'cuts') {
+      g.strokeStyle = '#6a1414'; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(14, 64); g.lineTo(44, 96); g.moveTo(90, 20); g.lineTo(112, 70); g.stroke();
+    }
+    if (L.wound === 'bite') { g.fillStyle = '#4a0c0c'; g.beginPath(); g.ellipse(100, 82, 16, 12, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = '#8a2020'; g.fillRect(92, 78, 14, 6); }
+
     // sunken eye sockets
     g.fillStyle = '#1e2218';
     g.fillRect(22, 40, 26, 18); g.fillRect(80, 40, 26, 18);
-    if (kind === 'collector') { // dark shades
-      g.fillStyle = '#050505'; g.fillRect(16, 38, 96, 22);
-      g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(24, 42, 14, 4); g.fillRect(84, 42, 14, 4);
+    // eyewear
+    if (L.glasses) {
+      if (kind === 'collector') { // dark shades
+        g.fillStyle = '#050505'; g.fillRect(16, 38, 96, 22);
+        g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(24, 42, 14, 4); g.fillRect(84, 42, 14, 4);
+      } else if (kind === 'shark') { // monocle
+        g.strokeStyle = '#d4a017'; g.lineWidth = 5;
+        g.beginPath(); g.arc(93, 49, 17, 0, Math.PI * 2); g.stroke();
+        g.beginPath(); g.moveTo(93, 66); g.lineTo(100, 110); g.stroke();
+      } else { // thick (sometimes cracked) glasses
+        g.strokeStyle = '#0b0b0b'; g.lineWidth = 6;
+        g.strokeRect(18, 36, 34, 26); g.strokeRect(76, 36, 34, 26);
+        g.beginPath(); g.moveTo(52, 46); g.lineTo(76, 46); g.stroke();
+        if (r() < 0.5) { g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(80, 38); g.lineTo(96, 52); g.lineTo(90, 60); g.stroke(); }
+      }
     }
-    if (kind === 'tax') { // thick glasses
-      g.strokeStyle = '#0b0b0b'; g.lineWidth = 6;
-      g.strokeRect(18, 36, 34, 26); g.strokeRect(76, 36, 34, 26);
-      g.beginPath(); g.moveTo(52, 46); g.lineTo(76, 46); g.stroke();
-    }
-    if (kind === 'shark') { // monocle and walrus mustache
-      g.strokeStyle = '#d4a017'; g.lineWidth = 5;
-      g.beginPath(); g.arc(93, 49, 17, 0, Math.PI * 2); g.stroke();
-      g.beginPath(); g.moveTo(93, 66); g.lineTo(100, 110); g.stroke();
-      g.fillStyle = '#f0ece2'; g.fillRect(28, 80, 72, 14); g.fillRect(20, 88, 16, 12); g.fillRect(92, 88, 16, 12);
-      g.fillStyle = '#2a0c0c'; g.fillRect(44, 98, 40, 8);
-    } else if (kind === 'debt') { // too-wide salesman grin
-      g.fillStyle = '#2a0c0c'; g.fillRect(24, 84, 80, 22);
-      g.fillStyle = '#e8e0c0'; g.fillRect(28, 86, 72, 8);
-      g.fillStyle = '#2a0c0c'; for (let x = 36; x < 100; x += 10) g.fillRect(x, 86, 3, 8);
-      g.fillStyle = '#7a1c1c'; g.fillRect(60, 106, 6, 14); // drool of blood
-    } else if (kind === 'collector') { // gold-toothed sneer
-      g.fillStyle = '#2a0c0c'; g.fillRect(36, 90, 56, 10); g.fillRect(84, 84, 8, 8);
-      g.fillStyle = '#d4a017'; g.fillRect(70, 90, 8, 6);
-    } else { // tight frown
-      g.fillStyle = '#2a0c0c'; g.fillRect(40, 92, 48, 8); g.fillRect(34, 98, 8, 6); g.fillRect(86, 98, 8, 6);
+
+    // stubble or a scraggly beard
+    if (L.beard === 'stubble') { g.fillStyle = 'rgba(20,20,15,.35)'; for (let i = 0; i < 140; i++) g.fillRect(14 + r() * 100, 76 + r() * 50, 2, 2); }
+    if (L.beard === 'beard') { g.fillStyle = L.hairCol; g.fillRect(10, 96, 108, 32); g.fillRect(10, 70, 12, 30); g.fillRect(106, 70, 12, 30); }
+
+    // mouths
+    switch (L.mouth) {
+      case 'grin': // too-wide salesman grin
+        g.fillStyle = '#2a0c0c'; g.fillRect(24, 84, 80, 22);
+        g.fillStyle = '#e8e0c0'; g.fillRect(28, 86, 72, 8);
+        g.fillStyle = '#2a0c0c'; for (let x = 36; x < 100; x += 10) g.fillRect(x, 86, 3, 8);
+        g.fillStyle = '#7a1c1c'; g.fillRect(60, 106, 6, 14); break;
+      case 'jaw': // jaw torn away, teeth and gore
+        g.fillStyle = '#3a0808'; g.fillRect(20, 82, 88, 46);
+        g.fillStyle = '#e8e0c0'; for (let x = 26; x < 102; x += 9) g.fillRect(x, 82, 6, 7);
+        g.fillStyle = '#8a2020'; g.fillRect(40, 100, 30, 10); g.fillRect(80, 110, 16, 18); break;
+      case 'stitch': // mouth sewn shut
+        g.fillStyle = '#2a0c0c'; g.fillRect(30, 92, 68, 4);
+        g.fillStyle = '#d8d0b0'; for (let x = 34; x < 96; x += 8) g.fillRect(x, 86, 2, 16); break;
+      case 'scream':
+        g.fillStyle = '#1a0404'; g.beginPath(); g.ellipse(64, 98, 20, 24, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#e8e0c0'; g.fillRect(52, 75, 24, 5); break;
+      case 'gold': // gold-toothed sneer
+        g.fillStyle = '#2a0c0c'; g.fillRect(36, 90, 56, 10); g.fillRect(84, 84, 8, 8);
+        g.fillStyle = '#d4a017'; g.fillRect(70, 90, 8, 6); break;
+      case 'stache': // walrus mustache
+        g.fillStyle = L.hairCol === '#8c8c86' ? '#bdbab0' : '#f0ece2'; g.fillRect(28, 80, 72, 14); g.fillRect(20, 88, 16, 12); g.fillRect(92, 88, 16, 12);
+        g.fillStyle = '#2a0c0c'; g.fillRect(44, 98, 40, 8); break;
+      case 'sneer':
+        g.fillStyle = '#2a0c0c'; g.fillRect(36, 94, 56, 8); g.fillRect(84, 86, 8, 10);
+        g.fillStyle = '#e8e0c0'; g.fillRect(76, 94, 10, 4); break;
+      default: // tight frown
+        g.fillStyle = '#2a0c0c'; g.fillRect(40, 92, 48, 8); g.fillRect(34, 98, 8, 6); g.fillRect(86, 98, 8, 6);
     }
     g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(58, 56, 12, 24); // nose shadow
   });
 }
 
 // Front of the enemy's torso: suit, shirt and tie.
-export function npcSuit(kind) {
+export function npcSuit(kind, look = npcLook(kind, 0)) {
   return tex(128, 128, (g, w, h) => {
-    const suit = { debt: '#6b4a2b', tax: '#d8d4c4', shark: '#1d2238', collector: '#5a0f12' }[kind];
+    const r = rng(look.seed + 5);
+    const L = look, suit = L.suit;
     g.fillStyle = suit; g.fillRect(0, 0, w, h);
-    if (kind === 'debt') {
-      g.strokeStyle = 'rgba(240,200,120,.25)'; g.lineWidth = 3; // cheap plaid
+    // fabric pattern
+    if (L.pattern === 'plaid') {
+      g.strokeStyle = 'rgba(240,200,120,.25)'; g.lineWidth = 3;
       for (let i = 8; i < w; i += 24) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); }
-      g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(40, 0); g.lineTo(88, 0); g.lineTo(64, 70); g.fill();
-      g.fillStyle = '#c62828'; g.beginPath(); g.moveTo(58, 4); g.lineTo(70, 4); g.lineTo(74, 80); g.lineTo(64, 92); g.lineTo(54, 80); g.fill();
-      g.fillStyle = '#4a311b'; g.beginPath(); g.moveTo(30, 0); g.lineTo(40, 0); g.lineTo(64, 70); g.lineTo(52, 74); g.fill();
+    } else if (L.pattern === 'pin') {
+      g.fillStyle = 'rgba(255,255,255,.16)'; for (let x = 4; x < w; x += 10) g.fillRect(x, 0, 2, h);
+    } else if (L.pattern === 'check') {
+      g.fillStyle = 'rgba(0,0,0,.18)'; for (let y = 0; y < h; y += 16) for (let x = (y / 16 % 2) * 16; x < w; x += 32) g.fillRect(x, y, 16, 16);
+    }
+    const tie = (x1, x2) => { g.fillStyle = L.tie; g.beginPath(); g.moveTo(x1, 4); g.lineTo(x2, 4); g.lineTo(x2 + 4, 80); g.lineTo(64, 92); g.lineTo(x1 - 4, 80); g.fill(); };
+    const lapels = (c) => {
+      g.fillStyle = c; g.beginPath(); g.moveTo(30, 0); g.lineTo(40, 0); g.lineTo(64, 70); g.lineTo(52, 74); g.fill();
       g.beginPath(); g.moveTo(98, 0); g.lineTo(88, 0); g.lineTo(64, 70); g.lineTo(76, 74); g.fill();
-      g.fillStyle = '#f4f0e4'; g.fillRect(84, 30, 30, 18); g.fillStyle = '#c62828'; g.fillRect(84, 30, 30, 6); // name tag
+    };
+    if (kind === 'debt') {
+      g.fillStyle = L.shirt; g.beginPath(); g.moveTo(40, 0); g.lineTo(88, 0); g.lineTo(64, 70); g.fill();
+      tie(58, 70); lapels('rgba(0,0,0,.3)');
+      g.fillStyle = '#f4f0e4'; g.fillRect(84, 30, 30, 18); g.fillStyle = L.tie; g.fillRect(84, 30, 30, 6); // name tag
+      g.fillStyle = '#333'; g.fillRect(88, 40, 18, 2);
+      if (r() < 0.5) { g.fillStyle = '#2e7d32'; g.fillRect(16, 24, 18, 8); } // a dollar in the breast pocket
     } else if (kind === 'tax') {
-      g.fillStyle = '#7d7a6e'; g.fillRect(16, 0, 10, h); g.fillRect(102, 0, 10, h); // suspenders
-      g.fillStyle = '#2b2f3a'; g.beginPath(); g.moveTo(60, 0); g.lineTo(68, 0); g.lineTo(70, 76); g.lineTo(64, 84); g.lineTo(58, 76); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(16, 0, 10, h); g.fillRect(102, 0, 10, h); // suspenders
+      g.fillStyle = L.tie; g.beginPath(); g.moveTo(60, 0); g.lineTo(68, 0); g.lineTo(70, 76); g.lineTo(64, 84); g.lineTo(58, 76); g.fill();
       g.fillStyle = '#e9ecef'; g.fillRect(80, 24, 24, 26); // pocket protector
       g.fillStyle = '#1d4ed8'; g.fillRect(84, 14, 4, 16); g.fillStyle = '#c62828'; g.fillRect(92, 12, 4, 18); g.fillStyle = '#111'; g.fillRect(98, 16, 3, 14);
       g.fillStyle = '#d4a017'; g.fillRect(28, 30, 22, 16); // badge
+      if (r() < 0.5) { g.fillStyle = 'rgba(120,100,40,.35)'; g.beginPath(); g.ellipse(40, 100, 16, 10, 0, 0, Math.PI * 2); g.fill(); } // coffee stain
     } else if (kind === 'collector') {
-      g.fillStyle = '#3a0709'; g.fillRect(58, 0, 12, h); // jacket zip
-      g.fillStyle = '#111'; g.fillRect(40, 0, 48, 20); // black tee
-      g.strokeStyle = '#c0c0c0'; g.lineWidth = 4; // heavy chain
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(58, 0, 12, h); // jacket zip
+      g.fillStyle = L.shirt; g.fillRect(40, 0, 48, 20); // tee
+      g.strokeStyle = L.tie; g.lineWidth = 4; // heavy chain
       g.beginPath(); g.moveTo(40, 4); g.quadraticCurveTo(64, 44, 88, 4); g.stroke();
-      g.save(); g.translate(64, 84); g.rotate(-0.2); // PAST DUE stamp
-      g.strokeStyle = '#ff3b30'; g.lineWidth = 3; g.strokeRect(-46, -14, 92, 28);
-      g.fillStyle = '#ff3b30'; g.font = 'bold 20px Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText('PAST DUE', 0, 1); g.restore();
+      g.save(); g.translate(64, 84); g.rotate(-0.2 + r() * 0.3); // red stamp
+      g.strokeStyle = '#ff3b30'; g.lineWidth = 3; g.strokeRect(-48, -14, 96, 28);
+      g.fillStyle = '#ff3b30'; g.font = 'bold 18px Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(L.stamp, 0, 1); g.restore();
     } else {
-      g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(44, 0); g.lineTo(84, 0); g.lineTo(64, 50); g.fill();
-      g.fillStyle = '#5a1020'; g.fillRect(40, 30, 48, h); // waistcoat
+      g.fillStyle = L.shirt; g.beginPath(); g.moveTo(44, 0); g.lineTo(84, 0); g.lineTo(64, 50); g.fill();
+      tie(60, 68);
+      g.fillStyle = L.waist; g.fillRect(40, 30, 48, h); // waistcoat
       g.fillStyle = '#d4a017'; for (let y = 50; y < h; y += 18) g.fillRect(61, y, 6, 6);
       g.strokeStyle = '#d4a017'; g.lineWidth = 3; g.beginPath(); g.moveTo(64, 80); g.quadraticCurveTo(76, 96, 86, 82); g.stroke(); // watch chain
-      g.fillStyle = '#b3121b'; g.beginPath(); g.moveTo(0, 6); g.lineTo(20, 0); g.lineTo(128, 110); g.lineTo(128, 128); g.lineTo(108, 128); g.fill(); // sash
-      g.fillStyle = '#d4a017'; g.fillRect(60, 56, 10, 10);
-      g.fillStyle = '#e53935'; g.fillRect(14, 20, 10, 10); // carnation
+      if (r() < 0.6) { g.fillStyle = '#b3121b'; g.beginPath(); g.moveTo(0, 6); g.lineTo(20, 0); g.lineTo(128, 110); g.lineTo(128, 128); g.lineTo(108, 128); g.fill(); } // sash
+      g.fillStyle = ['#e53935', '#f5f5f5', '#d4a017'][Math.floor(r() * 3)]; g.fillRect(14, 20, 10, 10); // buttonhole flower
     }
-    g.fillStyle = 'rgba(90,10,10,.55)'; // blood stains
-    g.fillRect(20, 92, 14, 10); g.fillRect(30, 100, 6, 16); g.fillRect(96, 60, 8, 8);
+    // a gash in the clothes showing ribs
+    if (L.torn) {
+      const x = r() < 0.5 ? 14 : 84, y = 54 + r() * 30;
+      g.fillStyle = '#3a0808'; g.fillRect(x, y, 30, 26);
+      g.fillStyle = '#d8d0b0'; for (let i = 0; i < 3; i++) g.fillRect(x + 2, y + 4 + i * 8, 26, 3);
+    }
+    // blood stains and bullet holes
+    g.fillStyle = 'rgba(90,10,10,.6)';
+    for (let i = 0; i < L.blood; i++) { const x = r() * 116, y = 40 + r() * 80; g.fillRect(x, y, 6 + r() * 12, 6 + r() * 10); g.fillRect(x + 2, y + 6, 4, 6 + r() * 12); }
+    g.fillStyle = '#120404'; for (let i = 0; i < Math.floor(r() * 4); i++) g.fillRect(10 + r() * 108, 30 + r() * 90, 5, 5);
   });
 }
 
