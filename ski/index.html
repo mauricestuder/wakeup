@@ -140,7 +140,10 @@
     h1 span { color: var(--orange); }
     h2 { margin: 0 0 6px; font-size: clamp(36px, 8vw, 64px); }
     .tag { margin: 8px 0 18px; font-size: 16px; font-weight: 700; opacity: .9; }
-    .drops { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 760px; }
+    .gear { display: inline-flex; gap: 0; margin: 0 auto 12px; border-radius: 999px; background: rgba(10,20,36,.55); padding: 4px; }
+    .gear button { background: transparent; box-shadow: none; padding: 8px 20px; border-radius: 999px; font-size: 15px; }
+    .gear button.on { background: var(--orange); box-shadow: 0 3px 0 #b33a0c; }
+    .drops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 auto 14px; max-width: 760px; }
     button { font: 900 italic 18px var(--font); text-transform: uppercase; color: #fff; background: var(--orange);
       border: 0; border-radius: 10px; padding: 12px 10px; cursor: pointer; box-shadow: 0 4px 0 #b83a0c; }
     button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b83a0c; }
@@ -168,7 +171,8 @@
     details.how summary::-webkit-details-marker { display: none; }
     details.how summary:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     details.how[open] summary { margin-bottom: 8px; }
-    @media (max-width: 900px) { .drops { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 900px) { .drops { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 600px) { .drops { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 380px) { .drops { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
@@ -203,13 +207,15 @@
     <div class="panel">
       <h1 class="heavy sh">Fresh<span>Line</span></h1>
       <p class="tag sh">Park laps, superpipe and big mountain. Corks, flips, grabs and rails.</p>
+      <div class="gear"><button data-gear="ski">Ski</button><button data-gear="board">Snowboard</button></div>
       <div class="drops">
         <button data-drop="summit">Summit<small>Full run</small></button>
         <button data-drop="park" class="alt">Park<small>Kickers + rails</small></button>
         <button data-drop="pro" class="alt">Pro Line<small>Step-up, hip, big air</small></button>
         <button data-drop="pipe">Halfpipe<small>Superpipe airs</small></button>
         <button data-drop="backcountry" class="dark">Backcountry<small>Trees + cliffs</small></button>
-        <button data-drop="jump" class="alt">Ski Jump<small>Distance + style</small></button>
+        <button data-drop="jump" class="alt"><span id="jumpLabel">Ski Jump</span><small>Distance + style</small></button>
+        <button data-drop="cross" class="dark">Boardercross<small>Berms + rollers</small></button>
       </div>
       <details class="how">
         <summary>How to ride</summary>

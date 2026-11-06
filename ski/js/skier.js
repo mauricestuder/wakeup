@@ -10,6 +10,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
 const PIVOT = 0.85; // height of the body's centre above the feet
+const BOARD_YAW = -1.35; // a snowboarder's body faces this far round from the board
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -53,6 +54,25 @@ function buildModel() {
     root.add(ski);
     skis.push(ski);
   }
+
+  // Snowboard (shown instead of the skis on a board): deck, kicked nose and
+  // tail, a stripe and two bindings.
+  const board = new THREE.Group();
+  const deckC = 0x1f8fff, stripe = 0xffcf33;
+  board.add(box(0.28, 0.03, 1.2, deckC));
+  for (const sgn of [1, -1]) {
+    const end = box(0.28, 0.03, 0.2, deckC);
+    end.position.set(0, 0.035, sgn * 0.68); end.rotation.x = -sgn * 0.35;
+    board.add(end);
+    const bind = box(0.24, 0.1, 0.16, 0x0d0f12, 0.065);
+    bind.position.z = sgn * 0.26;
+    board.add(bind);
+  }
+  const top = box(0.08, 0.005, 1.16, stripe, 0.017);
+  board.add(top);
+  board.position.y = 0.02;
+  board.visible = false;
+  root.add(board);
 
   const hips = new THREE.Group();
   body.add(hips);
@@ -100,7 +120,7 @@ function buildModel() {
     arms.push({ upper, fore, pole, side });
   }
   root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
-  return { root, body, hips, torso, legs, arms, skis, head };
+  return { root, body, hips, torso, legs, arms, skis, head, board };
 }
 
 // Two-bone IK for arms and legs: `tgt` is in the parent's space, the chain
@@ -154,7 +174,7 @@ export function nameTrick(air) {
   let pts = base * (air.switchTakeoff && rot ? 1.2 : 1);
   for (const g of air.grabs) {
     if (g.t < 0.2) continue;
-    parts.push(g.name);
+    parts.push(showName(g.name));
     const def = GRABS[g.name] || STYLES[g.name];
     pts += (150 + Math.min(g.t, 1.5) * 350) * (def ? def.k : 1);
   }
@@ -187,6 +207,14 @@ const STYLES = {
   Backscratcher: { k: 1.2, crouch: 0.45, hands: [[0, 'up'], [1, 'up']], skis: [{ y: 0.55, z: -0.35, rx: 1.25 }, { y: 0.55, z: -0.35, rx: 1.25 }], torso: { x: -0.3 } },
 };
 export const GRAB_NAMES = Object.keys(GRABS), STYLE_NAMES = Object.keys(STYLES);
+// On a snowboard the same moves go by their board names.
+const BOARD_NAMES = {
+  Safety: 'Indy', Mute: 'Mute', Tail: 'Tail Grab', 'Truck Driver': 'Stalefish', Japan: 'Japan', Nose: 'Nose Grab',
+  Blunt: 'Method', Critical: 'Melon', Seatbelt: 'Roast Beef',
+  'Iron Cross': 'Crail', 'Spread Eagle': 'Rocket Air', Daffy: 'Nose Bone', Backscratcher: 'Tail Bone',
+};
+let BOARD = false;
+export const showName = (n) => (BOARD && BOARD_NAMES[n]) || n;
 
 // Eight stick directions plus centre pick the grab.
 function grabName(x, y) {
@@ -252,6 +280,15 @@ export class Skier {
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.2),
       new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
     scene.add(this.shadow);
+  }
+
+  // Ski or snowboard: the physics are shared, only the rider changes.
+  setBoard(on) {
+    BOARD = this.board = !!on;
+    const M = this.model;
+    M.board.visible = this.board;
+    for (const ski of M.skis) for (const c of ski.children) c.visible = !this.board;
+    for (const arm of M.arms) arm.pole.visible = !this.board;
   }
 
   spawn(x, z, heading = 0, speed = 0) {
@@ -597,7 +634,7 @@ export class Skier {
       const style = !input.grab;
       a.grab = { name: style ? styleName(input.x, input.y) : grabName(input.x, input.y), t: 0, style };
       a.grabs.push(a.grab);
-      this.emit('grab', { name: a.grab.name });
+      this.emit('grab', { name: showName(a.grab.name) });
     }
     if (a.grab) {
       if (a.grab.style ? input.style : input.grab) a.grab.t += dt; else a.grab = null;
@@ -990,8 +1027,24 @@ export class Skier {
     M.hips.position.y = hipY;
     M.torso.rotation.set(P.tx, P.ty, P.tz);
     M.head.rotation.x = -0.1 - P.crouch * 0.45;
-    M.body.rotation.y = this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) : 0;
-    M.skis.forEach((ski, i) => {
+    // On a board the body stands sideways (left foot forward) and the head
+    // looks down the hill.
+    const yaw = this.board ? BOARD_YAW : 0;
+    M.body.rotation.y = yaw + (this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) * (this.board ? 0.4 : 1) : 0);
+    M.head.rotation.y = -yaw * 0.8;
+    if (this.board) {
+      // One board: it takes the average of the two ski poses, and each foot
+      // stands on its binding.
+      const a = P.skis[0], b = P.skis[1], B = M.board;
+      B.position.set(0, (a.y + b.y) / 2, (a.z + b.z) / 2);
+      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2);
+      B.updateMatrix();
+      M.skis.forEach((ski, i) => {
+        ski.position.set(0, 0, i ? -0.26 : 0.26).applyMatrix4(B.matrix);
+        ski.quaternion.copy(B.quaternion);
+        ski.updateMatrix();
+      });
+    } else M.skis.forEach((ski, i) => {
       const s = P.skis[i];
       ski.position.set(s.x, s.y, s.z);
       ski.rotation.set(s.rx, s.ry, s.rz);
@@ -1003,7 +1056,8 @@ export class Skier {
       if (h.ski !== undefined) {
         const pt = new THREE.Vector3(h.x, 0.05, h.z).applyMatrix4(M.skis[h.ski].matrix);
         P.hands[i].lerp(pt, 1 - Math.exp(-30 * dt));
-      } else P.hands[i].lerp(h, k);
+      } else if (this.board) P.hands[i].lerp(v3.copy(h).applyAxisAngle(Y, yaw * 0.7), k);
+      else P.hands[i].lerp(h, k);
     }
     M.root.updateMatrixWorld(true);
 

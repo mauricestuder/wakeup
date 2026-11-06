@@ -1,7 +1,7 @@
 // Fresh Line: boot, game loop, camera, scoring and screens.
 import * as THREE from '../../game/vendor/three.module.min.js';
 import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill } from './terrain.js';
-import { Skier } from './skier.js';
+import { Skier, showName } from './skier.js';
 import { Input, isTouch } from './input.js';
 import { initAudio, setMix, sfx } from './audio.js';
 import { Spray } from './spray.js';
@@ -130,7 +130,7 @@ function updateHud(dt) {
   let live = '';
   if (skier.state === 'air' && skier.air.t > 0.25) {
     const deg = Math.round(skier.air.total * 180 / Math.PI / 10) * 10;
-    live = (deg >= 90 ? deg + '°' : '') + (skier.air.grab ? '  ' + skier.air.grab.name.toUpperCase() : '');
+    live = (deg >= 90 ? deg + '°' : '') + (skier.air.grab ? '  ' + showName(skier.air.grab.name).toUpperCase() : '');
   } else if (skier.state === 'grind') live = skier.grind.name.toUpperCase();
   hud.live.textContent = live;
   updateJumpHud();
@@ -354,6 +354,16 @@ function finishRun() {
   $('finTop').textContent = run.bestTrick ? `${run.bestTrick.name} (${run.bestTrick.pts.toLocaleString()})` : '—';
   show('finish');
 }
+
+// Ski or snowboard, remembered between visits.
+function setGear(board) {
+  skier.setBoard(board);
+  store.set('board', board ? 1 : 0);
+  for (const b of document.querySelectorAll('[data-gear]')) b.classList.toggle('on', (b.dataset.gear === 'board') === board);
+  $('jumpLabel').textContent = board ? 'Big Jump' : 'Ski Jump';
+}
+for (const b of document.querySelectorAll('[data-gear]')) b.addEventListener('click', () => setGear(b.dataset.gear === 'board'));
+setGear(!!store.get('board'));
 
 for (const b of document.querySelectorAll('[data-drop]')) {
   b.addEventListener('click', () => { initAudio(); startRun(b.dataset.drop); });

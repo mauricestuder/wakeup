@@ -119,6 +119,28 @@ export function onJumpHill(x, z, pad = 0) {
   return Math.abs(x - JUMP.x) < JUMP.half + pad && u > -2 && u < JUMP.len;
 }
 
+// ---------- boardercross ----------
+
+// A twisting side course through the trees: banked turns, rollers between them.
+export const BX = { x: 92, z0: 140, z1: 900, A: 13, wl: 140 };
+const bxPhase = (z) => (z - BX.z0) / BX.wl * 2 * Math.PI;
+export const bxCenter = (z) => BX.x + BX.A * Math.sin(bxPhase(z));
+export const bxDist = (x, z) => (z < BX.z0 - 30 || z > BX.z1 + 30) ? 1e9 : Math.abs(x - bxCenter(z));
+function bxOffset(x, z) {
+  const fade = smooth(BX.z0, BX.z0 + 25, z) * (1 - smooth(BX.z1 - 25, BX.z1, z));
+  if (fade <= 0) return 0;
+  const ph = bxPhase(z), sn = Math.sin(ph), d = x - bxCenter(z), ad = Math.abs(d);
+  if (ad > 15) return 0;
+  // Low walls on both sides, and a high banked berm on the outside of each turn.
+  const out = d * Math.sign(sn), k = Math.abs(sn);
+  let o = 0.8 * smooth(6, 9, ad) * (1 - smooth(10.5, 14, ad));
+  o += 2.8 * k * k * smooth(-2, 9, out) * (1 - smooth(9.5, 14, out));
+  // Rollers on the straights between the turns.
+  const straight = 1 - smooth(0.3, 0.6, k);
+  o += straight * 0.6 * (0.5 - 0.5 * Math.cos(2 * Math.PI * (z - BX.z0) / 12)) * (1 - smooth(5, 8, ad));
+  return o * fade;
+}
+
 export function baseHeight(x, z) {
   const ax = Math.abs(x);
   const wild = smooth(LANE, LANE + 45, ax);
@@ -131,6 +153,12 @@ export function baseHeight(x, z) {
   if (pd < 46 && z > PIPE.z0 - 70 && z < PIPE.z1 + 60) {
     const m = (1 - smooth(32, 46, pd)) * smooth(PIPE.z0 - 70, PIPE.z0 - 30, z) * (1 - smooth(PIPE.z1 + 20, PIPE.z1 + 60, z));
     h += (fallLine(z) + PIPE.x * 0.035 - h) * m;
+  }
+  // The boardercross runs on a smooth bed cut through the bumpy mountain.
+  const bd = bxDist(x, z);
+  if (bd < 24) {
+    const m = (1 - smooth(15, 24, bd)) * smooth(BX.z0 - 30, BX.z0, z) * (1 - smooth(BX.z1, BX.z1 + 30, z));
+    h += (fallLine(z) + ax * 0.035 - h) * m;
   }
   // The jumping hill replaces the mountain in its corridor, with banked sides.
   const jd = Math.abs(x - JUMP.x), ju = jumpU(z);
@@ -199,6 +227,15 @@ function rail(x, z, len, h, kind = 'rail', dx = 0) {
 function featureOffset(f, x, z) {
   if (f.type === 'pipe') return pipeOffset(x, z);
   if (f.type === 'jumphill') return 0; // part of baseHeight; listed for its mesh and to keep trees off
+  if (f.type === 'bx') return bxOffset(x, z);
+  if (f.type === 'moguls') {
+    // Staggered bumps, every other row shifted, fading out at the edges.
+    const u = z - f.z, v = x - f.x;
+    const row = Math.floor(u / f.wave), shift = row % 2 ? f.wave / 2 : 0;
+    const bu = Math.sin(Math.PI * (u / f.wave - row)), bv = Math.cos(2 * Math.PI * (v + shift) / f.wave);
+    const edge = smooth(0, 8, u) * (1 - smooth(f.len - 8, f.len, u)) * (1 - smooth(f.W / 2 - 6, f.W / 2, Math.abs(v)));
+    return f.A * bu * bu * (0.5 + 0.5 * bv) * edge;
+  }
   const dx = x - f.x, dzz = z - f.z;
   const u = dzz * f.ca + dx * f.sa, v = Math.abs(dx * f.ca - dzz * f.sa);
   if (f.type === 'cliff') {
@@ -308,6 +345,9 @@ cliff(-140, 470, 4.5, 26);
 cliff(165, 900, 7, 30);
 cliff(-120, 1290, 9, 30);
 cliff(95, 1720, 5, 24);
+// Mogul field on the left at the top of the run, before the park starts.
+features.push({ type: 'moguls', x: -23, z: 22, len: 80, W: 34, A: 0.5, wave: 6.5, ang: 0, ca: 1, sa: 0, x0: -40, x1: -6, z0: 22, z1: 102 });
+features.push({ type: 'bx', x: BX.x, z: BX.z0, ang: 0, ca: 1, sa: 0, x0: BX.x - BX.A - 15, x1: BX.x + BX.A + 15, z0: BX.z0, z1: BX.z1 });
 features.push({ type: 'pipe', x: PIPE.x, z: PIPE.z0, x0: PIPE.x - 30, x1: PIPE.x + 30, z0: PIPE.z0, z1: PIPE.z1 + 6 });
 features.push({ type: 'jumphill', x: JUMP.x, z: JUMP.z0, x0: JUMP.x - JUMP.half - JUMP.side, x1: JUMP.x + JUMP.half + JUMP.side,
   z0: JUMP.z0 - 30, z1: JUMP.z0 + JUMP.len + 20 });
@@ -319,6 +359,7 @@ export const dropIns = {
   pipe: { x: PIPE.x, z: PIPE.z0 - 25, label: 'Halfpipe', speed: 14, finish: PIPE.z1 + 12 },
   backcountry: { x: -150, z: 30, label: 'Backcountry', speed: 6 },
   jump: { x: JUMP.x, z: JUMP.z0 + 2, label: 'Ski Jump', speed: 0, finish: JUMP.z0 + JUMP.len - 15 },
+  cross: { x: BX.x, z: BX.z0 + 4, label: 'Boardercross', speed: 8, finish: BX.z1 - 6 },
 };
 
 // ---------- trees, rocks and other solid things ----------
@@ -374,7 +415,8 @@ export function obstacleHit(x, y, z, r = 0.3) {
 
 const LIFT_X = 62;
 function nearFeature(x, z, m) {
-  for (const f of features) if (x > f.x0 - m && x < f.x1 + m && z > f.z0 - m && z < f.z1 + m) return true;
+  if (bxDist(x, z) < 16 + m) return true;
+  for (const f of features) if (f.type !== 'bx' && x > f.x0 - m && x < f.x1 + m && z > f.z0 - m && z < f.z1 + m) return true;
   if (Math.abs(x - PIPE.x) < 40 && z > PIPE.z0 - 60 && z < PIPE.z1 + 30) return true;
   return Math.abs(x - LIFT_X) < 7 || (z < 10 && Math.abs(x) < 30);
 }
@@ -500,12 +542,13 @@ function gridMesh(x0, x1, z0, z1, step, fn, colorFn, mat, stepZ = step) {
 }
 
 // 1 on the machine-groomed park lane and in the pipe, 0 in the powder.
-const groomedAt = (x, z) => Math.max(1 - smooth(LANE - 4, LANE + 6, Math.abs(x)), inPipe(x, z, PIPE.deck + 2) || onJumpHill(x, z, 2) ? 1 : 0);
+const groomedAt = (x, z) => Math.max(1 - smooth(LANE - 4, LANE + 6, Math.abs(x)), 1 - smooth(10, 15, bxDist(x, z)),
+  inPipe(x, z, PIPE.deck + 2) || onJumpHill(x, z, 2) ? 1 : 0);
 
 const ROCK = new THREE.Color(0.32, 0.31, 0.33), PARK_SHADE = new THREE.Color(0.62, 0.72, 0.88);
 function snowColor(x, z, n, c, built = false) {
   const steep = 1 - n.y;
-  const groomed = 1 - smooth(LANE - 4, LANE + 10, Math.abs(x));
+  const groomed = Math.max(1 - smooth(LANE - 4, LANE + 10, Math.abs(x)), 1 - smooth(10, 16, bxDist(x, z)));
   // Groomed snow is a touch warmer and brighter, powder a cooler blue, so the
   // lane reads at a glance. Both stay a little below pure white so the shading
   // and the detail show instead of burning out.
@@ -555,6 +598,22 @@ export function buildTerrain(scene) {
       scene.add(gridMesh(JUMP.x - JUMP.half - 2, JUMP.x + JUMP.half + 2, JUMP.z0 - 4, JUMP.z0 + JUMP.len, 0.5, height, jumpColor, fmat, 1));
       continue;
     }
+    if (f.type === 'bx') {
+      // Course mesh in strips that follow the track; gates mark the edges.
+      const red = new THREE.Color(0.9, 0.2, 0.15);
+      const bxColor = (x, z, n, c) => {
+        snowColor(x, z, n, c, true);
+        const d = bxDist(x, z);
+        if (Math.abs(d - 9.6) < 0.18) c.lerp(Math.floor(z / 20) % 2 ? blue : red, 0.85);
+      };
+      for (let z = f.z0; z < f.z1; z += 60) {
+        let lo = 1e9, hi = -1e9;
+        for (let zz = z; zz <= Math.min(f.z1, z + 60); zz += 2) { lo = Math.min(lo, bxCenter(zz)); hi = Math.max(hi, bxCenter(zz)); }
+        scene.add(gridMesh(lo - 15.5, hi + 15.5, z, Math.min(f.z1, z + 60), 0.6, height, bxColor, fmat));
+      }
+      continue;
+    }
+    if (f.type === 'moguls') { scene.add(gridMesh(f.x0, f.x1, f.z0, f.z1, 0.5, height, (x, z, n, c) => snowColor(x, z, n, c, true), fmat)); continue; }
     // Paint the lines a rider reads: lip, knuckle, the gap edge and the deck.
     const marks = [];
     if (f.type === 'kick' && !f.natural) marks.push(f.L, f.L + f.T);
@@ -638,37 +697,67 @@ function blobShadows(scene, list, size) {
   scene.add(inst);
 }
 
+// Cones with snow lying on the upper branches and on every other branch tip,
+// each tree a slightly different green.
+function snowyCone(r, h, y, seg, snowTop, tips) {
+  const g = new THREE.ConeGeometry(r, h, seg, 2).translate(0, y, 0).toNonIndexed();
+  const P = g.attributes.position.array, col = new Float32Array(P.length);
+  const green = new THREE.Color(0x2f6a4a), dark = new THREE.Color(0x1f4a35), white = new THREE.Color(0xeef3fa), c = new THREE.Color();
+  for (let k = 0; k < P.length; k += 3) {
+    const yr = (P[k + 1] - (y - h / 2)) / h, ang = Math.atan2(P[k + 2], P[k]);
+    c.copy(dark).lerp(green, Math.min(1, yr * 1.6));
+    let snow = smooth(1 - snowTop, 1, yr) * 0.85;
+    if (yr < 0.05 && tips && Math.cos(ang * seg) > 0) snow = Math.max(snow, 0.75);
+    c.lerp(white, snow);
+    col.set([c.r, c.g, c.b], k);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
 function buildTrees(scene) {
-  const leaf = new THREE.MeshLambertMaterial({ color: 0x2c6146, flatShading: true });
-  const snowy = new THREE.MeshLambertMaterial({ color: 0xe8eef5, flatShading: true });
+  const leaf = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const trunk = new THREE.MeshLambertMaterial({ color: 0x4a3426 });
   const parts = [
     [new THREE.CylinderGeometry(0.18, 0.25, 1.6, 6).translate(0, 0.8, 0), trunk],
-    [new THREE.ConeGeometry(2.1, 3.4, 7).translate(0, 2.6, 0), leaf],
-    [new THREE.ConeGeometry(1.6, 2.8, 7).translate(0, 4.1, 0), leaf],
-    [new THREE.ConeGeometry(1.0, 2.3, 7).translate(0, 5.6, 0), snowy],
+    [snowyCone(2.1, 3.4, 2.6, 8, 0.35, true), leaf],
+    [snowyCone(1.6, 2.8, 4.1, 8, 0.4, true), leaf],
+    [snowyCone(1.0, 2.3, 5.6, 7, 0.75, false), leaf],
   ];
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), tint = new THREE.Color();
   for (const [geo, mat] of parts) {
     const inst = new THREE.InstancedMesh(geo, mat, trees.length);
     trees.forEach((t, i) => {
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.x * 13.7);
-      m.compose(p.set(t.x, height(t.x, t.z) - 0.2, t.z), q, s.setScalar(t.s));
+      m.compose(p.set(t.x, height(t.x, t.z) - 0.2, t.z), q, s.set(t.s, t.s * (0.9 + hash(i, 7) * 0.3), t.s));
       inst.setMatrixAt(i, m);
+      if (mat === leaf) inst.setColorAt(i, tint.setRGB(0.85 + hash(i, 3) * 0.3, 0.9 + hash(i, 5) * 0.2, 0.85 + hash(i, 6) * 0.25));
     });
     scene.add(inst);
   }
   blobShadows(scene, trees, 4.6);
 }
 
+// Rocks: faceted, grey with a little brown, snow on the faces that look up.
 function buildRocks(scene) {
-  const inst = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0),
-    new THREE.MeshLambertMaterial({ color: 0x5d5a58, flatShading: true }), rocks.length);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  const geo = new THREE.DodecahedronGeometry(1, 1).toNonIndexed();
+  const P = geo.attributes.position.array, col = new Float32Array(P.length);
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  for (let k = 0; k < P.length; k += 9) {
+    A.fromArray(P, k); B.fromArray(P, k + 3); C.fromArray(P, k + 6);
+    n.subVectors(C, B).cross(A.clone().sub(B)).normalize();
+    if (n.y > 0.55) c.setRGB(0.93, 0.95, 0.99);
+    else c.setRGB(0.42, 0.4, 0.39).multiplyScalar(0.8 + hash(k, 9) * 0.4);
+    for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], k + v * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const inst = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), rocks.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), tint = new THREE.Color();
   rocks.forEach((r, i) => {
-    q.setFromEuler(e.set(r.r, r.r * 2, r.r * 0.5));
+    q.setFromEuler(e.set((r.r % 1) * 0.3, r.r * 2, ((r.r * 3) % 1) * 0.3)); // turned, barely tipped, so snow stays on top
     m.compose(new THREE.Vector3(r.x, height(r.x, r.z) - 0.2 * r.s, r.z), q, new THREE.Vector3(r.s, r.s * 0.7, r.s));
     inst.setMatrixAt(i, m);
+    inst.setColorAt(i, tint.setRGB(1, 0.96 + hash(i, 1) * 0.08, 0.92 + hash(i, 4) * 0.1));
   });
   scene.add(inst);
   blobShadows(scene, rocks, 2.6);
@@ -786,35 +875,54 @@ function arch(scene, z, text, bg, fg, cx = 0, half = 9) {
   scene.add(b);
 }
 
-// A jagged ring of peaks: noise for the ridge line, snow above the rock.
-function ridgeRing(scene, radius, base, peak, seedOff, rock, snow, haze) {
-  const N = 220, ROWS = 6, pos = [], col = [], idx = [];
-  const cRock = new THREE.Color(rock), cSnow = new THREE.Color(snow), cHaze = new THREE.Color(haze), c = new THREE.Color();
-  const snowLine = base + peak * 0.62;
+// A ring of faceted peaks: a sharp ridge line, spurs and gullies running down
+// the faces, snow on the gentle slopes and rock on the steep ones, lit by the
+// same sun as the slope and fading into the haze with distance.
+const SUN = new THREE.Vector3(-40, 60, 70).normalize();
+function ridgeRing(scene, radius, base, peak, seedOff, rock, snow, haze, hazeK) {
+  const N = 300, ROWS = 12, pos = [], idx = [];
+  const ridge = (t) => { // ridged noise: sharp peaks and saddles
+    const n = fbm(t + seedOff, seedOff * 0.37);
+    const r = 1 - Math.abs(2 * vnoise(t * 2.3 + seedOff, 4) - 1);
+    return Math.pow(n * 0.75 + r * 0.25, 1.7);
+  };
   for (let i = 0; i <= N; i++) {
-    const a = i / N * Math.PI * 2;
-    const t = i / N * 24;
-    const n = fbm(t + seedOff, seedOff * 0.37) * 0.7 + vnoise(t * 3.1 + seedOff, 9) * 0.3;
-    const h = base + Math.pow(n, 1.6) * peak * 1.9;
-    const x = Math.sin(a) * radius, z = 900 + Math.cos(a) * radius;
-    // Rows from deep below the horizon up to the ridge; colour follows height.
+    const a = i / N * Math.PI * 2, t = i / N * 26;
+    const h = base + ridge(t) * peak * 2.1;
+    const spur = (vnoise(t * 1.7 + seedOff, 31) - 0.5);
     for (let r = 0; r <= ROWS; r++) {
-      const y = r === 0 ? base - 900 : base + (h - base) * (r / ROWS);
-      pos.push(x, y, z);
-      c.copy(cRock).lerp(cSnow, smooth(snowLine - 60, snowLine + 30, y)).lerp(cHaze, 0.25 + 0.5 * (1 - smooth(base - 200, h, y)));
-      col.push(c.r, c.g, c.b);
+      const f = r / ROWS;
+      const y = r === 0 ? base - 900 : base + (h - base) * Math.pow(f, 0.85) + (r < ROWS ? (vnoise(t * 3 + r, seedOff) - 0.5) * 30 : 0);
+      // Lower down the face comes toward the viewer; spurs stick out further.
+      const rad = radius - (1 - f) * (h - base) * (1.1 + spur * 1.4) - (vnoise(t * 4, r * 0.9 + seedOff) - 0.5) * 50 * (1 - f);
+      pos.push(Math.sin(a) * rad, y, 900 + Math.cos(a) * rad);
     }
-    if (i < N) {
-      for (let r = 0; r < ROWS; r++) {
-        const k = i * (ROWS + 1) + r, k2 = k + ROWS + 1;
-        idx.push(k, k2, k + 1, k + 1, k2, k2 + 1);
-      }
+    if (i < N) for (let r = 0; r < ROWS; r++) {
+      const k = i * (ROWS + 1) + r, k2 = k + ROWS + 1;
+      idx.push(k, k2, k + 1, k + 1, k2, k2 + 1);
     }
   }
-  const g = new THREE.BufferGeometry();
+  let g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
+  g = g.toNonIndexed();
+  const P = g.attributes.position.array, col = new Float32Array(P.length);
+  const cRock = new THREE.Color(rock), cSnow = new THREE.Color(snow), cHaze = new THREE.Color(haze), cShade = new THREE.Color(0x8fa6c8);
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  const top = base + peak * 2.1;
+  for (let k = 0; k < P.length; k += 9) {
+    A.fromArray(P, k); B.fromArray(P, k + 3); C.fromArray(P, k + 6);
+    n.subVectors(C, B).cross(A.clone().sub(B)).normalize();
+    const mid = A.clone().add(B).add(C).divideScalar(3);
+    if (n.x * -mid.x + n.z * (900 - mid.z) < 0) n.negate(); // face the middle of the ring
+    const snowy = n.y + (vnoise(mid.x / 60, mid.z / 60 + seedOff) - 0.5) * 0.5 + smooth(base, top, mid.y) * 0.35 > 0.62;
+    c.copy(snowy ? cSnow : cRock);
+    const lit = Math.max(0, n.dot(SUN));
+    if (snowy) c.lerp(cShade, (1 - lit) * 0.55); else c.multiplyScalar(0.6 + lit * 0.7);
+    c.lerp(cHaze, hazeK + (1 - hazeK) * 0.6 * (1 - smooth(base - 300, top * 0.8, mid.y)));
+    for (let j = 0; j < 3; j++) col.set([c.r, c.g, c.b], k + j * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide })));
 }
 
@@ -835,6 +943,8 @@ function buildDecor(scene) {
   arch(scene, WORLD.finishZ, 'FINISH', '#1e88e5', '#ffffff');
   arch(scene, PIPE.z0 - 8, 'SUPERPIPE', '#ff5a1f', '#ffffff', PIPE.x, PIPE.lipD + PIPE.deck + 2);
   arch(scene, PIPE.z1 + 12, 'FINISH', '#1e88e5', '#ffffff', PIPE.x, PIPE.lipD + PIPE.deck + 2);
+  arch(scene, BX.z0 + 14, 'BOARDERCROSS', '#111418', '#ff5a1f', bxCenter(BX.z0 + 14), 13);
+  arch(scene, BX.z1 - 8, 'FINISH', '#1e88e5', '#ffffff', bxCenter(BX.z1 - 8), 13);
   arch(scene, JUMP.z0 + 18, 'SKI JUMP', '#ff5a1f', '#ffffff', JUMP.x, JUMP.half + 2);
   arch(scene, JUMP.z0 + JUMP.len - 15, 'FINISH', '#1e88e5', '#ffffff', JUMP.x, JUMP.half + 6);
 
@@ -882,7 +992,7 @@ function buildDecor(scene) {
   scene.add(pole, flags);
 
   // Three rings of peaks fading into the haze.
-  ridgeRing(scene, 2150, -380, 520, 3, 0x7d8ea6, 0xf3f6fb, 0xb9cbe0);
-  ridgeRing(scene, 1750, -460, 380, 11, 0x5d6f88, 0xeef2f8, 0xc6d5e6);
-  ridgeRing(scene, 1450, -560, 300, 23, 0x4c5d74, 0xe6edf5, 0xd3dfec);
+  ridgeRing(scene, 2300, -380, 560, 3, 0x6f7f99, 0xf6f8fc, 0xb9cbe0, 0.45);
+  ridgeRing(scene, 1850, -470, 420, 11, 0x56657d, 0xf1f5fa, 0xc6d5e6, 0.28);
+  ridgeRing(scene, 1450, -560, 320, 23, 0x46536a, 0xebf0f6, 0xd3dfec, 0.12);
 }
