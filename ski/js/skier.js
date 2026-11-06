@@ -5,6 +5,9 @@ import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHi
 const G = 9.81;
 const ROLL_MAX = 4;     // rad/s, rolling with Q / E
 const SPIN_MAX = 8;     // rad/s, about 460 degrees a second
+// Snowboard spins: a bit slower at the top, heavier to start and stop (they
+// float and carry), and you can wind up before the lip to leave already turning.
+const BOARD_SPIN = { max: 6.6, up: 4.5, down: 4.2, wind: 0.75 };
 const FLIP_MAX = 7.2;
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -145,6 +148,10 @@ function twoBone(upper, lower, tgt, L1, L2, bend) {
 
 // ---------- tricks ----------
 
+// A snowboarder (left foot forward) spins frontside when the chest turns to
+// face down the hill first, backside when the back does. Riding switch flips it.
+const boardSide = (air) => ((air.spinSigned || 0) * (air.switchTakeoff ? -1 : 1) > 0 ? 'Frontside ' : 'Backside ');
+
 export function nameTrick(air) {
   const total = air.total * DEG;
   const off = air.total > 0 ? air.off / air.total * DEG : 0;
@@ -155,6 +162,7 @@ export function nameTrick(air) {
     let deg = Math.round(total / 180) * 180;
     if (air.fromSlide) deg = Math.max(90, Math.round((total - 90) / 180) * 180 + 90);
     rot = deg + (air.fromSlide ? ' Out' : '');
+    if (air.board && !air.fromSlide) rot = boardSide(air) + rot;
     base = deg / 180 * 140 + Math.pow(deg / 360, 2) * 120;
   } else if (off > 64) {
     const n = Math.max(1, Math.round(total / 360));
@@ -167,6 +175,7 @@ export function nameTrick(air) {
     const corks = deg <= 720 ? 1 : deg <= 1260 ? 2 : 3;
     const kind = air.flip >= 0 ? 'Misty' : 'Cork';
     rot = ['', '', 'Double ', 'Triple '][corks] + kind + ' ' + deg;
+    if (air.board) rot = boardSide(air) + rot;
     base = (deg / 180 * 160 + Math.pow(deg / 360, 2) * 160) * (1 + 0.5 * corks);
   }
   const parts = [];
@@ -319,6 +328,10 @@ export class Skier {
   // input: { x, y, jump, grab, style, tuck, jumpReleased }
   step(dt, input) {
     this.time += dt;
+    // Snowboard wind-up: holding the stick sideways while crouched for a pop
+    // twists the shoulders the other way, ready to unwind off the lip.
+    const want = this.board && this.state === 'ground' && input.jump ? Math.max(-1, Math.min(1, input.x || 0)) : 0;
+    if (this.state === 'ground' || !this.board) this.wind = (this.wind || 0) + (want - (this.wind || 0)) * (1 - Math.exp(-8 * dt));
     if (this.landAnim && (this.landAnim.t += dt) > (this.landAnim.kind === 'telemark' ? 1.4 : 0.6)) this.landAnim = null;
     if (this.state === 'ground') this.stepGround(dt, input);
     else if (this.state === 'air') this.stepAir(dt, input);
@@ -394,7 +407,7 @@ export class Skier {
     const brake = input.y > 0.3 && !this.press ? (input.y - 0.3) / 0.7 : 0;
     this.updatePress(dt, input, speed);
 
-    const turn = (2.1 - Math.min(speed, 28) / 28 * 0.9) * (tuck ? 0.55 : 1) * (1 + brake * 0.4);
+    const turn = (2.1 - Math.min(speed, 28) / 28 * 0.9) * (tuck ? 0.55 : 1) * (1 + brake * 0.4) * (this.board && input.jump ? 0.25 : 1); // on a board, crouched = winding up, not turning
     this.heading -= input.x * turn * dt;
 
     const fH = v1.set(Math.sin(this.heading), 0, Math.cos(this.heading));
@@ -502,10 +515,12 @@ export class Skier {
     this.pivotUp.set(0, 1, 0).applyQuaternion(this.q);
     this.air = {
       t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
-      switchTakeoff: this.switch, grabs: [], grab: null, popped,
+      switchTakeoff: this.switch, grabs: [], grab: null, popped, board: this.board, spinSigned: 0,
       left: new THREE.Vector3().crossVectors(Y, dir), fromSlide: false,
       pipe: n.y < 0.85 && inPipe(this.p.x, this.p.z, 2), side: Math.sign(this.p.x - PIPE.x) || 1,
     };
+    if (this.board && Math.abs(this.wind || 0) > 0.2) this.air.spinRate = -this.wind * BOARD_SPIN.max * BOARD_SPIN.wind;
+    this.wind = 0;
     if (this.air.pipe) {
       // In the pipe the body leans with the wall on the way up and back down.
       // Spins happen in an upright frame (qb) that the lean is applied on top of.
@@ -544,10 +559,13 @@ export class Skier {
     const sx = a.jump ? 0 : dz(input.x), sy = a.jump ? 0 : dz(input.y);
     const slow = a.grab ? 0.8 : 1;
     const k = 1 - Math.exp(-12 * dt);
-    const spinT = -sx * SPIN_MAX * slow, flipT = -sy * FLIP_MAX * slow;
+    const SM = this.board ? BOARD_SPIN.max : SPIN_MAX;
+    const spinT = -sx * SM * slow, flipT = -sy * FLIP_MAX * slow;
     // Spins build up and run out over a moment instead of following the stick
     // exactly, so they have a bit of weight (and carry a little after release).
-    const ks = 1 - Math.exp(-(Math.abs(spinT) > Math.abs(a.spinRate) ? 7 : 9) * dt);
+    // A spin you are already in keeps going until the stick says otherwise.
+    const speeding = Math.abs(spinT) > Math.abs(a.spinRate) && spinT * a.spinRate >= 0;
+    const ks = 1 - Math.exp(-(this.board ? (speeding ? BOARD_SPIN.up : BOARD_SPIN.down) : (speeding ? 7 : 9)) * dt);
     a.spinRate += (spinT - a.spinRate) * ks;
     a.flipRate += (flipT - a.flipRate) * k;
     // Roll (Q / E): turn around the skier's own forward axis, to straighten up.
@@ -578,6 +596,7 @@ export class Skier {
         a.total += wl * dt;
         a.off += Math.acos(Math.min(1, Math.abs(a.spinRate) / wl)) * wl * dt;
         a.flip += a.flipRate * dt;
+        a.spinSigned += a.spinRate * dt;
       }
       // Turn the body toward a target at a gentle, capped speed (no snapping).
       const ease = (q, target, rate, cap) => {
@@ -830,7 +849,7 @@ export class Skier {
       const travel = new THREE.Vector3(Math.sin(g.yaw), 0, Math.cos(g.yaw));
       this.air = {
         t: 0, total: 0, off: 0, flip: 0, spinRate: 0, flipRate: 0,
-        switchTakeoff: travel.dot(vh) < -0.5, grabs: [], grab: null, popped: true,
+        switchTakeoff: travel.dot(vh) < -0.5, grabs: [], grab: null, popped: true, board: this.board, spinSigned: 0,
         left: new THREE.Vector3().crossVectors(Y, vh), fromSlide: g.slide, pipe: false, side: 1,
       };
       this.p.y += 0.05;
@@ -1025,7 +1044,11 @@ export class Skier {
 
     const hipY = 0.97 - P.crouch * 0.42;
     M.hips.position.y = hipY;
-    M.torso.rotation.set(P.tx, P.ty, P.tz);
+    // On a board the shoulders lead a spin and twist back for a wind-up.
+    let lead = 0;
+    if (this.board) lead = this.state === 'air' && this.air ? Math.max(-0.6, Math.min(0.6, this.air.spinRate * 0.09)) : -(this.wind || 0) * 0.55;
+    this.lead = (this.lead || 0) + (lead - (this.lead || 0)) * (1 - Math.exp(-10 * dt));
+    M.torso.rotation.set(P.tx, P.ty + this.lead, P.tz);
     M.head.rotation.x = -0.1 - P.crouch * 0.45;
     // On a board the body stands sideways (left foot forward) and the head
     // looks down the hill.
