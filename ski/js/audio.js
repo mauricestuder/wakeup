@@ -42,15 +42,16 @@ export function initAudio() {
   carve = src(carveFilter);
 }
 
-export function setMix(speed, scrub, grounded, muted) {
+// board: a snowboard's scrape is quieter and deeper than skis.
+export function setMix(speed, scrub, grounded, muted, board = false) {
   if (!ctx) return;
   const t = ctx.currentTime;
   const s = Math.min(1, speed / 30);
   wind.gain.setTargetAtTime(muted ? 0 : 0.05 + s * s * 0.5, t, 0.15);
   windFilter.frequency.setTargetAtTime(250 + s * 1400, t, 0.2);
-  const c = muted || !grounded ? 0 : Math.min(1, speed / 12) * (0.06 + scrub * 0.5);
+  const c = muted || !grounded ? 0 : Math.min(1, speed / 12) * (0.06 + scrub * 0.5) * (board ? 0.4 : 1);
   carve.gain.setTargetAtTime(c, t, 0.06);
-  carveFilter.frequency.setTargetAtTime(1200 + scrub * 1600 + s * 600, t, 0.1);
+  carveFilter.frequency.setTargetAtTime((1200 + scrub * 1600 + s * 600) * (board ? 0.6 : 1), t, 0.1);
 }
 
 function burst(freq, dur, vol, type = 'lowpass') {

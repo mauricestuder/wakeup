@@ -119,7 +119,12 @@ function updateHud(dt) {
     shownScore += (run.score - shownScore) * (1 - Math.exp(-7 * dt));
     if (Math.abs(run.score - shownScore) < 5) shownScore = run.score;
   }
-  hud.score.textContent = Math.round(shownScore).toLocaleString();
+  const txt = Math.round(shownScore).toLocaleString();
+  if (hud.score.textContent !== txt) {
+    hud.score.textContent = txt;
+    // Long numbers get smaller so a big score doesn't take over the screen.
+    hud.score.style.fontSize = `calc(var(--scoreSize) * ${Math.max(0.5, Math.min(1, 5 / txt.length)).toFixed(2)})`;
+  }
   hud.best.textContent = 'BEST ' + Math.max(best, run.score).toLocaleString();
   hud.speed.textContent = Math.round(skier.speed * 3.6);
   const m = speedMult();
@@ -529,7 +534,7 @@ function frame(now) {
     trail.update(dt, _tp, _ts, skier.state === 'air' || skier.state === 'grind');
     updateCamera(dt);
     updateHud(dt);
-    setMix(skier.speed, skier.scrub, skier.state === 'ground' || skier.state === 'crash', false);
+    setMix(skier.speed, skier.scrub, skier.state === 'ground' || skier.state === 'crash', false, skier.board);
     if (skier.p.z > (dropIns[dropIn].finish || WORLD.finishZ)) finishRun();
     if (Math.abs(skier.p.x) > WORLD.half - 8) skier.p.x = Math.sign(skier.p.x) * (WORLD.half - 8);
   } else {

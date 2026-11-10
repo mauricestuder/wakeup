@@ -30,7 +30,7 @@
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
     #hud[hidden] { display: none; }
     #scoreBox { position: absolute; left: calc(16px + env(safe-area-inset-left)); top: calc(6px + env(safe-area-inset-top)); transform-origin: 0 30%; }
-    #score { font-size: 64px; line-height: 1; font-weight: 900; font-style: italic; letter-spacing: -0.03em; padding-right: 8px;
+    #score { --scoreSize: 64px; font-size: var(--scoreSize); transition: font-size .25s; line-height: 1; font-weight: 900; font-style: italic; letter-spacing: -0.03em; padding-right: 8px;
       background: linear-gradient(105deg, #ff4f0f 0%, #ff8a1c 38%, #ffe6b0 50%, #ff8a1c 62%, #ff4f0f 100%);
       background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
       -webkit-text-stroke: 1px rgba(255,240,220,.55);
@@ -130,7 +130,7 @@
       [data-btn="grab"] { width: 62px; height: 62px; right: calc(114px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); }
       [data-btn="style"] { width: 54px; height: 54px; right: calc(100px + env(safe-area-inset-right)); bottom: calc(94px + env(safe-area-inset-bottom)); }
       [data-btn="butter"] { width: 54px; height: 54px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(112px + env(safe-area-inset-bottom)); }
-      #score { font-size: 50px; }
+      #score { --scoreSize: 50px; }
     }
 
     /* ---------- screens ---------- */
