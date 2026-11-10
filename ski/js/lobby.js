@@ -317,11 +317,13 @@ export function initLobby(api) {
     for (const p of root.querySelectorAll('[data-spane]')) p.hidden = p.dataset.spane !== b.dataset.scat;
   });
   const S = profile.settings;
+  const redraws = [];
   const bindToggle = (id, k) => {
     const t = $('#' + id, root);
     const draw = () => { t.classList.toggle('on', !!S[k]); t.querySelector('b').textContent = S[k] ? 'ON' : 'OFF'; };
     t.addEventListener('click', () => { S[k] = !S[k]; saveProfile(); draw(); api.applySettings(S); });
     draw();
+    redraws.push(draw);
   };
   bindToggle('setKeys', 'keys');
   bindToggle('setShake', 'shake');
@@ -335,6 +337,10 @@ export function initLobby(api) {
   }
   const vol = $('#setVol', root), volV = $('#setVolV', root);
   vol.value = Math.round(S.volume * 100); volV.textContent = vol.value;
+  redraws.push(() => {
+    vol.value = Math.round(S.volume * 100); volV.textContent = vol.value;
+    for (const x of root.querySelectorAll('[data-quality]')) x.classList.toggle('on', x.dataset.quality === S.quality);
+  });
   vol.addEventListener('input', () => { S.volume = vol.value / 100; volV.textContent = vol.value; saveProfile(); api.applySettings(S); });
   const nm = $('#setName', root);
   nm.value = S.name;
@@ -382,6 +388,8 @@ export function initLobby(api) {
       return n;
     },
     wearEquipped,
+    // Settings changed somewhere else (the pause menu).
+    syncSettings() { for (const f of redraws) f(); },
     tab: () => (root.hidden ? null : tab),
   };
 }

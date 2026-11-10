@@ -327,7 +327,7 @@ function updateCamera(dt, snap = false) {
 
 // ---------- screens ----------
 
-const screens = ['pauseScreen', 'finish'];
+const screens = ['pauseScreen', 'pauseSettings', 'finish'];
 function show(id) {
   for (const s of screens) $(s).hidden = s !== id;
   $('hud').hidden = !(mode === 'play');
@@ -397,7 +397,29 @@ function applySettings(s) {
   snowfall.visible = s.snowfall;
   setVolume(s.volume);
 }
-keyHintsChanged((on) => { profile.settings.keys = on; saveProfile(); });
+keyHintsChanged((on) => { profile.settings.keys = on; saveProfile(); drawPauseSettings(); });
+
+// Settings from the pause menu: the same settings as in the lobby.
+const PS = $('pauseSettings');
+function drawPauseSettings() {
+  const S = profile.settings;
+  for (const t of PS.querySelectorAll('[data-ps]')) {
+    t.classList.toggle('on', !!S[t.dataset.ps]);
+    t.querySelector('b').textContent = S[t.dataset.ps] ? 'ON' : 'OFF';
+  }
+  for (const b of PS.querySelectorAll('[data-pq]')) b.classList.toggle('on', b.dataset.pq === S.quality);
+  $('psVol').value = Math.round(S.volume * 100);
+  $('psVolV').textContent = $('psVol').value;
+}
+function changeSetting(fn) {
+  fn(profile.settings);
+  saveProfile(); applySettings(profile.settings); drawPauseSettings(); lobby.syncSettings();
+}
+for (const t of PS.querySelectorAll('[data-ps]')) t.addEventListener('click', () => changeSetting((S) => { S[t.dataset.ps] = !S[t.dataset.ps]; }));
+for (const b of PS.querySelectorAll('[data-pq]')) b.addEventListener('click', () => changeSetting((S) => { S.quality = b.dataset.pq; }));
+$('psVol').addEventListener('input', () => changeSetting((S) => { S.volume = $('psVol').value / 100; }));
+$('pSetBtn').addEventListener('click', () => { drawPauseSettings(); show('pauseSettings'); });
+$('psBack').addEventListener('click', () => show('pauseScreen'));
 
 let trailPreview = 'none';
 const lobby = initLobby({
@@ -456,17 +478,36 @@ function lobbyScene(dt) {
 
 // ---------- loop ----------
 
+// Size the picture to the canvas as it is really shown. iPhones and iPads
+// sometimes report the old window size during a rotation or when the
+// address bar moves, which stretched the picture, so this also runs every
+// frame and fixes any mismatch.
+var viewW = 0, viewH = 0; // var: resize() can run before this line (from the settings)
+function viewSize() {
+  const c = renderer.domElement;
+  return [c.clientWidth || innerWidth, c.clientHeight || innerHeight];
+}
+function checkSize() {
+  const [w, h] = viewSize();
+  if (w !== viewW || h !== viewH) resize();
+}
 function resize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
+  const [w, h] = viewSize();
+  if (!w || !h) return;
+  viewW = w; viewH = h;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 300));
+visualViewport?.addEventListener('resize', resize);
 resize();
 
 const STEP = 1 / 120;
 let acc = 0, last = performance.now();
 function frame(now) {
+  checkSize();
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   world.update(dt);

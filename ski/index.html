@@ -157,6 +157,8 @@
       background: rgba(10,20,36,.68); border-radius: 12px; padding: 10px 16px; margin: 0 auto; max-width: 480px; }
     .controls b { color: var(--gold); font-weight: 800; }
     body.touch .controls .kb, body:not(.touch) .tch { display: none; }
+    .psList { max-width: 520px; margin: 12px auto 0; text-align: left; font-family: var(--disp); font-size: 20px; }
+    .psList .row { background: rgba(8,14,50,.72); }
     .stack { display: grid; gap: 10px; max-width: 300px; margin: 14px auto 0; }
     #menuBest { margin-top: 10px; font-weight: 800; color: var(--gold); min-height: 1em; }
     .stats { display: grid; grid-template-columns: auto auto; gap: 4px 16px; justify-content: center; font-size: 16px; margin: 10px 0 6px; }
@@ -510,8 +512,23 @@
       <div class="stack">
         <button id="resumeBtn">Resume</button>
         <button id="restartBtn" class="alt">Restart run</button>
+        <button id="pSetBtn" class="alt">Settings</button>
         <button id="menuBtn" class="dark">Back to lobby</button>
       </div>
+    </div>
+  </section>
+
+  <section id="pauseSettings" class="screen" hidden>
+    <div class="panel">
+      <h2 class="heavy sh">Settings</h2>
+      <div class="psList">
+        <div class="row"><span>Key labels under buttons</span><button data-ps="keys" class="tog"><b>ON</b></button></div>
+        <div class="row"><span>Camera shake</span><button data-ps="shake" class="tog"><b>ON</b></button></div>
+        <div class="row"><span>Falling snow</span><button data-ps="snowfall" class="tog"><b>ON</b></button></div>
+        <div class="row"><span>Quality</span><div class="seg"><button data-pq="low">Low</button><button data-pq="high">High</button></div></div>
+        <div class="row"><span>Volume</span><div class="vol"><input id="psVol" type="range" min="0" max="100"><b id="psVolV">80</b></div></div>
+      </div>
+      <div class="stack"><button id="psBack">Back</button></div>
     </div>
   </section>
 
