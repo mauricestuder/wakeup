@@ -1,6 +1,7 @@
 // Fresh Line: boot, game loop, camera, scoring and screens.
 import * as THREE from '../../game/vendor/three.module.min.js';
-import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill } from './terrain.js';
+import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill, loadMap, currentMap } from './terrain.js';
+import { MAPS, mapById } from './maps.js';
 import { Skier, showName } from './skier.js';
 import { Input, isTouch, keyHintsChanged } from './input.js';
 import { initAudio, setMix, sfx, setVolume } from './audio.js';
@@ -24,9 +25,10 @@ const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 4200);
 const SUN_DIR = new THREE.Vector3(-40, 60, 70).normalize();
 const sky = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 16), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color(0x2763c4) }, mid: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 } },
+  uniforms: { top: { value: new THREE.Color(0x2763c4) }, mid: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 },
+    sunCol: { value: new THREE.Color(1, 0.72, 0.42) }, clouds: { value: 0.52 }, cloudTint: { value: new THREE.Color(1, 1, 1) }, stars: { value: 0 } },
   vertexShader: 'varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-  fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 sunDir; uniform float time; varying vec3 vp;
+  fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 sunDir; uniform float time; uniform vec3 sunCol; uniform float clouds; uniform vec3 cloudTint; uniform float stars; varying vec3 vp;
     float hs(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float ns(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
       return mix(mix(hs(i), hs(i + vec2(1, 0)), f.x), mix(hs(i + vec2(0, 1)), hs(i + vec2(1, 1)), f.x), f.y); }
@@ -36,13 +38,15 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 16), new THREE.Sha
       float h = clamp(d.y * 2.2 + 0.05, 0., 1.);
       vec3 col = mix(mid, top, pow(h, .7));
       float sd = max(dot(d, sunDir), 0.);
-      col += vec3(1., .72, .42) * pow(sd, 6.) * .32 + vec3(1., .9, .72) * pow(sd, 90.) * .7;
-      col = mix(col, vec3(1., .98, .92), smoothstep(.9972, .9988, sd));
+      col += sunCol * pow(sd, 6.) * .32 + mix(sunCol, vec3(1.), .5) * pow(sd, 90.) * .7;
+      col = mix(col, mix(sunCol, vec3(1.), .7), smoothstep(.9972, .9988, sd));
+      vec2 sg = floor(vec2(atan(d.z, d.x) * 260., d.y * 420.));
+      col += vec3(step(.9975, hs(sg)) * stars * smoothstep(.04, .3, d.y));
       if (d.y > 0.0) {
         vec2 uv = d.xz / (d.y + .12) * 1.4 + vec2(time * .012, time * .005);
         float c = fbm(uv);
-        float cov = smoothstep(.52, .8, c) * smoothstep(.0, .18, d.y);
-        vec3 cc = mix(vec3(.96, .97, 1.), vec3(1., .86, .7), pow(sd, 3.)) * (.82 + .18 * fbm(uv * 2.3 + 3.));
+        float cov = smoothstep(1.04 - clouds, 1.32 - clouds, c) * smoothstep(.0, .18, d.y);
+        vec3 cc = mix(vec3(.96, .97, 1.), vec3(1., .86, .7), pow(sd, 3.)) * (.82 + .18 * fbm(uv * 2.3 + 3.)) * cloudTint;
         col = mix(col, cc, cov * .9);
       }
       gl_FragColor = vec4(col, 1.);
@@ -53,7 +57,7 @@ scene.add(sky);
 
 // Light snow drifting around the camera.
 const snowfall = (() => {
-  const N = 700, pos = new Float32Array(N * 3), seed = new Float32Array(N);
+  const N = 2400, pos = new Float32Array(N * 3), seed = new Float32Array(N);
   for (let i = 0; i < N; i++) { pos.set([Math.random() * 80, Math.random() * 40, Math.random() * 80], i * 3); seed[i] = Math.random() * 6.3; }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -72,12 +76,52 @@ const snowfall = (() => {
   scene.add(m);
   return m;
 })();
-scene.add(new THREE.HemisphereLight(0xcfe2ff, 0x4f6a96, 0.95));
+const hemi = new THREE.HemisphereLight(0xcfe2ff, 0x4f6a96, 0.95);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
-sun.position.set(-40, 60, 70);
+const SUN_OFF = new THREE.Vector3(-40, 60, 70);
+sun.position.copy(SUN_OFF);
 scene.add(sun, sun.target);
 
-const world = buildTerrain(scene);
+// ---------- maps ----------
+
+// Sky, light and weather for a map (the ground is built by terrain.js).
+let snowAmount = 0.3, snowOn = true;
+function mapLook(m) {
+  const u = sky.material.uniforms, c = (h) => new THREE.Color(h);
+  u.top.value.set(m.sky.top); u.mid.value.set(m.sky.horizon);
+  u.sunCol.value.set(m.sky.sun).lerp(c(0xffb878), 0.35);
+  u.clouds.value = m.sky.clouds; u.stars.value = m.sky.stars;
+  u.cloudTint.value.setRGB(...(m.cloudTint || [1, 1, 1]));
+  SUN_OFF.set(...m.sun).normalize().multiplyScalar(Math.hypot(40, 60, 70));
+  SUN_DIR.copy(SUN_OFF).normalize();
+  scene.fog.color.set(m.sky.horizon); scene.fog.near = m.fog[0]; scene.fog.far = m.fog[1];
+  sun.color.set(m.sky.sun); sun.intensity = m.light.sun;
+  hemi.color.set(m.light.sky); hemi.groundColor.set(m.light.ground); hemi.intensity = m.light.hemi;
+  renderer.toneMappingExposure = m.light.exposure;
+  snowAmount = m.snow;
+  snowfall.geometry.setDrawRange(0, Math.round(2400 * Math.max(m.snow, 0.29)));
+  snowfall.visible = snowOn && m.snow > 0;
+}
+// ?map=<id> in the address always uses that map (for testing).
+const fixedMap = new URLSearchParams(location.search).get('map');
+function nextMap() {
+  if (fixedMap) return mapById(fixedMap);
+  const others = MAPS.filter((m) => m !== currentMap());
+  return others[Math.floor(Math.random() * others.length)];
+}
+const firstMap = fixedMap ? mapById(fixedMap) : MAPS[Math.floor(Math.random() * MAPS.length)];
+if (firstMap !== currentMap()) loadMap(firstMap);
+let world = buildTerrain(scene);
+mapLook(firstMap);
+function setMap(m) {
+  loadMap(m);
+  world.dispose();
+  world = buildTerrain(scene);
+  mapLook(m);
+  if (mode === 'menu') skier.spawn(LOBBY.x, LOBBY.z, 0);
+  lobby.refresh();
+}
 const skier = new Skier(scene);
 const spray = new Spray(scene);
 const trail = new Trail(scene);
@@ -106,6 +150,8 @@ const hud = {
 let popTimer = 0;
 function showPop(name, pts, tag, kind = '') {
   hud.popName.textContent = name;
+  // Long trick names get smaller so they fit on one or two lines.
+  hud.popName.style.fontSize = `calc(var(--nameSize) * ${Math.max(0.55, Math.min(1, 13 / name.length)).toFixed(2)})`;
   hud.popPts.textContent = pts ? '+' + pts.toLocaleString() : '';
   hud.popTag.textContent = tag || '';
   hud.pop.className = 'show ' + kind;
@@ -325,7 +371,7 @@ function updateCamera(dt, snap = false) {
   camera.lookAt(look);
   camera.fov += ((innerWidth < innerHeight ? 80 : 66) + sp * 8 - camera.fov) * (1 - Math.exp(-3 * dt));
   camera.updateProjectionMatrix();
-  sun.position.copy(skier.p).add(new THREE.Vector3(-40, 60, 70));
+  sun.position.copy(skier.p).add(SUN_OFF);
   sun.target.position.copy(skier.p);
   sky.position.copy(camera.position);
 }
@@ -362,6 +408,7 @@ function startRun(where, quick = false) {
   show(null);
   updateCamera(1 / 60, true);
   if (quick) showPop('DROP IN', 0, d.label.toUpperCase());
+  else showPop(currentMap().name.toUpperCase(), 0, d.label.toUpperCase() + '  ·  ' + currentMap().desc.toUpperCase());
 }
 
 function pause() {
@@ -384,11 +431,13 @@ function finishRun() {
   $('finFlakes').textContent = n ? '+' + n.toLocaleString() + ' ❄' : '';
   show('finish');
 }
-function toLobby() {
+// Back to the lobby, on a new map so the next run is a little different.
+function toLobby(newMap = true) {
   payRun();
   if (run.score > best) { best = run.score; store.set('best', best); }
   mode = 'menu';
   skier.spawn(LOBBY.x, LOBBY.z, 0);
+  if (newMap && !fixedMap) setMap(nextMap());
   show('lobby');
 }
 
@@ -399,7 +448,8 @@ function applySettings(s) {
   document.body.classList.toggle('nokeys', !s.keys);
   renderer.setPixelRatio(s.quality === 'low' ? 1 : Math.min(devicePixelRatio, isTouch ? 2 : 1.5));
   resize();
-  snowfall.visible = s.snowfall;
+  snowOn = s.snowfall;
+  snowfall.visible = snowOn && snowAmount > 0;
   setVolume(s.volume);
 }
 keyHintsChanged((on) => { profile.settings.keys = on; saveProfile(); drawPauseSettings(); });
@@ -431,6 +481,8 @@ const lobby = initLobby({
   skier,
   setGear: (board) => { skier.setBoard(board); },
   play: (where) => { initAudio(); startRun(where); },
+  map: () => currentMap(),
+  shuffleMap: () => setMap(nextMap()),
   best: () => best,
   applySettings,
   setTrailPreview: (id) => { trailPreview = id; trail.setStyle(id); },
@@ -550,9 +602,9 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 lobby.wearEquipped();
-toLobby();
+toLobby(false);
 requestAnimationFrame(frame);
 
-window.__ski = { skier, run, input, startRun, LANE, camDir };
+window.__ski = { skier, run, input, startRun, LANE, camDir, setMap: (id) => setMap(mapById(id)) };
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');

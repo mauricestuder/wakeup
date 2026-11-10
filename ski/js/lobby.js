@@ -207,7 +207,11 @@ export function initLobby(api) {
     const best = api.best();
     $('#playerBest', root).innerHTML = best ? `Best run <b>${fmt(best)}</b>` : 'No runs yet';
     for (const b of root.querySelectorAll('[data-gear]')) b.classList.toggle('on', (b.dataset.gear === 'board') === profile.board);
+    const map = api.map();
+    $('#mapName', root).textContent = map.name;
+    $('#mapDesc', root).textContent = map.desc;
   }
+  $('#mapCard', root).addEventListener('click', () => api.shuffleMap());
   for (const b of root.querySelectorAll('[data-gear]')) b.addEventListener('click', () => {
     profile.board = b.dataset.gear === 'board'; saveProfile();
     api.setGear(profile.board); drawPlay();
@@ -388,6 +392,7 @@ export function initLobby(api) {
       return n;
     },
     wearEquipped,
+    refresh() { if (tab === 'play' && !root.hidden) drawPlay(); },
     // Settings changed somewhere else (the pause menu).
     syncSettings() { for (const f of redraws) f(); },
     tab: () => (root.hidden ? null : tab),

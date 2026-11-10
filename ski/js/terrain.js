@@ -3,6 +3,11 @@
 // lane, park features (kickers, step-ups, gaps, rollers, rails, boxes) added on
 // top, and a halfpipe off to the side.
 import * as THREE from '../../game/vendor/three.module.min.js';
+import { MAPS } from './maps.js';
+
+// The map in use (see maps.js); loadMap() switches it.
+let MAP = MAPS[0];
+export const currentMap = () => MAP;
 
 export const WORLD = { half: 250, top: -100, bottom: 2060, finishZ: 1965 };
 export const LANE = 42; // half width of the groomed park lane
@@ -40,7 +45,7 @@ export const rand = () => {
 // ---------- fall line ----------
 
 function slopeAt(z) {
-  const run = 0.22 + 0.04 * Math.cos(z / 190) + 0.025 * Math.sin(z / 77);
+  const run = (0.22 + 0.04 * Math.cos(z / 190) + 0.025 * Math.sin(z / 77)) * MAP.slope;
   // A short flat by the hut, then a steep opening pitch that eases into the run.
   const top = 0.08 + 0.3 * smooth(-92, -66, z);
   const k = smooth(-20, 40, z);
@@ -48,10 +53,13 @@ function slopeAt(z) {
 }
 
 const FALL = new Float32Array(WORLD.bottom - WORLD.top + 2);
-for (let i = 1, y = 0; i < FALL.length; i++) {
-  y -= slopeAt(WORLD.top + i - 0.5);
-  FALL[i] = y;
+function fillFall() {
+  for (let i = 1, y = 0; i < FALL.length; i++) {
+    y -= slopeAt(WORLD.top + i - 0.5);
+    FALL[i] = y;
+  }
 }
+fillFall();
 
 export function fallLine(z) {
   const f = Math.min(FALL.length - 2, Math.max(0, z - WORLD.top));
@@ -145,7 +153,8 @@ export function baseHeight(x, z) {
   const ax = Math.abs(x);
   const wild = smooth(LANE, LANE + 45, ax);
   let h = fallLine(z) + ax * 0.035;
-  h += wild * ((fbm(x / 95, z / 95) - 0.5) * 22 + (vnoise(x / 32 + 50, z / 32) - 0.5) * 4);
+  const no = MAP.noise; // each map has its own bumps
+  h += wild * ((fbm(x / 95 + no, z / 95) - 0.5) * 22 * MAP.rough + (vnoise(x / 32 + 50 + no, z / 32) - 0.5) * 4);
   const e = Math.max(0, ax - 195);
   h += e * e * 0.014;
   // The pipe sits on a smooth groomed plane.
@@ -299,58 +308,64 @@ export function normal(x, z, out = _n) {
 
 // ---------- park layout ----------
 
-// Beginner line
-kicker(-12, 165, 1.1, 5, 4, 12, 6);
-rail(14, 170, 11, 0.45, 'box');
-kicker(12, 245, 1.3, 5, 4, 13, 6);
-rail(-14, 255, 11, 0.45, 'box');
-kicker(0, 330, 2, 6, 6, 18, 8);
-rail(-20, 410, 12, 0.7);
-rail(20, 410, 12, 0.7);
-kicker(0, 455, 2.2, 6.5, 6, 19, 8);
-rollers(0, 512, 0.8, 8, 4, 16);
-// Jib line
-rail(-10, 560, 14, 0.5, 'box');
-rail(10, 565, 16, 0.75);
-kicker(0, 630, 2.4, 7, 7, 20, 9);
-kicker(0, 692, 1.4, 4, 0, 9, 9, { mult: 1 }); // spine
-rail(-16, 720, 14, 0.75, 'rail', 3);
-rail(16, 720, 14, 0.75, 'rail', -3);
-rail(0, 800, 22, 0.5, 'box');
-rail(-22, 870, 14, 0.8);
-rail(22, 870, 14, 0.8);
-kicker(0, 920, 2.6, 7, 7, 22, 9, { gap: 1.6 }); // gap jump
-// Pro line
-kicker(0, 1050, 3, 8, 9, 28, 10);
-rail(-24, 1110, 16, 0.8);
-rail(24, 1110, 16, 0.5, 'box');
-stepUp(0, 1175, 3, 8, 7, 30, 26, 11);
-rail(-24, 1262, 18, 0.85);
-rail(24, 1262, 18, 0.85);
-// Three sizes side by side: pick your line.
-kicker(-20, 1310, 2.4, 7, 7, 20, 7);
-kicker(0, 1310, 3.6, 10, 11, 32, 10);
-kicker(21, 1310, 4.4, 11, 13, 38, 12);
-kicker(-10, 1450, 4, 11, 12, 36, 12, { ang: 0.28 }); // hip
-// Big air
-kicker(0, 1610, 4.6, 12, 10, 44, 14);
-// Backcountry: natural hits and cliff drops
-kicker(-100, 300, 1.6, 6, 0, 10, 10, { natural: true });
-kicker(130, 560, 2, 7, 0, 12, 12, { natural: true });
-kicker(-170, 790, 2.2, 7, 0, 12, 12, { natural: true });
-kicker(110, 1180, 2.5, 8, 0, 14, 12, { natural: true });
-kicker(-95, 1530, 2.4, 7, 0, 14, 12, { natural: true });
-kicker(160, 1450, 2, 7, 0, 12, 10, { natural: true });
-cliff(-140, 470, 4.5, 26);
-cliff(165, 900, 7, 30);
-cliff(-120, 1290, 9, 30);
-cliff(95, 1720, 5, 24);
-// Mogul field on the left at the top of the run, before the park starts.
-features.push({ type: 'moguls', x: -23, z: 22, len: 80, W: 34, A: 0.5, wave: 6.5, ang: 0, ca: 1, sa: 0, x0: -40, x1: -6, z0: 22, z1: 102 });
-features.push({ type: 'bx', x: BX.x, z: BX.z0, ang: 0, ca: 1, sa: 0, x0: BX.x - BX.A - 15, x1: BX.x + BX.A + 15, z0: BX.z0, z1: BX.z1 });
-features.push({ type: 'pipe', x: PIPE.x, z: PIPE.z0, x0: PIPE.x - 30, x1: PIPE.x + 30, z0: PIPE.z0, z1: PIPE.z1 + 6 });
-features.push({ type: 'jumphill', x: JUMP.x, z: JUMP.z0, x0: JUMP.x - JUMP.half - JUMP.side, x1: JUMP.x + JUMP.half + JUMP.side,
-  z0: JUMP.z0 - 30, z1: JUMP.z0 + JUMP.len + 20 });
+// The home mountain's park, line by line.
+function classicPark() {
+  // Beginner line
+  kicker(-12, 165, 1.1, 5, 4, 12, 6);
+  rail(14, 170, 11, 0.45, 'box');
+  kicker(12, 245, 1.3, 5, 4, 13, 6);
+  rail(-14, 255, 11, 0.45, 'box');
+  kicker(0, 330, 2, 6, 6, 18, 8);
+  rail(-20, 410, 12, 0.7);
+  rail(20, 410, 12, 0.7);
+  kicker(0, 455, 2.2, 6.5, 6, 19, 8);
+  rollers(0, 512, 0.8, 8, 4, 16);
+  // Jib line
+  rail(-10, 560, 14, 0.5, 'box');
+  rail(10, 565, 16, 0.75);
+  kicker(0, 630, 2.4, 7, 7, 20, 9);
+  kicker(0, 692, 1.4, 4, 0, 9, 9, { mult: 1 }); // spine
+  rail(-16, 720, 14, 0.75, 'rail', 3);
+  rail(16, 720, 14, 0.75, 'rail', -3);
+  rail(0, 800, 22, 0.5, 'box');
+  rail(-22, 870, 14, 0.8);
+  rail(22, 870, 14, 0.8);
+  kicker(0, 920, 2.6, 7, 7, 22, 9, { gap: 1.6 }); // gap jump
+  // Pro line
+  kicker(0, 1050, 3, 8, 9, 28, 10);
+  rail(-24, 1110, 16, 0.8);
+  rail(24, 1110, 16, 0.5, 'box');
+  stepUp(0, 1175, 3, 8, 7, 30, 26, 11);
+  rail(-24, 1262, 18, 0.85);
+  rail(24, 1262, 18, 0.85);
+  // Three sizes side by side: pick your line.
+  kicker(-20, 1310, 2.4, 7, 7, 20, 7);
+  kicker(0, 1310, 3.6, 10, 11, 32, 10);
+  kicker(21, 1310, 4.4, 11, 13, 38, 12);
+  kicker(-10, 1450, 4, 11, 12, 36, 12, { ang: 0.28 }); // hip
+  // Big air
+  kicker(0, 1610, 4.6, 12, 10, 44, 14);
+  // Backcountry: natural hits and cliff drops
+  kicker(-100, 300, 1.6, 6, 0, 10, 10, { natural: true });
+  kicker(130, 560, 2, 7, 0, 12, 12, { natural: true });
+  kicker(-170, 790, 2.2, 7, 0, 12, 12, { natural: true });
+  kicker(110, 1180, 2.5, 8, 0, 14, 12, { natural: true });
+  kicker(-95, 1530, 2.4, 7, 0, 14, 12, { natural: true });
+  kicker(160, 1450, 2, 7, 0, 12, 10, { natural: true });
+  cliff(-140, 470, 4.5, 26);
+  cliff(165, 900, 7, 30);
+  cliff(-120, 1290, 9, 30);
+  cliff(95, 1720, 5, 24);
+}
+// The same on every map: moguls, boardercross, halfpipe and ski jump.
+function fixedFeatures() {
+  // Mogul field on the left at the top of the run, before the park starts.
+  features.push({ type: 'moguls', x: -23, z: 22, len: 80, W: 34, A: 0.5, wave: 6.5, ang: 0, ca: 1, sa: 0, x0: -40, x1: -6, z0: 22, z1: 102 });
+  features.push({ type: 'bx', x: BX.x, z: BX.z0, ang: 0, ca: 1, sa: 0, x0: BX.x - BX.A - 15, x1: BX.x + BX.A + 15, z0: BX.z0, z1: BX.z1 });
+  features.push({ type: 'pipe', x: PIPE.x, z: PIPE.z0, x0: PIPE.x - 30, x1: PIPE.x + 30, z0: PIPE.z0, z1: PIPE.z1 + 6 });
+  features.push({ type: 'jumphill', x: JUMP.x, z: JUMP.z0, x0: JUMP.x - JUMP.half - JUMP.side, x1: JUMP.x + JUMP.half + JUMP.side,
+    z0: JUMP.z0 - 30, z1: JUMP.z0 + JUMP.len + 20 });
+}
 
 export const dropIns = {
   summit: { x: 0, z: -60, label: 'Summit', speed: 0 },
@@ -422,23 +437,25 @@ function nearFeature(x, z, m) {
 }
 
 const trees = [], rocks = [];
-for (let i = 0; i < 9000 && trees.length < 2600; i++) {
-  const x = (rand() * 2 - 1) * 238, z = WORLD.top + 20 + rand() * (WORLD.bottom - WORLD.top - 40);
-  const ax = Math.abs(x);
-  if (ax < LANE + 4) continue;
-  const edge = ax < LANE + 16 ? 0.25 : 0; // a loose tree line along the park
-  if (vnoise(x / 40 + 300, z / 40) + edge < 0.52 && ax < 205) continue;
-  if (nearFeature(x, z, 6)) continue;
-  const s = 0.75 + rand() * 0.7;
-  trees.push({ x, z, s });
-  addObstacle({ kind: 'tree', x, z, s, g: height(x, z) - 0.2 });
-}
-for (let i = 0; i < 260; i++) {
-  const x = (rand() * 2 - 1) * 230, z = rand() * WORLD.bottom;
-  if (Math.abs(x) < LANE + 12 || nearFeature(x, z, 4)) continue;
-  const s = 0.5 + rand() * 1.4;
-  rocks.push({ x, z, s, r: rand() * 6 });
-  addObstacle({ kind: 'rock', x, z, s, g: height(x, z) });
+function scatter() {
+  for (let i = 0; i < 9000 && trees.length < (MAP.treeMax || 2600); i++) {
+    const x = (rand() * 2 - 1) * 238, z = WORLD.top + 20 + rand() * (WORLD.bottom - WORLD.top - 40);
+    const ax = Math.abs(x);
+    if (ax < LANE + 4) continue;
+    const edge = ax < LANE + 16 ? 0.25 : 0; // a loose tree line along the park
+    if (vnoise(x / 40 + 300, z / 40) + edge < MAP.trees && ax < 205) continue;
+    if (nearFeature(x, z, 6)) continue;
+    const s = 0.75 + rand() * 0.7;
+    trees.push({ x, z, s });
+    addObstacle({ kind: 'tree', x, z, s, g: height(x, z) - 0.2 });
+  }
+  for (let i = 0; i < MAP.rocks; i++) {
+    const x = (rand() * 2 - 1) * 230, z = rand() * WORLD.bottom;
+    if (Math.abs(x) < LANE + 12 || nearFeature(x, z, 4)) continue;
+    const s = 0.5 + rand() * 1.4;
+    rocks.push({ x, z, s, r: rand() * 6 });
+    addObstacle({ kind: 'rock', x, z, s, g: height(x, z) });
+  }
 }
 
 // ---------- meshes ----------
@@ -556,9 +573,13 @@ function snowColor(x, z, n, c, built = false) {
   // Shade slopes facing uphill (toward the rider) so jumps and rollers read.
   c.multiplyScalar(1 - smooth(0.02, 0.5, -n.z) * (built ? 0.16 : 0.26) - smooth(0.05, 0.35, steep) * 0.1);
   if (steep > 0.35) c.lerp(built ? PARK_SHADE : ROCK, smooth(0.35, 0.6, steep) * (built ? 0.6 : 1));
+  c.r *= MAP.tint[0]; c.g *= MAP.tint[1]; c.b *= MAP.tint[2];
 }
 
-export function buildTerrain(scene) {
+export function buildTerrain(parent) {
+  // Everything goes in one group so a new map can replace it.
+  const scene = new THREE.Group();
+  parent.add(scene);
   const tex = snowTexture();
   const mat = snowMaterial(tex);
   const W = WORLD;
@@ -667,7 +688,21 @@ export function buildTerrain(scene) {
   buildRocks(scene);
   buildLift(scene);
   buildDecor(scene);
-  return { update(dt) { updateLift(dt); flagMat.uniforms.time.value += dt; } };
+  return {
+    update(dt) { updateLift(dt); flagMat.uniforms.time.value += dt; },
+    dispose() {
+      parent.remove(scene);
+      const seen = new Set();
+      scene.traverse((o) => {
+        if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
+        for (const m of [].concat(o.material || [])) {
+          if (m === flagMat || seen.has(m)) continue;
+          seen.add(m); if (m.map) m.map.dispose(); m.dispose();
+        }
+      });
+      tex.dispose();
+    },
+  };
 }
 
 // Soft shadows under trees and rocks, thrown away from the sun, so they sit on
@@ -781,6 +816,7 @@ function buildLift(scene) {
   const steel = new THREE.MeshLambertMaterial({ color: 0x6c737c });
   const tower = new THREE.BoxGeometry(0.6, 10, 0.6).translate(0, 5, 0);
   const arm = new THREE.BoxGeometry(4.4, 0.3, 0.3);
+  lift.towers.length = 0;
   for (let i = 0; i <= 18; i++) {
     const z = W_topLift + i * LIFT_SPACING, g = height(LIFT_X, z);
     const t = new THREE.Mesh(tower, steel);
@@ -878,7 +914,7 @@ function arch(scene, z, text, bg, fg, cx = 0, half = 9) {
 // A ring of faceted peaks: a sharp ridge line, spurs and gullies running down
 // the faces, snow on the gentle slopes and rock on the steep ones, lit by the
 // same sun as the slope and fading into the haze with distance.
-const SUN = new THREE.Vector3(-40, 60, 70).normalize();
+let SUN = new THREE.Vector3(-40, 60, 70).normalize(); // set from the map
 function ridgeRing(scene, radius, base, peak, seedOff, rock, snow, haze, hazeK) {
   const N = 300, ROWS = 12, pos = [], idx = [];
   const ridge = (t) => { // ridged noise: sharp peaks and saddles
@@ -886,15 +922,22 @@ function ridgeRing(scene, radius, base, peak, seedOff, rock, snow, haze, hazeK) 
     const r = 1 - Math.abs(2 * vnoise(t * 2.3 + seedOff, 4) - 1);
     return Math.pow(n * 0.75 + r * 0.25, 1.7);
   };
-  for (let i = 0; i <= N; i++) {
-    const a = i / N * Math.PI * 2, t = i / N * 26;
+  const point = (t, r) => {
     const h = base + ridge(t) * peak * 2.1;
     const spur = (vnoise(t * 1.7 + seedOff, 31) - 0.5);
+    const f = r / ROWS;
+    const y = r === 0 ? base - 900 : base + (h - base) * Math.pow(f, 0.85) + (r < ROWS ? (vnoise(t * 3 + r, seedOff) - 0.5) * 30 : 0);
+    // Lower down the face comes toward the viewer; spurs stick out further.
+    const rad = radius - (1 - f) * (h - base) * (1.1 + spur * 1.4) - (vnoise(t * 4, r * 0.9 + seedOff) - 0.5) * 50 * (1 - f);
+    return [y, rad];
+  };
+  for (let i = 0; i <= N; i++) {
+    const a = i / N * Math.PI * 2, t = i / N * 26;
+    // The last stretch blends into the start so the ring has no seam.
+    const w = smooth(21, 26, t);
     for (let r = 0; r <= ROWS; r++) {
-      const f = r / ROWS;
-      const y = r === 0 ? base - 900 : base + (h - base) * Math.pow(f, 0.85) + (r < ROWS ? (vnoise(t * 3 + r, seedOff) - 0.5) * 30 : 0);
-      // Lower down the face comes toward the viewer; spurs stick out further.
-      const rad = radius - (1 - f) * (h - base) * (1.1 + spur * 1.4) - (vnoise(t * 4, r * 0.9 + seedOff) - 0.5) * 50 * (1 - f);
+      const p = point(t, r), q = w > 0 ? point(t - 26, r) : p;
+      const y = p[0] + (q[0] - p[0]) * w, rad = p[1] + (q[1] - p[1]) * w;
       pos.push(Math.sin(a) * rad, y, 900 + Math.cos(a) * rad);
     }
     if (i < N) for (let r = 0; r < ROWS; r++) {
@@ -919,6 +962,7 @@ function ridgeRing(scene, radius, base, peak, seedOff, rock, snow, haze, hazeK) 
     c.copy(snowy ? cSnow : cRock);
     const lit = Math.max(0, n.dot(SUN));
     if (snowy) c.lerp(cShade, (1 - lit) * 0.55); else c.multiplyScalar(0.6 + lit * 0.7);
+    if (MAP.ridge) { c.r *= MAP.ridge[0]; c.g *= MAP.ridge[1]; c.b *= MAP.ridge[2]; }
     c.lerp(cHaze, hazeK + (1 - hazeK) * 0.6 * (1 - smooth(base - 300, top * 0.8, mid.y)));
     for (let j = 0; j < 3; j++) col.set([c.r, c.g, c.b], k + j * 3);
   }
@@ -992,7 +1036,95 @@ function buildDecor(scene) {
   scene.add(pole, flags);
 
   // Three rings of peaks fading into the haze.
-  ridgeRing(scene, 2300, -380, 560, 3, 0x6f7f99, 0xf6f8fc, 0xb9cbe0, 0.45);
-  ridgeRing(scene, 1850, -470, 420, 11, 0x56657d, 0xf1f5fa, 0xc6d5e6, 0.28);
-  ridgeRing(scene, 1450, -560, 320, 23, 0x46536a, 0xebf0f6, 0xd3dfec, 0.12);
+  // On other maps the haze takes the colour of that map's horizon.
+  const hz = (c, k) => MAP.id === 'classic' ? c : new THREE.Color(c).lerp(new THREE.Color(MAP.sky.horizon), k).getHex();
+  const so = MAP.id === 'classic' ? 0 : MAP.seed % 17; // different peaks on each map
+  ridgeRing(scene, 2300, -380, 560, 3 + so, 0x6f7f99, 0xf6f8fc, hz(0xb9cbe0, 0.85), 0.45);
+  ridgeRing(scene, 1850, -470, 420, 11 + so, 0x56657d, 0xf1f5fa, hz(0xc6d5e6, 0.8), 0.28);
+  ridgeRing(scene, 1450, -560, 320, 23 + so, 0x46536a, 0xebf0f6, hz(0xd3dfec, 0.75), 0.12);
 }
+
+// ---------- maps ----------
+
+// A park laid out from the map's seed: sections from a set of known-good
+// features (the same sizes as the home park), easy at the top and bigger
+// lower down. The Pro Line drop-in at z 990 is always kept clear.
+function randomPark() {
+  const R = rand, pick = (a) => a[Math.floor(R() * a.length)];
+  const KICK = {
+    s: [1.1, 5, 4, 12, 6], m: [2, 6, 6, 18, 8], l: [2.4, 7, 7, 20, 9], xl: [3, 8, 9, 28, 10], xxl: [3.6, 10, 11, 32, 10],
+  };
+  const sections = {
+    kicker: (z, tier) => kicker(0, z, ...KICK[pick(tier)]),
+    pair: (z) => { // two rails or boxes side by side
+      const len = 11 + Math.round(R() * 7), h = 0.45 + R() * 0.4, kind = R() < 0.4 ? 'box' : 'rail', x = 12 + R() * 10;
+      rail(-x, z, len, h, kind); rail(x, z, len, R() < 0.5 ? h : 0.5, R() < 0.5 ? kind : 'box');
+      return { z1: z + len + 6 };
+    },
+    kinked: (z) => { const x = 14 + R() * 6, len = 13 + R() * 4; rail(-x, z, len, 0.75, 'rail', 3); rail(x, z, len, 0.75, 'rail', -3); return { z1: z + len + 6 }; },
+    jib: (z) => { const len = 16 + R() * 8; rail(0, z, len, 0.5, 'box'); rail(-24, z + 4, 12, 0.7); rail(24, z + 4, 12, 0.7, 'box'); return { z1: z + len + 6 }; },
+    rollers: (z) => rollers(0, z, 0.6 + R() * 0.4, 7 + R() * 2, 4, 16),
+    spine: (z) => kicker(0, z, 1.4, 4, 0, 9, 9, { mult: 1 }),
+    three: (z) => { kicker(-20, z, ...KICK.l.slice(0, 4), 7); kicker(0, z, ...KICK.xxl); return kicker(21, z, 4.4, 11, 13, 38, 12); },
+    step: (z) => stepUp(0, z, 3, 8, 7, 30, 26, 11),
+    hip: (z) => kicker(R() < 0.5 ? -10 : 10, z, 4, 11, 12, 36, 12, { ang: R() < 0.5 ? 0.28 : -0.28 }),
+  };
+  const easy = ['kicker', 'pair', 'kicker', 'pair', 'rollers', 'jib'];
+  const mid = ['kicker', 'pair', 'kinked', 'jib', 'spine', 'kicker', 'rollers'];
+  const pro = ['kicker', 'pair', 'three', 'step', 'hip', 'kicker', 'kinked'];
+  let z = 150, last = '';
+  while (z < 1600) {
+    const pool = z < 520 ? easy : z < 990 ? mid : pro;
+    const tier = z < 520 ? ['s', 'm'] : z < 990 ? ['m', 'l'] : ['xl', 'xxl', 'l'];
+    let type = pick(pool);
+    if (type === last) type = pick(pool);
+    // Keep the Pro Line start (and its arch) clear.
+    const reach = { kicker: 110, three: 120, step: 110, hip: 110 }[type] || 40;
+    if (z < 990 && z + reach > 960) { z = 1025; continue; }
+    const f = sections[type](z, tier);
+    last = type;
+    // Leave a run-in after rails and boxes so the next jump has a clean line.
+    z = Math.max(z + 20, f.z1) + 18 + R() * 22 + (['jib', 'pair', 'kinked'].includes(type) ? 35 : 0);
+  }
+  // A big air to finish, when it fits.
+  if (z < 1700) kicker(0, Math.max(z, 1610), 4.6, 12, 10, 44, 14);
+}
+
+// Natural kickers and cliffs off the groomed lane, away from the other areas.
+function randomBackcountry() {
+  const R = rand;
+  const clear = (x, z, m) => {
+    if (Math.abs(x) < LANE + 25 || Math.abs(x - LIFT_X) < 18) return false;
+    if (Math.abs(x - PIPE.x) < 60 && z > PIPE.z0 - 90 && z < PIPE.z1 + 60) return false;
+    if (Math.abs(x - JUMP.x) < 60 && z > JUMP.z0 - 50 && z < JUMP.z0 + JUMP.len + 40) return false;
+    if (bxDist(x, z) < 45 && z > BX.z0 - 60 && z < BX.z1 + 60) return false;
+    for (const f of features) if (x > f.x0 - m && x < f.x1 + m && z > f.z0 - m && z < f.z1 + m) return false;
+    return true;
+  };
+  let hits = 0, cliffs = 0;
+  for (let i = 0; i < 400 && (hits < 7 || cliffs < (MAP.cliffs || 4)); i++) {
+    const x = (R() < 0.5 ? -1 : 1) * (75 + R() * 120), z = 200 + R() * 1550;
+    if (!clear(x, z, 30)) continue;
+    if (hits < 7 && R() < 0.6) { kicker(x, z, 1.6 + R() * 0.9, 6 + R() * 2, 0, 10 + R() * 4, 10 + R() * 2, { natural: true }); hits++; }
+    else if (cliffs < (MAP.cliffs || 4)) { cliff(x, z, 4 + R() * 5, 24 + R() * 6); cliffs++; }
+  }
+}
+
+// Switch to a map: rebuild the slope, the park, the backcountry, trees and
+// rocks. Call buildTerrain() afterwards for the meshes.
+export function loadMap(map) {
+  MAP = map;
+  MAP.noise = MAP.id === 'classic' ? 0 : (MAP.seed % 97) * 0.37;
+  seed = MAP.seed;
+  fillFall();
+  JUMP.base = fallLine(JUMP.z0 + JUMP.len) + JUMP.x * -0.035 - JUMP.P[JUMP.P.length - 1];
+  SUN = new THREE.Vector3(...MAP.sun).normalize();
+  features.length = 0; rails.length = 0; obstacles.length = 0; solids.length = 0;
+  trees.length = 0; rocks.length = 0; grid.clear();
+  if (MAP.park === 'classic') classicPark(); else { randomPark(); }
+  fixedFeatures();
+  if (MAP.park !== 'classic') randomBackcountry();
+  if (MAP.park !== 'classic') seed = MAP.seed * 31 + 5; // trees and rocks
+  scatter();
+}
+loadMap(MAPS[0]);
