@@ -1095,7 +1095,7 @@ export class Skier {
       this.groundQuat(target);
       // On a board the rider stays almost upright and the board tips on
       // its edge, so a left turn looks and feels like a right turn.
-      const lk = this.board ? 0.3 : 1;
+      const lk = this.board ? 0.3 + 0.35 * (this.square || 0) : 1;
       q1.setFromAxisAngle(Z, (this.switch ? -this.lean : this.lean) * lk);
       target.multiply(q1);
       if (this.butter) {
@@ -1141,7 +1141,11 @@ export class Skier {
     M.head.rotation.x = -0.1 - P.crouch * 0.45;
     // On a board the body stands sideways (left foot forward) and the head
     // looks down the hill.
-    const yaw = this.board ? BOARD_YAW : 0;
+    // In a turn on a board the rider squares up towards the fall line the
+    // same amount either way, so toeside and heelside turns look alike.
+    const turning = this.board && this.state === 'ground' ? Math.min(1, Math.abs(this.lean) / 0.35) : 0;
+    this.square = (this.square || 0) + (turning - (this.square || 0)) * (1 - Math.exp(-8 * dt));
+    const yaw = this.board ? BOARD_YAW * (1 - 0.85 * this.square) : 0;
     M.body.rotation.y = yaw + (this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) * (this.board ? 0.4 : 1) : 0);
     M.head.rotation.y = -yaw * 0.8;
     if (this.board) {
