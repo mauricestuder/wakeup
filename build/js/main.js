@@ -116,9 +116,9 @@ input.handlers.press = (id) => {
   }
 };
 input.handlers.release = (id) => {
-  if (id !== 'fire') return;
-  arsenal.trigger(false);
-  if (game.state === 'playing' && game.mode === 'edit' && settings.editRelease && editor.changed) {
+  if (id === 'fire') arsenal.trigger(false);
+  // Edit on release: letting go of select or reset confirms the edit.
+  if ((id === 'fire' || id === 'editReset') && game.state === 'playing' && game.mode === 'edit' && settings.editRelease && editor.changed) {
     if (editor.confirm()) setMode(game.before);
   }
 };
@@ -254,7 +254,9 @@ let last = performance.now(), acc = 0;
 
 const TIPS = {
   build: () => `${input.label('fire')} place · hold to keep building`,
-  edit: () => `${input.label('fire')} mark tiles · ${input.label('edit')} confirm · ${input.label('editReset')} reset`,
+  edit: () => (settings.editRelease
+    ? `Hold ${input.label('fire')} and drag over tiles · let go to confirm · ${input.label('editReset')} reset`
+    : `${input.label('fire')} mark tiles · ${input.label('edit')} confirm · ${input.label('editReset')} reset`),
 };
 
 function tick(dt) {

@@ -132,11 +132,28 @@ export class Player {
     const len = Math.hypot(f, s);
     if (len) { f /= len; s /= len; }
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    const speed = b.h === CROUCH && b.onGround ? T.crouchSpeed : T.runSpeed;
-    const wx = (-sin * f + cos * s) * speed, wz = (-cos * f - sin * s) * speed;
-    const rate = (len ? T.groundAccel : T.groundStop) * (b.onGround ? 1 : T.airControl) * dt;
-    const ex = wx - b.vx, ez = wz - b.vz, e = Math.hypot(ex, ez);
-    if (e <= rate || e === 0) { b.vx = wx; b.vz = wz; } else { b.vx += ex / e * rate; b.vz += ez / e * rate; }
+    const max = b.h === CROUCH && b.onGround ? T.crouchSpeed : T.runSpeed;
+    const ctrl = b.onGround ? 1 : T.airControl;
+    const sp = Math.hypot(b.vx, b.vz);
+    if (len) {
+      const dx = -sin * f + cos * s, dz = -cos * f - sin * s;
+      // Turning is quick: the speed there already is swings round to the new direction ...
+      const k = Math.min(1, T.grip * ctrl * dt);
+      b.vx += (dx * sp - b.vx) * k;
+      b.vz += (dz * sp - b.vz) * k;
+      // ... but picking up speed takes a moment.
+      const along = b.vx * dx + b.vz * dz;
+      const want = along > max ? Math.max(max, along - T.groundStop * ctrl * dt) : Math.min(max, along + T.groundAccel * ctrl * dt);
+      b.vx += dx * (want - along);
+      b.vz += dz * (want - along);
+      const now = Math.hypot(b.vx, b.vz), cap = Math.max(max, sp);
+      if (now > cap) { b.vx *= cap / now; b.vz *= cap / now; }
+    } else if (sp > 0) {
+      // No key held: the character runs out over a short distance.
+      const k = Math.max(0, sp - T.groundStop * ctrl * dt) / sp;
+      b.vx *= k;
+      b.vz *= k;
+    }
 
     this.coyote = b.onGround ? T.coyote + 1e-3 : this.coyote - dt;
     this.jumpBuf -= dt;

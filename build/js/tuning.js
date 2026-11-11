@@ -7,9 +7,10 @@ const KEY = 'highground.tuning';
 export const DEFS = [
   { g: 'Movement', k: 'runSpeed', label: 'Run speed', unit: 'm/s', min: 3, max: 9, step: 0.1, v: 5.6 },
   { k: 'crouchSpeed', label: 'Crouch speed', unit: 'm/s', min: 1, max: 6, step: 0.1, v: 3 },
-  { k: 'groundAccel', label: 'Acceleration', min: 10, max: 150, step: 1, v: 60 },
-  { k: 'groundStop', label: 'Stopping power', min: 10, max: 150, step: 1, v: 55 },
-  { k: 'airControl', label: 'Air control', min: 0, max: 1, step: 0.05, v: 0.35 },
+  { k: 'groundAccel', label: 'Acceleration (higher = snappier start)', min: 4, max: 150, step: 1, v: 20 },
+  { k: 'groundStop', label: 'Stopping power (higher = shorter slide)', min: 4, max: 150, step: 1, v: 18 },
+  { k: 'grip', label: 'Turning grip', min: 2, max: 40, step: 1, v: 10 },
+  { k: 'airControl', label: 'Air control', min: 0, max: 1, step: 0.05, v: 0.7 },
   { k: 'gravity', label: 'Gravity', min: 10, max: 45, step: 0.5, v: 26 },
   { k: 'jumpSpeed', label: 'Jump power', min: 5, max: 12, step: 0.1, v: 8.2 },
   { k: 'coyote', label: 'Late jump window', unit: 's', min: 0, max: 0.25, step: 0.01, v: 0.09 },

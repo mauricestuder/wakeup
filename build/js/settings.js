@@ -10,10 +10,10 @@ export const OPTIONS = [
   { k: 'buildSens', label: 'While building', unit: '×', min: 0.3, max: 2, step: 0.05, v: 1 },
   { k: 'editSens', label: 'While editing', unit: '×', min: 0.3, max: 2, step: 0.05, v: 1 },
   { k: 'invertY', label: 'Invert up / down', choices: [[false, 'Off'], [true, 'On']], v: false },
+  { k: 'editRelease', label: 'Edit on release', choices: [[false, 'Off'], [true, 'On']], v: false },
   { k: 'fov', label: 'Field of view', unit: '°', min: 60, max: 110, step: 1, v: 80 },
   { k: 'camDist', label: 'Camera distance', unit: ' m', min: 1.5, max: 5, step: 0.1, v: 3.2 },
   { k: 'volume', label: 'Volume', unit: '%', min: 0, max: 100, step: 5, v: 70 },
-  { k: 'editRelease', label: 'Confirm edit when the button is let go', choices: [[false, 'Off'], [true, 'On']], v: false },
   { k: 'rebuild', label: 'Enemy puts broken walls back', choices: [['off', 'Off'], ['slow', 'Slow'], ['fast', 'Fast']], v: 'fast' },
   { k: 'hints', label: 'Key hints on screen', choices: [[false, 'Off'], [true, 'On']], v: true },
 ];
