@@ -94,6 +94,7 @@ export const sfx = {
   hit() { tone('sine', 1250, 1250, 0.16, 0.05); },
   head() { tone('sine', 1900, 1900, 0.2, 0.07); tone('sine', 2850, 2850, 0.1, 0.09, 0.02); },
   down() { tone('triangle', 620, 930, 0.22, 0.1); tone('triangle', 930, 1400, 0.22, 0.14, 0.08); },
+  mantle() { noise('lowpass', 700, 300, 0.14, 0.14); noise('bandpass', 1400, 900, 0.07, 0.05, 0.12, 2); },
   jump() { noise('lowpass', 500, 900, 0.07, 0.08); },
   land() { noise('lowpass', 420, 150, 0.16, 0.09); },
   reset() { tone('sine', 440, 660, 0.14, 0.1); tone('sine', 660, 880, 0.12, 0.1, 0.07); },

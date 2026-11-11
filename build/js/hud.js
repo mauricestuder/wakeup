@@ -37,6 +37,7 @@ export class Hud {
     this.barsEl = $('bars');
     this.statsEl = $('stats');
     this.hintsEl = $('hints');
+    this.staminaEl = $('stamina');
     this.slotEls = {};
     const bar = $('slots');
     for (const [action, icon, name] of SLOTS) {
@@ -65,14 +66,14 @@ export class Hud {
   keys() {
     for (const [action] of SLOTS) this.slotEls[action].querySelector('b').textContent = label(action);
     $('menuKeys').innerHTML =
-      `<b>${['forward', 'left', 'back', 'right'].map(label).join(' ')} · ${label('jump')} · ${label('crouch')}</b><span>move, jump, crouch</span>` +
+      `<b>${['forward', 'left', 'back', 'right'].map(label).join(' ')} · ${label('jump')} · ${label('sprint')} · ${label('crouch')}</b><span>move, jump (hold forward at a ledge to climb it), sprint, crouch</span>` +
       `<b>${label('pick')}</b><span>pickaxe</span>` +
       `<b>${['gun1', 'gun2', 'gun3'].map(label).join(' · ')} · ${label('aim')}</b><span>shotgun, rifle, SMG · hold to aim</span>` +
       `<b>${['wall', 'floor', 'ramp', 'roof'].map(label).join(' · ')}</b><span>wall, floor, ramp, roof</span>` +
-      `<b>${label('edit')}</b><span>edit your own piece: mark tiles, then confirm</span>` +
+      `<b>${label('edit')} · ${label('quickReset')}</b><span>edit your own piece: mark tiles, then confirm · reset it in one press</span>` +
       `<b>${label('resetArena')}</b><span>reset the arena</span>`;
     this.hintsEl.innerHTML =
-      `<span><b>${label('aim')}</b> aim</span><span><b>${label('edit')}</b> edit</span><span><b>${label('reload')}</b> reload</span>` +
+      `<span><b>${label('sprint')}</b> sprint</span><span><b>${label('aim')}</b> aim</span><span><b>${label('edit')}</b> edit</span><span><b>${label('quickReset')}</b> reset piece</span><span><b>${label('reload')}</b> reload</span>` +
       `<span><b>${label('resetArena')}</b> reset arena</span><span><b>Esc</b> menu</span>`;
   }
 
@@ -110,6 +111,16 @@ export class Hud {
     this.toastEl.textContent = text;
     this.toastEl.classList.add('show');
     this.toastT = time;
+  }
+
+  // The sprint bar only shows while it is not full.
+  stamina(v) {
+    const pct = Math.round(v * 100);
+    if (this.cache.stam === pct) return;
+    this.cache.stam = pct;
+    this.staminaEl.firstChild.style.width = pct + '%';
+    this.staminaEl.classList.toggle('show', pct < 100);
+    this.staminaEl.classList.toggle('low', pct < 25);
   }
 
   stats(text) { this.set(this.statsEl, 'stats', text); }
@@ -153,7 +164,7 @@ export class Hud {
     }
     for (let n = 0; n < dummies.length; n++) {
       const d = dummies[n], bar = this.bars[n];
-      let v = d.alive ? this.project(d.x, d.y + 2.15, d.z) : null;
+      let v = d.alive ? this.project(d.x, d.y + d.headY + d.headR + 0.25, d.z) : null;
       if (v) {
         // not through walls
         const c = this.camera.position;

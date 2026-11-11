@@ -12,7 +12,8 @@ export const ACTIONS = [
   { id: 'left', label: 'Move left', def: 'KeyA' },
   { id: 'right', label: 'Move right', def: 'KeyD' },
   { id: 'jump', label: 'Jump', def: 'Space' },
-  { id: 'crouch', label: 'Crouch', def: 'ShiftLeft' },
+  { id: 'sprint', label: 'Sprint (hold)', def: 'ShiftLeft' },
+  { id: 'crouch', label: 'Crouch', def: 'KeyX' },
   { id: 'fire', label: 'Shoot / swing / place / select', def: 'Mouse0', g: 'Actions' },
   { id: 'aim', label: 'Aim (zoom in)', def: 'Mouse2', ctx: 'gun' },
   { id: 'reload', label: 'Reload', def: 'KeyR' },
@@ -25,7 +26,8 @@ export const ACTIONS = [
   { id: 'ramp', label: 'Ramp', def: 'KeyE' },
   { id: 'roof', label: 'Roof', def: 'KeyV' },
   { id: 'edit', label: 'Edit / confirm', def: 'KeyF', g: 'Editing' },
-  { id: 'editReset', label: 'Reset edit', def: 'Mouse2', ctx: 'edit' },
+  { id: 'editReset', label: 'Reset tiles while editing', def: 'Mouse2', ctx: 'edit' },
+  { id: 'quickReset', label: 'Reset piece in one press', def: 'WheelDown' },
   { id: 'resetArena', label: 'Reset arena', def: 'KeyT', g: 'Other' },
 ];
 let group = '';
@@ -52,7 +54,7 @@ try {
   if (saved && typeof saved === 'object') {
     for (const a of ACTIONS) binds[a.id] = typeof saved[a.id] === 'string' ? saved[a.id] : '';
     // Actions that are newer than the saved keys take their usual key, or the next free one.
-    const spare = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyX', 'KeyZ', 'KeyG', 'KeyB'];
+    const spare = ['KeyX', 'KeyZ', 'KeyG', 'KeyB', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'];
     for (const a of ACTIONS) {
       if (typeof saved[a.id] === 'string') continue;
       binds[a.id] = [a.def, ...spare].find((code) => !clashes(a.id, code).length) || '';

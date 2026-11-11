@@ -37,6 +37,7 @@ const WALL_DEFS = [
   ['Low wall', 'XXX XXX ...', '', cols([0, 1, 2], L / 4)],
   ['Low wall, narrow', 'XXX XXX XX.', 'm', cols([2], L / 4)],
   ['Triangle', 'XX. X.. ...', 'm', [[[0, 0], [C, 0], [C, L]]]],
+  ['Corner opening', '... ..X .XX', 'm', [[[0, 0], [C, L], [0, L]]]],     // the same slant, open below it
   ['Gable', 'X.X ... ...', '', [[[0, 0], [C, 0], [C / 2, L]]]],
   ['Brace', '..X .XX XXX', 'm', [[[0, L / 3], [2 * C / 3, L], [0, L]]]],
 ];

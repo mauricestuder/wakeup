@@ -13,6 +13,8 @@ const SUIT = 0x1f8f96, SUIT2 = 0x176a72, DARK = 0x16323a, TRIM = 0xffb23e, SHELL
 // Limb lengths: upper arm, forearm, thigh, shin, and the sole under the ankle.
 const UA = 0.3, FA = 0.29, TL = 0.42, SL = 0.4, SOLE = 0.075;
 const STANDING = TL + SL + SOLE;
+// The figure is modelled 1.8 tall and shrunk to the body's real height.
+const SCALE = STAND / 1.8, EYE = STAND - 0.22, EYE_LOW = CROUCH - 0.1;
 
 // What the hands hold. `at` is where the grip sits (seen from the hips), `r`
 // and `l` are where the right and left hand go on the tool, `twist` turns the
@@ -49,6 +51,7 @@ function buildModel() {
   const lying = (g) => g.rotateX(Math.PI / 2);   // turns an upright shape along z
 
   const root = new THREE.Group();
+  root.scale.setScalar(SCALE);
   const hips = group(root, 0, STANDING, 0);
   add(hips, ball(0.165, 1.12, 0.85, 0.92), DARK, 0, 0.03, 0);
   const torso = group(hips);
@@ -176,7 +179,7 @@ export class Player {
     this.kick = 0;
     this.coyote = 0;
     this.jumpBuf = 0;
-    this.eye = 1.55;
+    this.eye = EYE;
     this.liftOff = 0;
     this.camDist = settings.camDist;
     this.side = T.camRight;
@@ -188,6 +191,11 @@ export class Player {
     this.zoom = 1;             // zoom of the gun in hand when fully aimed
     this.lookScale = 1;        // mouse speed factor while aiming
     this.swing = 0;            // 0..1 through a pickaxe swing
+    this.stamina = 1;          // 0..1, what is left for sprinting
+    this.spent = false;        // ran dry: wait for it to come back a bit
+    this.sprinting = false;
+    this.sprintK = 0;
+    this.mantle = null;        // { t, dur, x0, y0, z0, x1, y1, z1 } while pulling up on a ledge
     this.crouchK = 0;
     this.legs = [0, 0.1, 0, 0.1];   // thigh and knee angles, left then right
     this.lean = 0;
@@ -210,6 +218,9 @@ export class Player {
     this.camDist = settings.camDist;
     this.ads = this.adsWant = 0;
     this.swing = 0;
+    this.stamina = 1;
+    this.spent = this.sprinting = false;
+    this.mantle = null;
   }
 
   setTool(name) {
@@ -231,6 +242,20 @@ export class Player {
     const b = this.body;
     this.prev.x = b.x; this.prev.y = b.y; this.prev.z = b.z;
 
+    // Pulling up on a ledge: first up along it, then over the edge.
+    if (this.mantle) {
+      const m = this.mantle;
+      m.t += dt;
+      const u = Math.min(1, m.t / m.dur), up = smooth(u / 0.62), over = smooth((u - 0.5) / 0.5);
+      b.x = m.x0 + (m.x1 - m.x0) * over;
+      b.z = m.z0 + (m.z1 - m.z0) * over;
+      b.y = m.y0 + (m.y1 - m.y0) * up;
+      b.vx = b.vy = b.vz = 0;
+      this.jumpBuf = 0;
+      if (u >= 1) { this.mantle = null; this.world.place(b, m.x1, m.y1, m.z1); }
+      return;
+    }
+
     const crouch = input.down('crouch');
     if (crouch) b.h = CROUCH;
     else if (b.h !== STAND && this.world.canBe(b, STAND)) b.h = STAND;
@@ -240,7 +265,14 @@ export class Player {
     const len = Math.hypot(f, s);
     if (len) { f /= len; s /= len; }
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    const max = b.h === CROUCH && b.onGround ? T.crouchSpeed : T.runSpeed;
+    // Sprinting: forward only, not crouched, not aimed in, and only while there is breath left.
+    if (this.spent && this.stamina > 0.25) this.spent = false;
+    this.sprinting = input.down('sprint') && f > 0 && b.h !== CROUCH && this.adsWant === 0 && !this.spent;
+    if (this.sprinting) {
+      this.stamina -= dt / T.sprintTime;
+      if (this.stamina <= 0) { this.stamina = 0; this.spent = true; this.sprinting = false; }
+    } else this.stamina = Math.min(1, this.stamina + dt / T.sprintRest);
+    const max = b.h === CROUCH && b.onGround ? T.crouchSpeed : this.sprinting ? T.sprintSpeed : T.runSpeed;
     const ctrl = b.onGround ? 1 : T.airControl;
     const sp = Math.hypot(b.vx, b.vz);
     if (len) {
@@ -278,6 +310,17 @@ export class Player {
     this.world.step(b, dt);
     if (air && b.onGround && vy < -5) sfx.land();
     if (b.lift) { this.liftOff -= b.lift; b.lift = 0; }
+
+    // In the air, pushing forward at a ledge that the jump doesn't quite reach: grab it.
+    if (!b.onGround && T.mantleReach > 0 && f > 0 && b.vy < 3) {
+      const px = b.x - sin * 0.75, pz = b.z - cos * 0.75;
+      const top = this.world.ledge(b, px, pz, b.y + 0.2, b.y + T.mantleReach);
+      if (top !== null) {
+        this.mantle = { t: 0, dur: 0.24 + 0.11 * (top - b.y), x0: b.x, y0: b.y, z0: b.z, x1: px, y1: top, z1: pz };
+        b.vx = b.vy = b.vz = 0;
+        sfx.mantle();
+      }
+    }
   }
 
   // Camera position for the current look direction. Also fills the aim ray,
@@ -303,7 +346,7 @@ export class Player {
 
     this.liftOff = T.camLift > 0 ? this.liftOff * Math.exp(-dt / (T.camLift / 2.5)) : 0;
     if (Math.abs(this.liftOff) < 0.002) this.liftOff = 0;
-    this.eye += ((b.h === CROUCH ? 1.15 : 1.55) - this.eye) * Math.min(1, dt * 16);
+    this.eye += ((b.h === CROUCH ? EYE_LOW : EYE) - this.eye) * Math.min(1, dt * 16);
     this.kick *= Math.exp(-dt * 14);
     this.pivot.set(x, y + this.eye + this.liftOff, z);
 
@@ -311,7 +354,9 @@ export class Player {
     this.ads += (this.adsWant - this.ads) * Math.min(1, dt * 15);
     if (!this.adsWant && this.ads < 0.003) this.ads = 0;
     const zoom = 1 + (this.zoom - 1) * this.ads;
-    const fov = 2 * Math.atan(Math.tan(settings.fov * Math.PI / 360) / zoom) * 180 / Math.PI;
+    this.sprintK += ((this.sprinting ? 1 : 0) - this.sprintK) * Math.min(1, dt * 8);
+    const wide = Math.min(125, settings.fov * (1 + 0.07 * this.sprintK));   // the view opens up a little at a sprint
+    const fov = 2 * Math.atan(Math.tan(wide * Math.PI / 360) / zoom) * 180 / Math.PI;
     if (Math.abs(fov - this.camera.fov) > 0.004) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     this.lookScale = 1 + (settings.aimSens / this.zoom - 1) * this.ads;
 
@@ -352,10 +397,11 @@ export class Player {
     const s = Math.sin(this.phase), c = Math.cos(this.phase);
 
     // legs: thigh forward and knee bend, left then right
+    const stride = 0.6 * run * (1 - 0.35 * cr) * (1 + 0.3 * this.sprintK);
     const want = b.onGround
-      ? [0.6 * run * (1 - 0.35 * cr) * s + 1.1 * cr, 0.1 + 1.15 * run * Math.max(0, c) + 2.05 * cr,
-        -0.6 * run * (1 - 0.35 * cr) * s + 1.1 * cr, 0.1 + 1.15 * run * Math.max(0, -c) + 2.05 * cr]
-      : [0.6, 1.05, -0.2, 0.65];
+      ? [stride * s + 1.1 * cr, 0.1 + 1.15 * run * Math.max(0, c) + 2.05 * cr,
+        -stride * s + 1.1 * cr, 0.1 + 1.15 * run * Math.max(0, -c) + 2.05 * cr]
+      : this.mantle ? [0.9, 1.3, 0.1, 0.5] : [0.6, 1.05, -0.2, 0.65];
     const g = this.legs;
     for (let n = 0; n < 4; n++) g[n] += (want[n] - g[n]) * k;
     let hip = 0;
@@ -369,7 +415,7 @@ export class Player {
     m.hips.position.y = hip + (STANDING - hip) * 0.35 * (1 - cr);
 
     // chest: leans into the run, turns for a gun stance
-    this.lean += ((b.onGround ? 0.12 * run + 0.62 * cr : 0.16) - this.lean) * k;
+    this.lean += ((b.onGround ? 0.12 * run + 0.62 * cr + 0.12 * this.sprintK : this.mantle ? 0.3 : 0.16) - this.lean) * k;
     this.twist += (def.twist * (1 + 0.25 * this.ads) - this.twist) * k;
     const pitch = Math.max(-1.1, Math.min(1.1, this.pitch));
     m.torso.rotation.set(-this.lean, this.twist, 0);
@@ -388,7 +434,11 @@ export class Player {
     INV.copy(m.torso.quaternion).invert();
     const hand = (arm, off) => reach(arm, V.set(off[0], off[1], off[2]).applyQuaternion(hold.quaternion).add(hold.position).applyQuaternion(INV));
     hand(m.armR, def.r);
-    if (def.l) hand(m.armL, def.l);
+    if (this.mantle) {
+      // one hand up on the ledge
+      m.armL.sh.rotation.set(2.7, 0, -0.15);
+      m.armL.el.rotation.x = 0.35;
+    } else if (def.l) hand(m.armL, def.l);
     else {
       // the free arm swings against its leg
       m.armL.sh.rotation.set(b.onGround ? -g[0] * 0.9 + 0.5 * cr : 0.5, 0, b.onGround ? -0.1 : -0.5);
@@ -398,7 +448,7 @@ export class Player {
     // shadow on the ground below, smaller and fainter from high up
     const hit = this.world.ray(x, y + 0.4, z, 0, -1, 0, 60);
     const drop = hit ? Math.max(0, hit.t - 0.4) : 60, size = 1 / (1 + drop * 0.22);
-    m.shadow.position.y = 0.03 - drop - this.liftOff;
+    m.shadow.position.y = (0.03 - drop - this.liftOff) / SCALE;
     m.shadow.scale.setScalar(size);
     m.shadow.material.opacity = 0.5 * fade * size;
     m.root.updateMatrixWorld(true);

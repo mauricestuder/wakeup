@@ -10,8 +10,8 @@ import { inside } from './shapes.js';
 import { T } from './tuning.js';
 
 export const HW = 0.4;           // half width of the player
-export const STAND = 1.8;
-export const CROUCH = 1.2;
+export const STAND = 1.55;
+export const CROUCH = 1.05;
 const STEP_SLOPE = 0.75;         // how far a ramp or roof may lift the feet
 const STEP_BOX = 0.5;            // same for the top of a tile (ramp onto floor)
 const SNAP = 0.3;                // stay glued when walking downhill
@@ -245,6 +245,48 @@ export class World {
     b.y = ny;
   }
 
+  // Is a body of height h free of everything at this spot? (Used for mantling,
+  // so it looks at the place itself and not at where the body is now.)
+  clear(x, y, z, h) {
+    for (const t of this.near) {
+      if (t.y1 > y + 0.05 && overlaps(t, x, y, z, h)) return false;
+    }
+    const ci = cellOf(x), cj = cellOf(z);
+    for (let k = lo(y), k1 = hi(y, h); k <= k1; k++) {
+      for (const type of SLOPED) {
+        const p = this.pieces.get(type, ci, k, cj);
+        const s = p ? surfaceAt(p, x, z) : null;
+        if (s !== null && s > y + 0.05 && s - THICK[type] < y + h) return false;
+      }
+    }
+    return x >= HW && x <= SIZE - HW && z >= HW && z <= SIZE - HW;
+  }
+
+  // A ledge to pull up on: the lowest surface under (x, z) between yMin and
+  // yMax that has room to stand on, with room to rise to it from where the
+  // body is. Returns its height, or null.
+  ledge(b, x, z, yMin, yMax) {
+    this.collect(b.x, b.y, b.z, yMax - b.y + b.h + 0.5, 1.3);
+    const tops = [];
+    for (const t of this.near) {
+      if (t.y1 > yMin && t.y1 <= yMax && x + HW > t.x0 + EPS && x - HW < t.x1 - EPS && z + HW > t.z0 + EPS && z - HW < t.z1 - EPS) tops.push(t.y1);
+    }
+    const ci = cellOf(x), cj = cellOf(z);
+    for (let k = lo(b.y), k1 = hi(yMax, b.h); k <= k1; k++) {
+      for (const type of SLOPED) {
+        const p = this.pieces.get(type, ci, k, cj);
+        const s = p ? surfaceAt(p, x, z) : null;
+        if (s !== null && s > yMin && s <= yMax) tops.push(s);
+      }
+    }
+    tops.sort((a, c) => a - c);
+    for (const top of tops) {
+      // room on top, and nothing over my head on the way up
+      if (this.clear(x, top, z, b.h) && this.clear(b.x, b.y, b.z, top - b.y + b.h)) return top;
+    }
+    return null;
+  }
+
   // Can the body be `h` tall where it is now (used to stand up again)?
   canBe(b, h) {
     this.collect(b.x, b.y, b.z, h);
@@ -275,7 +317,7 @@ export class World {
     const s = surfaceAt(p, b.x, b.z);
     if (s === null || b.y >= s - EPS) return;
     this.collect(b.x, s, b.z, b.h);
-    if (s - b.y <= (p.type === 'r' ? L : 1.5) + EPS && this.free(b, b.x, s, b.z, b.h)) {
+    if (s - b.y <= L + EPS && this.free(b, b.x, s, b.z, b.h)) {
       b.lift += s - b.y;
       b.y = s; b.vy = 0; b.onGround = true;
     } else {
@@ -322,7 +364,8 @@ export class World {
   // ---------- rays ----------
   // Returns the nearest hit within tMax, or null. The result object is reused.
   //   dummies   also test the targets
-  //   pick      own walls and floors count with their full outline (edit pick)
+  //   pick      own walls and floors count with their full outline, openings
+  //             included (the edit pick falls back on this)
   //   skip      a piece to ignore
   ray(ox, oy, oz, dx, dy, dz, tMax, { dummies = false, pick = false, skip = null } = {}) {
     const hit = this.hit;

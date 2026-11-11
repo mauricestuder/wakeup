@@ -43,12 +43,31 @@ export class Editor {
 
   get active() { return !!this.piece; }
 
-  // The own piece under the crosshair, if it is in reach.
+  // The own piece under the crosshair, if it is in reach. An opening counts as
+  // open: looking through a window picks what stands behind it, so two pieces
+  // can be edited one after the other. With nothing of mine behind it, the
+  // opened piece itself is picked, so it can be closed again.
   pick() {
-    const a = this.player.rig();
-    const h = this.world.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach, { pick: true });
+    const a = this.player.rig(), w = this.world;
+    let h = w.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach);
+    if (h && h.kind === 'piece' && h.piece.owner === 'me') return h.piece;
+    h = w.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach, { pick: true });
     if (!h || h.kind !== 'piece' || h.piece.owner !== 'me') return null;
     return h.piece;
+  }
+
+  // One press: the own piece under the crosshair goes back to how it was
+  // placed. Returns false when there is no such piece.
+  resetPiece() {
+    const p = this.pick(), ps = this.pieces;
+    if (!p) return false;
+    const before = p.mesh.geometry;
+    if (p.type === 'r') { if (p.form !== 'F') ps.setRamp(p, 'F', p.dir, 0); } else ps.setMask(p, FULL[p.type]);
+    if (p.mesh.geometry !== before) {
+      sfx.editReset();
+      if (p.type === 'r' || p.type === 'c') this.world.onTurned(p, this.player.body);
+    }
+    return true;
   }
 
   // Edit key outside edit mode. Returns true when editing started.

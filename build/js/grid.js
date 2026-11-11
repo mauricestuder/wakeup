@@ -16,7 +16,7 @@ export const N = 25;         // cells per side
 export const H = 250;        // no real height limit: this is 750 m up
 export const WALL_LEVELS = 3; // the map walls are this many levels high
 export const WT = 0.2;       // wall and floor thickness
-export const CONE_H = 1.5;   // roof height
+export const CONE_H = L;     // roof height: a full level, up to the top of the wall beside it
 export const RAMP_THICK = 0.25;
 export const SIZE = N * C;
 
@@ -34,7 +34,7 @@ export function inBounds(type, i, k, j) {
     case 'wz': return i >= 0 && i <= N - 1 && j >= 1 && j <= N - 1 && k >= 0 && k <= H - 1;
     case 'f': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 1 && k <= H;
     case 'r': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 0 && k <= H - 1;
-    case 'c': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 1 && k <= H;
+    case 'c': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 0 && k <= H;
     default: return false;
   }
 }

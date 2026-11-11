@@ -13,12 +13,14 @@ export const OPTIONS = [
   { k: 'invertY', label: 'Invert up / down', choices: [[false, 'Off'], [true, 'On']], v: false },
   { k: 'editRelease', label: 'Edit on release', choices: [[false, 'Off'], [true, 'On']], v: false },
   { k: 'fov', label: 'Field of view', unit: '°', min: 60, max: 110, step: 1, v: 80 },
-  { k: 'camDist', label: 'Camera distance', unit: ' m', min: 1.5, max: 5, step: 0.1, v: 3.4 },
+  { k: 'camDist', label: 'Camera distance', unit: ' m', min: 1.5, max: 5, step: 0.1, v: 2.8 },
   { k: 'glass', label: 'See-through builds', unit: '%', min: 0, max: 85, step: 5, v: 55 },
   { k: 'volume', label: 'Volume', unit: '%', min: 0, max: 100, step: 5, v: 70 },
   { k: 'rebuild', label: 'Enemy puts broken walls back', choices: [['off', 'Off'], ['slow', 'Slow'], ['fast', 'Fast']], v: 'fast' },
   { k: 'hints', label: 'Key hints on screen', choices: [[false, 'Off'], [true, 'On']], v: true },
 ];
+
+const VERSION = 2, OLD_DEFAULTS = { camDist: [3.2, 3.4] };
 
 export const settings = {};
 for (const o of OPTIONS) settings[o.k] = o.v;
@@ -26,13 +28,15 @@ try {
   const saved = JSON.parse(localStorage.getItem(KEY)) || {};
   for (const o of OPTIONS) {
     const v = saved[o.k];
+    // a value that was only ever the old default moves along with the new default
+    if ((saved.v || 1) < VERSION && OLD_DEFAULTS[o.k]?.includes(v)) continue;
     if (o.choices) { if (o.choices.some((c) => c[0] === v)) settings[o.k] = v; }
     else if (typeof v === 'number' && isFinite(v)) settings[o.k] = Math.min(o.max, Math.max(o.min, v));
   }
 } catch { /* first visit or private mode */ }
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ ...settings, v: VERSION })); } catch { /* private mode */ }
 }
 
 // Radians per pixel of mouse movement.

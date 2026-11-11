@@ -19,15 +19,17 @@ function boxAround(i, j, roof = true, levels = 1) {
 // Middle of cell (i, j), standing on level k.
 const at = (i, j, k = 0) => [(O + i + 0.5) * C, k * L, (O + j + 0.5) * C];
 
+const SIZE = 0.86;   // the dummies are as tall as the player
+
 class Dummy {
   constructor(scene, kind, x, y, z, slots) {
     this.kind = kind;
     this.home = { x, y, z };
     this.slots = slots;            // the structure that belongs to this dummy
-    this.hw = 0.3;
-    this.bodyH = 1.44;
-    this.headY = 1.66;
-    this.headR = 0.24;
+    this.hw = 0.3 * SIZE;
+    this.bodyH = 1.44 * SIZE;
+    this.headY = 1.66 * SIZE;
+    this.headR = 0.24 * SIZE;
     this.box = { x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0 };
     this.x = x; this.y = y; this.z = z;
     this.vy = 0;
@@ -50,8 +52,9 @@ class Dummy {
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.14, 0.62), dark);
     band.position.y = 1.02;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), this.matHead);
-    head.position.y = this.headY;
+    head.position.y = 1.66;
     g.add(body, base, band, head);
+    g.scale.setScalar(SIZE);
     scene.add(g);
     this.mesh = g;
     this.sync();
