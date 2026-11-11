@@ -21,8 +21,9 @@ const SLOTS = [
 ];
 
 export class Hud {
-  constructor(camera) {
+  constructor(camera, world) {
     this.camera = camera;
+    this.world = world;
     this.v = new THREE.Vector3();
     this.cross = $('cross');
     this.hitEl = $('hitmark');
@@ -62,6 +63,12 @@ export class Hud {
   // Key labels on the slots and in the hint line.
   keys() {
     for (const [action] of SLOTS) this.slotEls[action].querySelector('b').textContent = label(action);
+    $('menuKeys').innerHTML =
+      `<b>${['forward', 'left', 'back', 'right'].map(label).join(' ')} · ${label('jump')} · ${label('crouch')}</b><span>move, jump, crouch</span>` +
+      `<b>${['wall', 'floor', 'ramp', 'roof'].map(label).join(' · ')}</b><span>wall, floor, ramp, roof</span>` +
+      `<b>${label('edit')}</b><span>edit your own piece, again to confirm</span>` +
+      `<b>${['gun1', 'gun2', 'gun3'].map(label).join(' · ')}</b><span>shotgun, rifle, SMG</span>` +
+      `<b>${label('resetArena')}</b><span>reset the arena</span>`;
     this.hintsEl.innerHTML =
       `<span><b>${label('edit')}</b> edit</span><span><b>${label('reload')}</b> reload</span>` +
       `<span><b>${label('resetArena')}</b> reset arena</span><span><b>Esc</b> menu</span>`;
@@ -81,6 +88,7 @@ export class Hud {
     const w = reloading ? Math.round((1 - left) * 100) : 0;
     if (this.cache.rel !== w) { this.cache.rel = w; $('reloadFill').style.width = w + '%'; }
     $('ammo').classList.toggle('low', !!gun && !reloading && now === 0);
+    if (this.cache.gunOn !== !!gun) { this.cache.gunOn = !!gun; $('ammo').style.visibility = gun ? '' : 'hidden'; }
   }
 
   // Crosshair gap follows the spread (degrees) and the field of view.
@@ -143,7 +151,14 @@ export class Hud {
     }
     for (let n = 0; n < dummies.length; n++) {
       const d = dummies[n], bar = this.bars[n];
-      const v = d.alive ? this.project(d.x, d.y + 2.15, d.z) : null;
+      let v = d.alive ? this.project(d.x, d.y + 2.15, d.z) : null;
+      if (v) {
+        // not through walls
+        const c = this.camera.position;
+        let dx = d.x - c.x, dy = d.y + d.headY - c.y, dz = d.z - c.z;
+        const len = Math.hypot(dx, dy, dz);
+        if (len > 0.6 && this.world.ray(c.x, c.y, c.z, dx / len, dy / len, dz / len, len - 0.3)) v = null;
+      }
       const on = !!v;
       if (on !== bar.on) { bar.on = on; bar.el.style.display = on ? '' : 'none'; }
       if (!on) continue;

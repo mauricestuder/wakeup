@@ -50,19 +50,20 @@
     .slot.on { background: rgba(26,37,49,.92); border-color: var(--amber); color: #fff; transform: translateY(-4px); }
     .slot.on i { color: #fff; }
     #tip { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 13px; color: #fff;
-      text-shadow: 0 1px 2px rgba(0,0,0,.8); letter-spacing: .02em; white-space: nowrap; }
-    #ammo { position: absolute; right: 26px; bottom: 20px; text-align: right; text-shadow: 0 2px 3px rgba(0,0,0,.6); }
+      letter-spacing: .02em; white-space: nowrap; padding: 4px 12px; border-radius: 5px; background: rgba(17,25,35,.6); }
+    #tip:empty { display: none; }
+    #ammo { position: absolute; right: 20px; bottom: 16px; padding: 8px 14px 10px; border-radius: 10px; background: rgba(17,25,35,.62); text-align: right; }
     #gunName { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #dbe5ee; }
     #ammoNow { font-size: 54px; font-weight: 800; line-height: 1; }
     #ammoSub { font-size: 15px; color: #dbe5ee; margin-left: 6px; }
     #ammo.low #ammoNow { color: var(--red); }
-    #reload { height: 4px; width: 130px; margin: 6px 0 0 auto; background: rgba(0,0,0,.35); border-radius: 2px; overflow: hidden; }
+    #reload { height: 4px; width: 130px; margin: 6px 0 0 auto; background: rgba(255,255,255,.18); border-radius: 2px; overflow: hidden; }
     #reloadFill { height: 100%; width: 0; background: var(--amber); }
-    #hints { position: absolute; left: 18px; top: 14px; display: flex; gap: 14px; font-size: 12px; color: #f1f5f9;
-      text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    #hints { position: absolute; left: 14px; top: 12px; display: flex; gap: 6px; font-size: 12px; color: #f1f5f9; }
+    #hints span { padding: 3px 8px 3px 3px; border-radius: 6px; background: rgba(17,25,35,.55); }
     #hints b { display: inline-block; min-width: 18px; padding: 1px 5px; margin-right: 4px; border-radius: 4px; text-align: center;
       background: rgba(17,25,35,.7); color: var(--amber); }
-    #stats { position: absolute; right: 22px; top: 14px; font-size: 12px; color: #f1f5f9; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    #stats { position: absolute; right: 14px; top: 12px; padding: 4px 9px; border-radius: 6px; background: rgba(17,25,35,.55); font-size: 12px; color: #f1f5f9; }
     #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); padding: 7px 16px; border-radius: 6px;
       background: rgba(17,25,35,.8); font-size: 15px; font-weight: 700; opacity: 0; transition: opacity .2s; }
     #toast.show { opacity: 1; }
@@ -142,13 +143,7 @@
     <button id="play" class="btn">Play</button>
     <button class="btn ghost openSettings">Settings</button>
     <p id="touchNote" hidden>High Ground needs a keyboard and mouse for now.</p>
-    <div class="keys">
-      <b>WASD · Space · Shift</b><span>move, jump, crouch</span>
-      <b>Q · C · E · V</b><span>wall, floor, ramp, roof</span>
-      <b>F</b><span>edit your piece, F again to confirm</span>
-      <b>1 · 2 · 3</b><span>shotgun, rifle, SMG</span>
-      <b>T</b><span>reset the arena</span>
-    </div>
+    <div class="keys" id="menuKeys"></div>
   </div>
 
   <div id="paused" class="screen" hidden>

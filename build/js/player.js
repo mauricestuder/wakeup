@@ -205,7 +205,7 @@ export class Player {
     const m = this.model;
     m.root.position.set(x, y + this.liftOff, z);
     m.root.rotation.y = this.yaw;
-    const fade = Math.max(0, Math.min(1, (this.camDist - 0.55) / 0.8));
+    const fade = Math.max(0, Math.min(1, (this.camDist - 0.6) / 1.5));   // see-through when the camera is close
     m.root.visible = fade > 0.03;
     for (const mat of m.mats) mat.opacity = fade;
     const crouched = b.h === CROUCH;

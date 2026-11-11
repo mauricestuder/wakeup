@@ -27,7 +27,7 @@ const world = new World(pieces);
 const player = new Player(scene, camera, world);
 const builder = new Builder(scene, pieces, world, player);
 const editor = new Editor(scene, pieces, world, player);
-const hud = new Hud(camera);
+const hud = new Hud(camera, world);
 const arsenal = new Arsenal(scene, world, pieces, player, hud);
 const targets = new Targets(scene, world, pieces);
 
@@ -145,7 +145,7 @@ for (const btn of document.querySelectorAll('.openSettings')) {
 }
 document.getElementById('setBack').addEventListener('click', () => { show(settingsFrom); sfx.ui(); });
 
-let hadLock = false, skipMoves = 0, lockRefused = false;
+let hadLock = false, locked = false, skipMoves = 0, lockRefused = false;
 // Raw mouse input skips the system's pointer acceleration. Older browsers fall back to a normal lock.
 function lock() {
   try {
@@ -154,7 +154,8 @@ function lock() {
   } catch { /* headless or unsupported: play without mouse lock */ }
 }
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === canvas) { hadLock = true; lockRefused = false; skipMoves = 2; return; }
+  locked = document.pointerLockElement === canvas;
+  if (locked) { hadLock = true; lockRefused = false; skipMoves = 2; return; }
   if (hadLock && game.state === 'playing') pause();
 });
 document.addEventListener('pointerlockerror', () => { lockRefused = true; });
@@ -217,8 +218,9 @@ addEventListener('mouseup', (e) => {
 });
 addEventListener('mousemove', (e) => {
   if (game.state !== 'playing') return;
-  if (document.pointerLockElement !== canvas && !game.freeLook) return;
-  // The first events after locking can carry the whole cursor jump, and some browsers send odd spikes.
+  // Only once the lock is confirmed: a move that arrives just before can carry the whole cursor jump.
+  if (!locked && !game.freeLook) return;
+  // The first events after locking can jump too, and some browsers send odd spikes.
   if (skipMoves > 0) { skipMoves--; return; }
   const dx = e.movementX, dy = e.movementY;
   if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
@@ -262,6 +264,7 @@ function tick(dt) {
     while (acc >= STEP && n++ < 24) { player.step(STEP); acc -= STEP; }
     if (acc >= STEP) acc = 0;
     player.view(acc / STEP, dt);
+    camera.updateMatrixWorld();   // the HUD projects with this frame's camera, not the last one
 
     if (game.mode === 'build') {
       builder.aim();
