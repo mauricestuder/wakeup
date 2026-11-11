@@ -75,6 +75,9 @@ export const sfx = {
   editConfirm() { tone('triangle', 700, 1050, 0.22, 0.08); tone('triangle', 1050, 1400, 0.16, 0.08, 0.05); },
   editReset() { tone('sine', 700, 420, 0.18, 0.09); },
   turn() { tone('triangle', 300, 420, 0.22, 0.07); },
+  swing() { noise('bandpass', 500, 1500, 0.12, 0.13, 0.04, 1.2); },
+  pickHit(dull) { noise('bandpass', dull ? 500 : 1100, dull ? 250 : 500, 0.4, 0.07, 0, 1.5); tone('triangle', dull ? 120 : 240, dull ? 70 : 110, 0.35, 0.08); },
+  aim(on) { noise('bandpass', on ? 1800 : 1300, on ? 2400 : 900, 0.05, 0.05, 0, 2); },
   deny() { tone('square', 150, 120, 0.12, 0.09); },
   shotgun() {
     noise('lowpass', 3200, 250, 0.9, 0.24);

@@ -4,8 +4,9 @@
 // doors, windows and half walls fall out of the same test. Ramps and roofs are
 // height fields sampled under the body's centre.
 
-import { C, L, N, H, SIZE, WT, RAMP_THICK, cellOf } from './grid.js';
+import { C, L, N, H, SIZE, WT, RAMP_THICK, WALL_LEVELS, cellOf } from './grid.js';
 import { surfaceAt } from './pieces.js';
+import { inside } from './shapes.js';
 import { T } from './tuning.js';
 
 export const HW = 0.4;           // half width of the player
@@ -15,7 +16,12 @@ const STEP_SLOPE = 0.75;         // how far a ramp or roof may lift the feet
 const STEP_BOX = 0.5;            // same for the top of a tile (ramp onto floor)
 const SNAP = 0.3;                // stay glued when walking downhill
 const EPS = 1e-4;
-export const WALL_TOP = 15;      // height of the map walls
+export const WALL_TOP = WALL_LEVELS * L;   // height of the map walls
+const SLOPED = ['r', 'c'];
+const THICK = { r: RAMP_THICK, c: 0.05 };
+// Ramps and roofs only matter on the levels around the body.
+const lo = (y) => Math.max(0, Math.floor((y - 3) / L) - 1);
+const hi = (y, h) => Math.min(H, Math.floor((y + h + 3) / L));
 
 export function makeBody() {
   return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, h: STAND, onGround: true, jumped: false,
@@ -63,10 +69,12 @@ export class World {
     b.ci = cellOf(x);
     b.cj = cellOf(z);
     b.under.clear();
-    for (let k = 0; k <= H; k++) {
-      const r = this.pieces.get('r', b.ci, k, b.cj), c = this.pieces.get('c', b.ci, k, b.cj);
-      if (r && b.y < surfaceAt(r, x, z) - STEP_SLOPE) b.under.add(r.id);
-      if (c && b.y < surfaceAt(c, x, z) - STEP_SLOPE) b.under.add(c.id);
+    for (let k = lo(b.y), k1 = hi(b.y, b.h); k <= k1; k++) {
+      for (const type of SLOPED) {
+        const p = this.pieces.get(type, b.ci, k, b.cj);
+        const s = p ? surfaceAt(p, x, z) : null;
+        if (s !== null && b.y < s - STEP_SLOPE) b.under.add(p.id);
+      }
     }
   }
 
@@ -87,11 +95,13 @@ export class World {
     }
     const ci = cellOf(x), cj = cellOf(z);
     if (ci === b.ci && cj === b.cj) {
-      for (let k = 0; k <= H; k++) {
-        for (const type of ['r', 'c']) {
+      for (let k = lo(y), k1 = hi(y, b.h); k <= k1; k++) {
+        for (const type of SLOPED) {
           const p = this.pieces.get(type, ci, k, cj);
-          if (!p || b.under.has(p.id)) continue;
+          if (!p) continue;
           const s = surfaceAt(p, x, z);
+          if (s === null) { b.under.delete(p.id); continue; }   // beside a narrow ramp: neither on it nor under it
+          if (b.under.has(p.id)) continue;
           if (s > y + STEP_SLOPE + EPS) { b.under.add(p.id); continue; }
           if (s > g) g = s;
         }
@@ -103,11 +113,13 @@ export class World {
   // Lowest thing above the body that belongs to a ramp or roof it is under.
   ceilingAt(b, x, z) {
     let c = Infinity;
-    for (let k = 0; k <= H; k++) {
-      for (const type of ['r', 'c']) {
+    for (let k = lo(b.y), k1 = hi(b.y, b.h); k <= k1; k++) {
+      for (const type of SLOPED) {
         const p = this.pieces.get(type, b.ci, k, b.cj);
         if (!p || !b.under.has(p.id)) continue;
-        const s = surfaceAt(p, x, z) - (type === 'r' ? RAMP_THICK : 0);
+        const top = surfaceAt(p, x, z);
+        if (top === null) continue;
+        const s = top - THICK[type];
         if (s < c) c = s;
       }
     }
@@ -149,23 +161,20 @@ export class World {
     const changed = ci !== b.ci || cj !== b.cj;
     let under = b.under, stop = false;
     if (changed) under = new Set();
-    for (let k = 0; k <= H && !stop; k++) {
-      const r = this.pieces.get('r', ci, k, cj);
-      if (r) {
-        const s = surfaceAt(r, nx, nz);
-        const below = changed ? b.y < s - STEP_SLOPE : b.under.has(r.id);
-        if (below) {
-          if (changed) under.add(r.id);
-          // the slab would newly cut into the body
-          if (s > b.y + EPS && s - RAMP_THICK < b.y + b.h - EPS) {
-            const so = changed ? Infinity : surfaceAt(r, ox, oz);
-            if (!(so > b.y + EPS && so - RAMP_THICK < b.y + b.h - EPS)) stop = true;
-          }
-        }
-      }
-      if (changed) {
-        const c = this.pieces.get('c', ci, k, cj);
-        if (c && b.y < surfaceAt(c, nx, nz) - STEP_SLOPE) under.add(c.id);
+    for (let k = lo(b.y), k1 = hi(b.y, b.h); k <= k1 && !stop; k++) {
+      for (const type of SLOPED) {
+        const p = this.pieces.get(type, ci, k, cj);
+        if (!p) continue;
+        const s = surfaceAt(p, nx, nz);
+        if (s === null) continue;
+        const so = changed ? null : surfaceAt(p, ox, oz);
+        // coming in from outside decides it by height, otherwise it stays as it was
+        const below = so === null ? b.y < s - STEP_SLOPE : b.under.has(p.id);
+        if (!below) continue;
+        under.add(p.id);
+        // the slab would newly cut into the body
+        const cuts = (h) => h !== null && h > b.y + EPS && h - THICK[type] < b.y + b.h - EPS;
+        if (cuts(s) && !cuts(so)) { stop = true; break; }
       }
     }
     if (!stop) {
@@ -264,7 +273,7 @@ export class World {
     if (p.i !== b.ci || p.j !== b.cj) return;
     b.under.delete(p.id);
     const s = surfaceAt(p, b.x, b.z);
-    if (b.y >= s - EPS) return;
+    if (s === null || b.y >= s - EPS) return;
     this.collect(b.x, s, b.z, b.h);
     if (s - b.y <= (p.type === 'r' ? L : 1.5) + EPS && this.free(b, b.x, s, b.z, b.h)) {
       b.lift += s - b.y;
@@ -274,11 +283,11 @@ export class World {
     }
   }
 
-  // A ramp turned under or over the body: sort it again.
+  // A ramp or roof changed shape under or over the body: sort it again.
   onTurned(p, b) {
     if (p.i !== b.ci || p.j !== b.cj) return;
     const s = surfaceAt(p, b.x, b.z);
-    if (b.y >= s - STEP_SLOPE) b.under.delete(p.id); else b.under.add(p.id);
+    if (s === null || b.y >= s - STEP_SLOPE) b.under.delete(p.id); else b.under.add(p.id);
   }
 
   // Simple helpers for the dummies.
@@ -290,12 +299,12 @@ export class World {
       if (x + hw > t.x0 && x - hw < t.x1 && z + hw > t.z0 && z - hw < t.z1 && t.y1 > g) g = t.y1;
     }
     const ci = cellOf(x), cj = cellOf(z);
-    for (let k = 0; k <= H; k++) {
-      for (const type of ['r', 'c']) {
+    for (let k = lo(y), k1 = hi(y, 1.6); k <= k1; k++) {
+      for (const type of SLOPED) {
         const p = this.pieces.get(type, ci, k, cj);
         if (!p) continue;
         const s = surfaceAt(p, x, z);
-        if (s <= y + 0.4 && s > g) g = s;
+        if (s !== null && s <= y + 0.4 && s > g) g = s;
       }
     }
     return g;
@@ -339,31 +348,15 @@ export class World {
 
     for (const p of this.pieces.map.values()) {
       if (p === skip || boxT(p.aabb) < 0) continue;
-      if (p.type === 'r') {
-        // plane y = base + slope * u
-        let gx = 0, gz = 0, c0;
-        const s = L / C;
-        if (p.dir === 0) { gx = s; c0 = -p.i * C * s; } else if (p.dir === 1) { gz = s; c0 = -p.j * C * s; }
-        else if (p.dir === 2) { gx = -s; c0 = (p.i + 1) * C * s; } else { gz = -s; c0 = (p.j + 1) * C * s; }
-        const den = dy - gx * dx - gz * dz;
-        if (Math.abs(den) < 1e-9) continue;
-        const t = (p.k * L + c0 + gx * ox + gz * oz - oy) / den;
-        if (t < 0 || t >= best) continue;
-        const x = ox + dx * t, z = oz + dz * t;
-        if (x < p.aabb.x0 - EPS || x > p.aabb.x1 + EPS || z < p.aabb.z0 - EPS || z > p.aabb.z1 + EPS) continue;
-        best = t; kind = 'piece'; piece = p; bit = -1; dummy = null;
-      } else if (p.type === 'c') {
-        const cx = (p.i + 0.5) * C, cz = (p.j + 0.5) * C, s = 1.5 / (C / 2), top = p.k * L + 1.5;
-        for (let f = 0; f < 4; f++) {
-          // face f: y = top - s * (sign * (x - cx))   or the same along z
-          const sx = f === 0 ? s : f === 2 ? -s : 0, sz = f === 1 ? s : f === 3 ? -s : 0;
-          const den = dy + sx * dx + sz * dz;
+      if (p.type === 'r' || p.type === 'c') {
+        // each flat patch: y = base + c + gx * x + gz * z
+        const bx = p.i * C, by = p.k * L, bz = p.j * C;
+        for (const f of p.facets) {
+          const den = dy - f.gx * dx - f.gz * dz;
           if (Math.abs(den) < 1e-9) continue;
-          const t = (top - sx * (ox - cx) - sz * (oz - cz) - oy) / den;
+          const t = (by + f.c + f.gx * (ox - bx) + f.gz * (oz - bz) - oy) / den;
           if (t < 0 || t >= best) continue;
-          const x = ox + dx * t - cx, z = oz + dz * t - cz;
-          const m = sx ? Math.sign(sx) * x : Math.sign(sz) * z;
-          if (m < -EPS || m > C / 2 + EPS || Math.abs(sx ? z : x) > m + EPS) continue;
+          if (!inside(f, ox + dx * t - bx, oz + dz * t - bz, 1e-4)) continue;
           best = t; kind = 'piece'; piece = p; bit = -1; dummy = null;
         }
       } else if (pick && p.owner === 'me') {
@@ -372,7 +365,7 @@ export class World {
       } else {
         for (const b of p.boxes) {
           const t = boxT(b);
-          if (t >= 0 && t < best) { best = t; kind = 'piece'; piece = p; bit = b.bit; dummy = null; }
+          if (t >= 0 && t < best) { best = t; kind = 'piece'; piece = p; bit = -1; dummy = null; }
         }
       }
     }

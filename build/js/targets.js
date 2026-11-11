@@ -2,16 +2,22 @@
 
 import * as THREE from '../../game/vendor/three.module.min.js';
 import { isWall } from './pieces.js';
-import { slotKey } from './grid.js';
+import { slotKey, C, L } from './grid.js';
+import { O } from './arena.js';
 import { T } from './tuning.js';
 import { settings } from './settings.js';
 import { sfx } from './audio.js';
 
-function boxAround(i, j, roof = true) {
-  const s = [['wx', i, 0, j], ['wx', i + 1, 0, j], ['wz', i, 0, j], ['wz', i, 0, j + 1]];
-  if (roof) s.push(['f', i, 1, j]);
+// A closed box of `levels` storeys around cell (i, j), counted from the practice ground.
+function boxAround(i, j, roof = true, levels = 1) {
+  i += O; j += O;
+  const s = [];
+  for (let k = 0; k < levels; k++) s.push(['wx', i, k, j], ['wx', i + 1, k, j], ['wz', i, k, j], ['wz', i, k, j + 1]);
+  if (roof) s.push(['f', i, levels, j]);
   return s;
 }
+// Middle of cell (i, j), standing on level k.
+const at = (i, j, k = 0) => [(O + i + 0.5) * C, k * L, (O + j + 0.5) * C];
 
 class Dummy {
   constructor(scene, kind, x, y, z, slots) {
@@ -77,9 +83,12 @@ export class Targets {
     this.queue = [];          // enemy walls waiting to be put back
     this.downs = 0;
     this.list = [
-      new Dummy(scene, 'strafe', 14, 0, 14, null),
-      new Dummy(scene, 'tower', 22, 3, 22, boxAround(5, 5)),
-      new Dummy(scene, 'box', 22, 0, 14, boxAround(5, 3)),
+      new Dummy(scene, 'strafe', ...at(3, 3), null),
+      new Dummy(scene, 'tower', ...at(5, 5, 1), boxAround(5, 5)),
+      new Dummy(scene, 'box', ...at(5, 3), boxAround(5, 3)),
+      new Dummy(scene, 'strafe', ...at(8, -3), null),
+      new Dummy(scene, 'tower', ...at(10, 2, 3), boxAround(10, 2, true, 3)),
+      new Dummy(scene, 'far', ...at(13, 5), null),
     ];
     world.dummies = this.list;
     this.boxWalls = new Set(boxAround(5, 3, false).map((s) => slotKey(...s)));
@@ -144,7 +153,7 @@ export class Targets {
         d.turnT -= dt;
         if (d.turnT <= 0) { d.turnT = 0.8 + Math.random() * 1.8; if (Math.random() < 0.5) d.dir = -d.dir; }
         const nz = d.z + d.dir * T.strafeSpeed * dt;
-        if (nz < 5 || nz > 23 || this.world.blockedAt(d.x, d.y, nz, d.hw, d.bodyH)) d.dir = -d.dir;
+        if (Math.abs(nz - d.home.z) > 9 || this.world.blockedAt(d.x, d.y, nz, d.hw, d.bodyH)) d.dir = -d.dir;
         else d.z = nz;
       }
       const g = this.world.floorUnder(d.x, d.y, d.z, d.hw);

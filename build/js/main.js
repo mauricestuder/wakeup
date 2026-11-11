@@ -8,6 +8,7 @@ import { Player } from './player.js';
 import { Builder } from './build.js';
 import { Editor } from './edit.js';
 import { Arsenal, GUNS } from './weapons.js';
+import { Pickaxe } from './pickaxe.js';
 import { Targets } from './targets.js';
 import { buildArena, startLayout, SPAWN } from './arena.js';
 import { Hud } from './hud.js';
@@ -19,7 +20,7 @@ const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.08, 400);
+const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.08, 1500);
 
 buildArena(scene);
 const pieces = new Pieces(scene);
@@ -29,16 +30,17 @@ const builder = new Builder(scene, pieces, world, player);
 const editor = new Editor(scene, pieces, world, player);
 const hud = new Hud(camera, world);
 const arsenal = new Arsenal(scene, world, pieces, player, hud);
+const pickaxe = new Pickaxe(world, pieces, player, hud);
 const targets = new Targets(scene, world, pieces);
 
-const game = { state: 'menu', mode: 'gun', before: 'gun' };   // state: menu | playing | paused
+const game = { state: 'menu', mode: 'gun', before: 'gun' };   // state: menu | playing | paused, mode: gun | pick | build | edit
 const BUILD = { wall: 'wall', floor: 'floor', ramp: 'ramp', roof: 'roof' };
 
 pieces.onBreak = (p, cause) => {
   if (cause === 'collapse') sfx.collapse(); else sfx.breakPiece();
   targets.onBreak(p);
 };
-arsenal.onDummyHit = (d, amount, head, dead) => { if (dead) targets.downs++; };
+arsenal.onDummyHit = pickaxe.onDummyHit = (d, amount, head, dead) => { if (dead) targets.downs++; };
 
 function resetArena(quiet) {
   editor.close();
@@ -48,6 +50,7 @@ function resetArena(quiet) {
   targets.reset();
   player.spawn(SPAWN.x, SPAWN.y, SPAWN.z, SPAWN.yaw);
   arsenal.refill();
+  pickaxe.stop();
   builder.placed = 0;
   hud.clear();
   if (!quiet) { sfx.reset(); hud.toast('Arena reset'); }
@@ -58,16 +61,24 @@ function setMode(mode) {
   const was = game.mode;
   game.mode = mode;
   if (mode !== 'build') builder.hide();
+  if (mode !== 'gun') arsenal.trigger(false);
   if (mode === 'gun') {
     if (was !== 'gun') arsenal.raise();
     player.setTool(arsenal.gun.id);
     hud.mode('gun', 'gun' + (arsenal.current + 1));
+  } else if (mode === 'pick') {
+    player.setTool('pick');
+    hud.mode('pick', 'pick');
   } else {
-    arsenal.trigger(false);
     player.setTool('plan');
-    if (mode === 'build') hud.mode('build', builder.kind);
-    else hud.mode('edit', null);
+    hud.mode(mode, mode === 'build' ? builder.kind : null);
   }
+}
+
+function pickTool() {
+  if (game.mode === 'edit') editor.close();
+  if (game.mode !== 'pick') sfx.swap();
+  setMode('pick');
 }
 
 function pickGun(n) {
@@ -85,12 +96,14 @@ function pickPiece(kind) {
   if (input.down('fire')) builder.place();
 }
 
+function confirmEdit() {
+  editor.confirm();
+  setMode(game.before);
+}
+
 function editKey() {
-  if (game.mode === 'edit') {
-    if (editor.confirm()) setMode(game.before);
-    return;
-  }
-  if (editor.start() === 'edit') {
+  if (game.mode === 'edit') return confirmEdit();
+  if (editor.start()) {
     game.before = game.mode;
     setMode('edit');
   }
@@ -106,6 +119,8 @@ input.handlers.press = (id) => {
       else if (game.mode === 'build') builder.place();
       else editor.press();
       break;
+    case 'pick': pickTool(); break;
+    case 'aim': if (game.mode === 'gun') sfx.aim(true); break;
     case 'gun1': pickGun(0); break;
     case 'gun2': pickGun(1); break;
     case 'gun3': pickGun(2); break;
@@ -116,11 +131,9 @@ input.handlers.press = (id) => {
   }
 };
 input.handlers.release = (id) => {
-  if (id !== 'fire') return;
-  arsenal.trigger(false);
-  if (game.state === 'playing' && game.mode === 'edit' && settings.editRelease && editor.changed) {
-    if (editor.confirm()) setMode(game.before);
-  }
+  if (id === 'fire') arsenal.trigger(false);
+  // Edit on release: letting go of select or reset confirms the edit.
+  if ((id === 'fire' || id === 'editReset') && game.state === 'playing' && game.mode === 'edit' && settings.editRelease && editor.changed) confirmEdit();
 };
 
 // ---------- screens ----------
@@ -131,8 +144,8 @@ function show(id) {
 
 function applySettings() {
   setVolume(settings.volume);
-  camera.fov = settings.fov;
-  camera.updateProjectionMatrix();
+  pieces.setGlass(settings.glass / 100);
+  if (game.state !== 'playing') { camera.fov = settings.fov; camera.updateProjectionMatrix(); }
   hud.keys();
   hud.cache.gap = -1;
   document.getElementById('hints').hidden = !settings.hints;
@@ -185,6 +198,9 @@ function pause() {
 function toMenu() {
   game.state = 'menu';
   editor.close();
+  player.ads = player.adsWant = 0;
+  camera.fov = settings.fov;
+  camera.updateProjectionMatrix();
   show('menu');
 }
 
@@ -224,7 +240,7 @@ addEventListener('mousemove', (e) => {
   if (skipMoves > 0) { skipMoves--; return; }
   const dx = e.movementX, dy = e.movementY;
   if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
-  player.look(dx, dy, lookSpeed(game.mode));
+  player.look(dx, dy, lookSpeed(game.mode) * player.lookScale);
 });
 addEventListener('wheel', (e) => {
   if (game.state !== 'playing' || settingsUI.isListening()) return;
@@ -253,8 +269,15 @@ const STEP = 1 / 120;
 let last = performance.now(), acc = 0;
 
 const TIPS = {
+  pick: () => `${input.label('fire')} swing · hold to keep swinging`,
   build: () => `${input.label('fire')} place · hold to keep building`,
-  edit: () => `${input.label('fire')} mark tiles · ${input.label('edit')} confirm · ${input.label('editReset')} reset`,
+  edit: () => {
+    const how = editor.piece?.type === 'r' ? 'draw the path' : editor.piece?.type === 'c' ? 'lift corners' : 'mark tiles';
+    const keys = settings.editRelease
+      ? `Hold ${input.label('fire')} and drag to ${how} · let go to confirm · ${input.label('editReset')} reset`
+      : `${input.label('fire')} ${how} · ${input.label('edit')} confirm · ${input.label('editReset')} reset`;
+    return `${editor.label() || 'Not a shape'} · ${keys}`;
+  },
 };
 
 function tick(dt) {
@@ -263,6 +286,8 @@ function tick(dt) {
     let n = 0;
     while (acc >= STEP && n++ < 24) { player.step(STEP); acc -= STEP; }
     if (acc >= STEP) acc = 0;
+    player.zoom = T[arsenal.gun.id + 'Zoom'];
+    player.adsWant = game.mode === 'gun' && input.down('aim') ? 1 : 0;
     player.view(acc / STEP, dt);
     camera.updateMatrixWorld();   // the HUD projects with this frame's camera, not the last one
 
@@ -273,6 +298,7 @@ function tick(dt) {
       if (!editor.update(input.down('fire'))) setMode(game.before);
     }
     arsenal.update(dt, game.mode === 'gun');
+    pickaxe.update(dt, game.mode === 'pick', input.down('fire'));
     targets.update(dt);
     pieces.update(dt);
 
@@ -280,13 +306,13 @@ function tick(dt) {
     hud.ammo(gun, arsenal.ammo[arsenal.current], arsenal.reloading, arsenal.reloadLeft);
     if (gun) hud.spread(arsenal.spread);
     hud.tipText(TIPS[game.mode] ? TIPS[game.mode]() : '');
-    hud.stats(`Dummies down ${targets.downs} · Pieces placed ${builder.placed}`);
+    hud.stats(`Height ${Math.max(0, Math.round(player.body.y))} m · Dummies down ${targets.downs} · Pieces placed ${builder.placed}`);
     hud.update(dt, targets.list);
   } else if (game.state === 'menu') {
     // a slow look around the room behind the menu
     const t = performance.now() / 9000;
-    camera.position.set(14 + Math.cos(t) * 19, 9, 14 + Math.sin(t) * 19);
-    camera.lookAt(14, 1.5, 14);
+    camera.position.set(SPAWN.x + 8 + Math.cos(t) * 21, 10, SPAWN.z + Math.sin(t) * 21);
+    camera.lookAt(SPAWN.x + 8, 1.5, SPAWN.z);
     pieces.update(dt);
   }
   if (!game.noRender) renderer.render(scene, camera);
@@ -316,6 +342,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 
 // For testing from the console: __game.manual = true stops the clock, tick(dt) moves it by hand.
 window.__game = Object.assign(game, {
-  T, GUNS, settings, input, pieces, world, player, builder, editor, arsenal, targets, hud, camera,
-  manual: false, noRender: false, freeLook: false, tick, start, pause, resetArena, setMode, pickGun, pickPiece, editKey,
+  T, GUNS, SPAWN, settings, input, pieces, world, player, builder, editor, arsenal, pickaxe, targets, hud, camera, scene, renderer,
+  manual: false, noRender: false, freeLook: false, tick, start, pause, resetArena, setMode, pickGun, pickTool, pickPiece, editKey,
 });

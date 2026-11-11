@@ -7,6 +7,7 @@ import { T } from './tuning.js';
 import { sfx } from './audio.js';
 
 const DOWN = -0.42;   // looking down further than this means "below me"
+const STEEP = -0.75;  // and this far down, walls go one level lower
 
 export class Builder {
   constructor(scene, pieces, world, player) {
@@ -43,7 +44,7 @@ export class Builder {
     if (!t) { this.ghost.visible = false; return null; }
     const key = t.type + t.dir;
     let g = this.geo.get(key);
-    if (!g) this.geo.set(key, g = pieceGeometry(t.type, FULL[t.type], t.dir, 0.015));
+    if (!g) this.geo.set(key, g = pieceGeometry({ type: t.type, mask: FULL[t.type], dir: t.dir }, 0.015));
     this.ghost.geometry = g;
     this.ghost.material = t.valid ? this.okMat : this.badMat;
     centreOf(t.type, t.i, t.k, t.j, this.ghost.position);
@@ -56,6 +57,12 @@ export class Builder {
   wall(a, cut) {
     const ps = this.pieces, b = this.player.body;
     const feet = Math.max(0, Math.min(H - 1, Math.floor((b.y + 1) / L)));
+    // Up high, looking steeply down: the wall under the edge in front of me.
+    if (a.dy < STEEP && feet >= 1 && b.onGround) {
+      const f = facing(a.dx, a.dz), ci = cellOf(b.x), cj = cellOf(b.z);
+      const type = f === 0 || f === 2 ? 'wx' : 'wz', i = f === 0 ? ci + 1 : ci, j = f === 1 ? cj + 1 : cj;
+      if (this.ok(type, i, feet - 1, j)) return { type, i, k: feet - 1, j, dir: 0, valid: true };
+    }
     for (const cr of wallCrossings(a.ox, a.oz, a.dx, a.dz, 0, Math.min(T.reachWall, cut))) {
       const x = a.ox + a.dx * cr.t, y = a.oy + a.dy * cr.t, z = a.oz + a.dz * cr.t;
       if (y < 0) continue;
@@ -112,9 +119,11 @@ export class Builder {
     // The level follows what I stand on. On a ramp, the next cell continues the staircase.
     let k = Math.floor((b.y + 1) / L);
     if (b.onGround) {
-      for (let kk = 0; kk < H; kk++) {
+      const near = Math.floor(b.y / L);
+      for (let kk = Math.max(0, near - 1); kk <= near; kk++) {
         const r = ps.get('r', ci, kk, cj);
-        if (!r || b.under.has(r.id) || Math.abs(surfaceAt(r, b.x, b.z) - b.y) > 0.05) continue;
+        const top = r && !b.under.has(r.id) ? surfaceAt(r, b.x, b.z) : null;
+        if (top === null || Math.abs(top - b.y) > 0.05) continue;
         if (i === ci && j === cj) return null;
         k = b.y - kk * L > 0.4 ? kk + 1 : kk;
         break;
@@ -127,7 +136,7 @@ export class Builder {
       return { type: 'r', i, k: k - 1, j, dir: (f + 2) % 4, valid: this.ok('r', i, k - 1, j) };
     }
     if (ps.has('r', i, k, j)) return null;
-    for (let kk = k; kk >= 0; kk--) {
+    for (let kk = k; kk >= Math.max(0, k - 1); kk--) {
       if (this.ok('r', i, kk, j)) return { type: 'r', i, k: kk, j, dir: f, valid: true };
     }
     return { type: 'r', i, k, j, dir: f, valid: false };
@@ -139,7 +148,7 @@ export class Builder {
     const feet = Math.floor((b.y + 1) / L);
     const k = Math.max(1, Math.min(H, a.dy < DOWN ? feet : feet + 1));
     if (ps.has('c', i, k, j)) return null;
-    for (let kk = k; kk >= 1; kk--) {
+    for (let kk = k; kk >= Math.max(1, k - 1); kk--) {
       if (this.ok('c', i, kk, j)) return { type: 'c', i, k: kk, j, dir: 0, valid: true };
     }
     return { type: 'c', i, k, j, dir: 0, valid: false };

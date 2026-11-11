@@ -8,11 +8,13 @@
 //   f   floor panel at y = k*L over cell (i, j)
 //   r   ramp inside cell (i, j), from y = k*L up to (k+1)*L
 //   c   roof (low pyramid) with its base at y = k*L over cell (i, j)
+// There is no height limit worth the name: k can go as high as you can build.
 
 export const C = 4;          // cell width
 export const L = 3;          // level height
-export const N = 7;          // cells per side
-export const H = 5;          // build height in levels
+export const N = 25;         // cells per side
+export const H = 250;        // no real height limit: this is 750 m up
+export const WALL_LEVELS = 3; // the map walls are this many levels high
 export const WT = 0.2;       // wall and floor thickness
 export const CONE_H = 1.5;   // roof height
 export const RAMP_THICK = 0.25;
@@ -21,7 +23,8 @@ export const SIZE = N * C;
 const TYPE_ID = { wx: 0, wz: 1, f: 2, r: 3, c: 4 };
 export const TYPES = ['wx', 'wz', 'f', 'r', 'c'];
 
-export function slotKey(type, i, k, j) { return (TYPE_ID[type] << 12) | (i << 8) | (k << 4) | j; }
+// One number per slot. i and j stay below 64, k can be anything.
+export function slotKey(type, i, k, j) { return TYPE_ID[type] + 8 * (j + 64 * (i + 64 * k)); }
 
 // The outer ring of walls belongs to the map, so player walls start one line in.
 export function inBounds(type, i, k, j) {
@@ -39,7 +42,7 @@ export function inBounds(type, i, k, j) {
 // Lattice edges hold the structure together. axis 0 runs along x, 1 along z,
 // 2 straight up, each starting at grid corner (i, k, j).
 const EX = 0, EZ = 1, EY = 2;
-export function edgeKey(axis, i, k, j) { return (axis << 12) | (i << 8) | (k << 4) | j; }
+export function edgeKey(axis, i, k, j) { return axis + 4 * (j + 64 * (i + 64 * k)); }
 
 function square(i, k, j) {
   return [edgeKey(EX, i, k, j), edgeKey(EX, i, k, j + 1), edgeKey(EZ, i, k, j), edgeKey(EZ, i + 1, k, j)];
@@ -58,10 +61,14 @@ export function edgesOf(type, i, k, j) {
 
 // An edge is anchored when it lies on the ground or on the outer map walls.
 export function edgeAnchored(e) {
-  const axis = e >> 12, i = (e >> 8) & 15, k = (e >> 4) & 15, j = e & 15;
-  if (axis === EX) return k === 0 || j === 0 || j === N;
-  if (axis === EZ) return k === 0 || i === 0 || i === N;
-  return i === 0 || i === N || j === 0 || j === N;
+  const axis = e % 4;
+  let r = (e - axis) / 4;
+  const j = r % 64;
+  r = (r - j) / 64;
+  const i = r % 64, k = (r - i) / 64;
+  if (axis === EX) return k === 0 || ((j === 0 || j === N) && k <= WALL_LEVELS);
+  if (axis === EZ) return k === 0 || ((i === 0 || i === N) && k <= WALL_LEVELS);
+  return (i === 0 || i === N || j === 0 || j === N) && k < WALL_LEVELS;
 }
 
 // Tracks which edges are in use and answers "would this stand?" and "what is
@@ -167,11 +174,13 @@ export function wallCrossings(ox, oz, dx, dz, tMin, tMax) {
   return out.sort((a, b) => a.t - b.t);
 }
 
-// Where a ray crosses the floor levels 1..H, nearest first: { t, k }.
+// Where a ray crosses the floor levels from 1 up, nearest first: { t, k }.
 export function levelCrossings(oy, dy, tMin, tMax) {
   const out = [];
   if (Math.abs(dy) < 1e-9) return out;
-  for (let k = 1; k <= H; k++) {
+  const ya = oy + dy * tMin, yb = oy + dy * tMax;
+  const k0 = Math.max(1, Math.ceil(Math.min(ya, yb) / L)), k1 = Math.min(H, Math.floor(Math.max(ya, yb) / L));
+  for (let k = k0; k <= k1; k++) {
     const t = (k * L - oy) / dy;
     if (t > tMin && t <= tMax) out.push({ t, k });
   }

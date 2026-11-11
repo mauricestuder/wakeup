@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111923">
-  <meta name="description" content="High Ground: a build, edit and aim trainer. Walls, floors, ramps and roofs on a grid, tile edits and three guns. Plays in the browser with keyboard and mouse.">
+  <meta name="description" content="High Ground: a build, edit and aim trainer. Walls, floors, ramps and roofs on a grid, tile edits, a pickaxe and three guns. Plays in the browser with keyboard and mouse.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -29,7 +29,8 @@
     #cross .r { width: 8px; height: 2px; top: -1px; left: var(--gap); }
     #cross .u { width: 2px; height: 8px; left: -1px; top: calc(-8px - var(--gap)); }
     #cross .b { width: 2px; height: 8px; left: -1px; top: var(--gap); }
-    body[data-mode="build"] #cross i:not(.d), body[data-mode="edit"] #cross i:not(.d) { display: none; }
+    body[data-mode="build"] #cross i:not(.d), body[data-mode="edit"] #cross i:not(.d), body[data-mode="pick"] #cross i:not(.d) { display: none; }
+    body[data-mode="pick"] #cross .d { width: 8px; height: 8px; left: -4px; top: -4px; border-radius: 50%; background: transparent; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0,0,0,.55); }
     body[data-mode="build"] #cross .d { width: 6px; height: 6px; left: -3px; top: -3px; transform: rotate(45deg); background: var(--blue); }
     body[data-mode="edit"] #cross .d { width: 6px; height: 6px; left: -3px; top: -3px; border-radius: 50%; }
     #hitmark { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; opacity: 0; }
@@ -40,7 +41,7 @@
     #hitmark.head::before, #hitmark.head::after { background: linear-gradient(var(--amber) 0 30%, transparent 30% 70%, var(--amber) 70%); }
 
     #slots { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; }
-    .slot { position: relative; width: 62px; height: 62px; border-radius: 8px; background: rgba(17,25,35,.62);
+    .slot { position: relative; width: 60px; height: 60px; border-radius: 8px; background: rgba(17,25,35,.62);
       border: 2px solid rgba(255,255,255,.14); color: #c7d3df; display: grid; place-items: center; }
     .slot.gap { margin-left: 14px; }
     .slot svg { width: 34px; height: 34px; margin-top: -6px; }
@@ -139,7 +140,7 @@
 
   <div id="menu" class="screen">
     <h1>High <span>Ground</span></h1>
-    <p class="tag">Build, edit and aim practice. Box up, cut a window, take the wall, climb. Every number behind the feel can be changed in the Feel lab.</p>
+    <p class="tag">Build, edit and aim practice on a wide open ground. Box up, cut a window, take the wall, climb as high as you like. Every number behind the feel can be changed in the Feel lab.</p>
     <button id="play" class="btn">Play</button>
     <button class="btn ghost openSettings">Settings</button>
     <p id="touchNote" hidden>High Ground needs a keyboard and mouse for now.</p>
