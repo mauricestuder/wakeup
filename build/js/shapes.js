@@ -8,7 +8,7 @@
 //   ramps   the 8 outer tiles of a 3 x 3 grid, marked tiles are the path the
 //           ramp takes, starting at the tile that was marked first.
 
-import { C, L, CONE_H, DIR_X, DIR_Z } from './grid.js';
+import { C, L, CONE_H, CONE_PEAK, DIR_X, DIR_Z } from './grid.js';
 
 const TW = C / 3, TH = L / 3;
 
@@ -151,7 +151,7 @@ export function roofFacets(mask) {
   const RING = [0, 1, 3, 2];                       // the corners in order around the cell
   const out = [];
   if (!up.length) {
-    for (let n = 0; n < 4; n++) out.push(facet([pt(RING[n]), pt(RING[(n + 1) % 4]), P(0.5, 0.5, 1)]));
+    for (let n = 0; n < 4; n++) out.push(facet([pt(RING[n]), pt(RING[(n + 1) % 4]), P(0.5, 0.5, CONE_PEAK / CONE_H)]));
   } else if (up.length === 2 && up[0] + up[1] !== 3) {
     out.push(facet(RING.map(pt)));                 // two neighbours up: one slope
   } else {
