@@ -43,10 +43,15 @@ export class Editor {
 
   get active() { return !!this.piece; }
 
-  // The own piece under the crosshair, if it is in reach.
+  // The own piece under the crosshair, if it is in reach. An opening counts as
+  // open: looking through a window picks what stands behind it, so two pieces
+  // can be edited one after the other. With nothing of mine behind it, the
+  // opened piece itself is picked, so it can be closed again.
   pick() {
-    const a = this.player.rig();
-    const h = this.world.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach, { pick: true });
+    const a = this.player.rig(), w = this.world;
+    let h = w.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach);
+    if (h && h.kind === 'piece' && h.piece.owner === 'me') return h.piece;
+    h = w.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, T.editReach, { pick: true });
     if (!h || h.kind !== 'piece' || h.piece.owner !== 'me') return null;
     return h.piece;
   }

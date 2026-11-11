@@ -275,7 +275,7 @@ export class World {
     const s = surfaceAt(p, b.x, b.z);
     if (s === null || b.y >= s - EPS) return;
     this.collect(b.x, s, b.z, b.h);
-    if (s - b.y <= (p.type === 'r' ? L : 1.5) + EPS && this.free(b, b.x, s, b.z, b.h)) {
+    if (s - b.y <= L + EPS && this.free(b, b.x, s, b.z, b.h)) {
       b.lift += s - b.y;
       b.y = s; b.vy = 0; b.onGround = true;
     } else {
@@ -322,7 +322,8 @@ export class World {
   // ---------- rays ----------
   // Returns the nearest hit within tMax, or null. The result object is reused.
   //   dummies   also test the targets
-  //   pick      own walls and floors count with their full outline (edit pick)
+  //   pick      own walls and floors count with their full outline, openings
+  //             included (the edit pick falls back on this)
   //   skip      a piece to ignore
   ray(ox, oy, oz, dx, dy, dz, tMax, { dummies = false, pick = false, skip = null } = {}) {
     const hit = this.hit;

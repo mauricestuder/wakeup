@@ -16,7 +16,7 @@ export const N = 25;         // cells per side
 export const H = 250;        // no real height limit: this is 750 m up
 export const WALL_LEVELS = 3; // the map walls are this many levels high
 export const WT = 0.2;       // wall and floor thickness
-export const CONE_H = 1.5;   // roof height
+export const CONE_H = L;     // roof height: a full level, up to the top of the wall beside it
 export const RAMP_THICK = 0.25;
 export const SIZE = N * C;
 
