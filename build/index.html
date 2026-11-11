@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111923">
+  <meta name="description" content="High Ground: a build, edit and aim trainer. Walls, floors, ramps and roofs on a grid, tile edits and three guns. Plays in the browser with keyboard and mouse.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>High Ground</title>
+  <style>
+    :root { --ink: #111923; --panel: #1a2531; --line: #2e3d4e; --text: #e8eef4; --dim: #93a4b6; --amber: #ffb23e;
+      --blue: #7fd0ff; --red: #ff5a4a;
+      --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--text);
+      font-family: var(--font); user-select: none; -webkit-user-select: none; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    [hidden] { display: none !important; }
+    b, h1, h2, h3 { font-weight: 800; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; font-variant-numeric: tabular-nums; }
+    #cross { position: absolute; left: 50%; top: 50%; --gap: 8px; }
+    #cross i { position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.55); }
+    #cross .d { width: 2px; height: 2px; left: -1px; top: -1px; }
+    #cross .l { width: 8px; height: 2px; top: -1px; left: calc(-8px - var(--gap)); }
+    #cross .r { width: 8px; height: 2px; top: -1px; left: var(--gap); }
+    #cross .u { width: 2px; height: 8px; left: -1px; top: calc(-8px - var(--gap)); }
+    #cross .b { width: 2px; height: 8px; left: -1px; top: var(--gap); }
+    body[data-mode="build"] #cross i:not(.d), body[data-mode="edit"] #cross i:not(.d) { display: none; }
+    body[data-mode="build"] #cross .d { width: 6px; height: 6px; left: -3px; top: -3px; transform: rotate(45deg); background: var(--blue); }
+    body[data-mode="edit"] #cross .d { width: 6px; height: 6px; left: -3px; top: -3px; border-radius: 50%; }
+    #hitmark { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; opacity: 0; }
+    #hitmark::before, #hitmark::after { content: ''; position: absolute; left: 12px; top: -2px; width: 2px; height: 30px;
+      background: linear-gradient(#fff 0 30%, transparent 30% 70%, #fff 70%); transform: rotate(45deg); }
+    #hitmark::after { transform: rotate(-45deg); }
+    #hitmark.show { opacity: 1; }
+    #hitmark.head::before, #hitmark.head::after { background: linear-gradient(var(--amber) 0 30%, transparent 30% 70%, var(--amber) 70%); }
+
+    #slots { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; }
+    .slot { position: relative; width: 62px; height: 62px; border-radius: 8px; background: rgba(17,25,35,.62);
+      border: 2px solid rgba(255,255,255,.14); color: #c7d3df; display: grid; place-items: center; }
+    .slot.gap { margin-left: 14px; }
+    .slot svg { width: 34px; height: 34px; margin-top: -6px; }
+    .slot b { position: absolute; left: 5px; top: 3px; font-size: 11px; color: var(--amber); }
+    .slot i { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 10px; font-style: normal;
+      letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+    .slot.on { background: rgba(26,37,49,.92); border-color: var(--amber); color: #fff; transform: translateY(-4px); }
+    .slot.on i { color: #fff; }
+    #tip { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 13px; color: #fff;
+      letter-spacing: .02em; white-space: nowrap; padding: 4px 12px; border-radius: 5px; background: rgba(17,25,35,.6); }
+    #tip:empty { display: none; }
+    #ammo { position: absolute; right: 20px; bottom: 16px; padding: 8px 14px 10px; border-radius: 10px; background: rgba(17,25,35,.62); text-align: right; }
+    #gunName { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #dbe5ee; }
+    #ammoNow { font-size: 54px; font-weight: 800; line-height: 1; }
+    #ammoSub { font-size: 15px; color: #dbe5ee; margin-left: 6px; }
+    #ammo.low #ammoNow { color: var(--red); }
+    #reload { height: 4px; width: 130px; margin: 6px 0 0 auto; background: rgba(255,255,255,.18); border-radius: 2px; overflow: hidden; }
+    #reloadFill { height: 100%; width: 0; background: var(--amber); }
+    #hints { position: absolute; left: 14px; top: 12px; display: flex; gap: 6px; font-size: 12px; color: #f1f5f9; }
+    #hints span { padding: 3px 8px 3px 3px; border-radius: 6px; background: rgba(17,25,35,.55); }
+    #hints b { display: inline-block; min-width: 18px; padding: 1px 5px; margin-right: 4px; border-radius: 4px; text-align: center;
+      background: rgba(17,25,35,.7); color: var(--amber); }
+    #stats { position: absolute; right: 14px; top: 12px; padding: 4px 9px; border-radius: 6px; background: rgba(17,25,35,.55); font-size: 12px; color: #f1f5f9; }
+    #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); padding: 7px 16px; border-radius: 6px;
+      background: rgba(17,25,35,.8); font-size: 15px; font-weight: 700; opacity: 0; transition: opacity .2s; }
+    #toast.show { opacity: 1; }
+    .num { position: absolute; left: 0; top: 0; font-size: 22px; font-weight: 800; color: #fff; will-change: transform;
+      text-shadow: 0 0 3px #000, 0 2px 0 rgba(0,0,0,.6); }
+    .num.head { color: var(--amber); font-size: 27px; }
+    .hp { position: absolute; left: 0; top: 0; width: 64px; height: 7px; border-radius: 4px; background: rgba(0,0,0,.5);
+      border: 1px solid rgba(0,0,0,.5); overflow: hidden; will-change: transform; }
+    .hp i { display: block; height: 100%; width: 100%; background: #ff7b5c; }
+
+    /* ---------- screens ---------- */
+    .screen { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 24px; background: rgba(13,19,27,.72); backdrop-filter: blur(3px); }
+    #menu { align-items: flex-start; justify-content: center; padding-left: max(6vw, 28px);
+      background: linear-gradient(90deg, rgba(13,19,27,.94) 0, rgba(13,19,27,.8) 38%, rgba(13,19,27,.1) 75%); backdrop-filter: none; }
+    h1 { margin: 0; font-size: clamp(46px, 8vw, 96px); line-height: .9; letter-spacing: -.02em; text-transform: uppercase; }
+    h1 span { display: block; color: var(--amber); }
+    .tag { margin: 4px 0 14px; max-width: 34em; color: var(--dim); font-size: 16px; line-height: 1.45; }
+    h2 { margin: 0 0 6px; font-size: 34px; text-transform: uppercase; letter-spacing: .02em; }
+    .btn { font: inherit; font-weight: 800; font-size: 18px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink);
+      background: var(--amber); border: 0; border-radius: 8px; padding: 14px 34px; min-width: 240px; cursor: pointer; }
+    .btn:hover { filter: brightness(1.08); }
+    .btn.ghost { background: transparent; color: var(--text); box-shadow: inset 0 0 0 2px var(--line); }
+    .btn.ghost:hover { box-shadow: inset 0 0 0 2px var(--amber); }
+    .btn.small { font-size: 13px; padding: 9px 16px; min-width: 0; background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+    .keys { margin-top: 18px; display: grid; grid-template-columns: auto auto; gap: 5px 14px; font-size: 13px; color: var(--dim); }
+    .keys b { color: var(--text); }
+    #touchNote { color: var(--amber); font-size: 14px; max-width: 30em; }
+
+    #settings { justify-content: flex-start; padding-top: 4vh; }
+    #setBody { width: min(680px, 100%); flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel);
+      border-radius: 12px; border: 1px solid var(--line); overflow: hidden; }
+    .tabs { display: flex; border-bottom: 1px solid var(--line); }
+    .tab { flex: 1; font: inherit; font-weight: 700; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; color: var(--dim);
+      background: none; border: 0; padding: 13px 8px; cursor: pointer; border-bottom: 3px solid transparent; }
+    .tab.on { color: var(--text); border-bottom-color: var(--amber); }
+    .page { flex: 1; overflow-y: auto; padding: 10px 20px 18px; }
+    .page h3 { margin: 16px 0 4px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); }
+    .row { display: flex; align-items: center; gap: 12px; padding: 5px 0; font-size: 14px; }
+    .row .name { flex: 1 1 46%; }
+    .row input[type=range] { flex: 1 1 40%; accent-color: var(--amber); min-width: 0; }
+    .row .val { width: 62px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+    .row.changed .val { color: var(--amber); }
+    .choices { display: flex; gap: 6px; }
+    .chip, .bind { font: inherit; font-size: 13px; font-weight: 700; color: var(--text); background: var(--ink); border: 1px solid var(--line);
+      border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+    .chip.on { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+    .bind { min-width: 118px; }
+    .bind.wait { border-color: var(--amber); color: var(--amber); }
+    .note { margin: 10px 0; font-size: 13px; line-height: 1.45; color: var(--dim); }
+    .bar { display: flex; gap: 8px; }
+  </style>
+</head>
+<body data-mode="gun">
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="cross"><i class="d"></i><i class="l"></i><i class="r"></i><i class="u"></i><i class="b"></i></div>
+    <div id="hitmark"></div>
+    <div id="bars"></div>
+    <div id="nums"></div>
+    <div id="hints"></div>
+    <div id="stats"></div>
+    <div id="toast"></div>
+    <div id="tip"></div>
+    <div id="slots"></div>
+    <div id="ammo">
+      <div id="gunName"></div>
+      <span id="ammoNow"></span><span id="ammoSub"></span>
+      <div id="reload"><div id="reloadFill"></div></div>
+    </div>
+  </div>
+
+  <div id="menu" class="screen">
+    <h1>High <span>Ground</span></h1>
+    <p class="tag">Build, edit and aim practice. Box up, cut a window, take the wall, climb. Every number behind the feel can be changed in the Feel lab.</p>
+    <button id="play" class="btn">Play</button>
+    <button class="btn ghost openSettings">Settings</button>
+    <p id="touchNote" hidden>High Ground needs a keyboard and mouse for now.</p>
+    <div class="keys" id="menuKeys"></div>
+  </div>
+
+  <div id="paused" class="screen" hidden>
+    <h2>Paused</h2>
+    <button id="resume" class="btn">Resume</button>
+    <button id="restart" class="btn ghost">Reset arena</button>
+    <button class="btn ghost openSettings">Settings</button>
+    <button id="quit" class="btn ghost">Main menu</button>
+  </div>
+
+  <div id="settings" class="screen" hidden>
+    <h2>Settings</h2>
+    <div id="setBody"></div>
+    <button id="setBack" class="btn">Back</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
