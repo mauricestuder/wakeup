@@ -7,6 +7,7 @@ import { GUNS } from './weapons.js';
 const $ = (id) => document.getElementById(id);
 
 const ICON = {
+  pick: '<path d="M3 9c5-5 13-5 18 0l-2 1.6c-2.4-1.7-4.4-2.4-6-2.6V21h-2V8c-1.6.2-3.6.9-6 2.6z"/>',
   brk: '<path d="M2 9h17l3 2v2H9l-1 3H5l1-3H2z"/>',
   rng: '<path d="M1 9h14V7h3v2h5v2h-6v1h-4l-1 4h-3l1-4H1z"/>',
   hrn: '<path d="M4 8h13v3h-4v5h-3v-5H7l-1 3H4z"/>',
@@ -16,7 +17,7 @@ const ICON = {
   roof: '<path d="M2 18 12 6l10 12z M12 6v12" fill="none" stroke="currentColor" stroke-width="1.6"/>',
 };
 const SLOTS = [
-  ['gun1', 'brk', 'Breaker'], ['gun2', 'rng', 'Ranger'], ['gun3', 'hrn', 'Hornet'],
+  ['pick', 'pick', 'Pickaxe'], ['gun1', 'brk', 'Breaker'], ['gun2', 'rng', 'Ranger'], ['gun3', 'hrn', 'Hornet'],
   ['wall', 'wall', 'Wall'], ['floor', 'floor', 'Floor'], ['ramp', 'ramp', 'Ramp'], ['roof', 'roof', 'Roof'],
 ];
 
@@ -65,12 +66,13 @@ export class Hud {
     for (const [action] of SLOTS) this.slotEls[action].querySelector('b').textContent = label(action);
     $('menuKeys').innerHTML =
       `<b>${['forward', 'left', 'back', 'right'].map(label).join(' ')} · ${label('jump')} · ${label('crouch')}</b><span>move, jump, crouch</span>` +
+      `<b>${label('pick')}</b><span>pickaxe</span>` +
+      `<b>${['gun1', 'gun2', 'gun3'].map(label).join(' · ')} · ${label('aim')}</b><span>shotgun, rifle, SMG · hold to aim</span>` +
       `<b>${['wall', 'floor', 'ramp', 'roof'].map(label).join(' · ')}</b><span>wall, floor, ramp, roof</span>` +
-      `<b>${label('edit')}</b><span>edit your own piece, again to confirm</span>` +
-      `<b>${['gun1', 'gun2', 'gun3'].map(label).join(' · ')}</b><span>shotgun, rifle, SMG</span>` +
+      `<b>${label('edit')}</b><span>edit your own piece: mark tiles, then confirm</span>` +
       `<b>${label('resetArena')}</b><span>reset the arena</span>`;
     this.hintsEl.innerHTML =
-      `<span><b>${label('edit')}</b> edit</span><span><b>${label('reload')}</b> reload</span>` +
+      `<span><b>${label('aim')}</b> aim</span><span><b>${label('edit')}</b> edit</span><span><b>${label('reload')}</b> reload</span>` +
       `<span><b>${label('resetArena')}</b> reset arena</span><span><b>Esc</b> menu</span>`;
   }
 

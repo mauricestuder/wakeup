@@ -53,8 +53,10 @@ export class Arsenal {
   // Spread right now, in degrees (the crosshair shows it).
   get spread() {
     const id = this.gun.id;
-    if (id === 'brk') return T.brkSpread;
-    return Math.min(T[id + 'MaxSpread'], T[id + 'Spread'] + this.bloom);
+    // aiming tightens it
+    const k = 1 - (1 - T.aimSpread) * this.player.ads;
+    if (id === 'brk') return T.brkSpread * (1 - (1 - k) * 0.5);
+    return Math.min(T[id + 'MaxSpread'], T[id + 'Spread'] + this.bloom) * k;
   }
 
   select(n) {

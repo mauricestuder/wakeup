@@ -4,7 +4,11 @@ import * as THREE from '../../game/vendor/three.module.min.js';
 import { C, N, SIZE } from './grid.js';
 import { WALL_TOP } from './collide.js';
 
-export const SPAWN = { x: 6, y: 0, z: 14, yaw: -Math.PI / 2 };
+// The practice ground sits in the middle of the map: everything is placed
+// this many cells in from the corner.
+export const O = Math.floor((N - 7) / 2);
+export const OX = O * C;
+export const SPAWN = { x: OX + 6, y: 0, z: OX + 14, yaw: -Math.PI / 2 };
 
 function gridTexture(base, line, fine, sub) {
   const c = document.createElement('canvas');
@@ -28,8 +32,29 @@ function gridTexture(base, line, fine, sub) {
   return t;
 }
 
+// A dome with a soft blue running down to the haze at the horizon.
+function sky() {
+  const g = new THREE.SphereGeometry(900, 24, 12);
+  const top = new THREE.Color(0x6fa8de), low = new THREE.Color(HAZE), c = new THREE.Color(), col = [];
+  const y = g.attributes.position;
+  for (let n = 0; n < y.count; n++) {
+    const h = Math.max(0, y.getY(n) / 900);
+    c.copy(low).lerp(top, Math.min(1, Math.pow(h, 0.55)));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+}
+
+const HAZE = 0xcfdbe6;
+
 export function buildArena(scene) {
-  scene.background = new THREE.Color(0xc9d6e2);
+  scene.background = new THREE.Color(HAZE);
+  scene.fog = new THREE.Fog(HAZE, 220, 1150);
+  const dome = sky();
+  dome.position.set(SIZE / 2, 0, SIZE / 2);
+  dome.renderOrder = -1;
+  scene.add(dome);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x8e9aab, 2.1));
   const sun = new THREE.DirectionalLight(0xffffff, 1.9);
   sun.position.set(0.45, 1, 0.3);
@@ -58,7 +83,7 @@ export function buildArena(scene) {
     scene.add(t);
   }
   // a darker surround so the room doesn't float in nothing
-  const out = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({ color: 0x9aa9b9 }));
+  const out = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.MeshLambertMaterial({ color: 0x9aa9b9 }));
   out.rotation.x = -Math.PI / 2;
   out.position.set(SIZE / 2, -0.05, SIZE / 2);
   scene.add(out);
@@ -66,10 +91,8 @@ export function buildArena(scene) {
 
 // The box the player starts in.
 export function startLayout(pieces) {
-  const i = 1, j = 3;
+  const i = O + 1, j = O + 3;
   for (const [type, a, b] of [['wx', i, j], ['wx', i + 1, j], ['wz', i, j], ['wz', i, j + 1]]) {
     pieces.add(type, a, 0, b, { owner: 'me', pop: false });
   }
 }
-
-export { C };

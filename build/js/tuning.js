@@ -16,14 +16,16 @@ export const DEFS = [
   { k: 'coyote', label: 'Late jump window', unit: 's', min: 0, max: 0.25, step: 0.01, v: 0.09 },
   { k: 'jumpBuffer', label: 'Early jump window', unit: 's', min: 0, max: 0.25, step: 0.01, v: 0.1 },
 
-  { g: 'Camera', k: 'camRight', label: 'Shoulder offset', unit: 'm', min: 0, max: 1.2, step: 0.05, v: 0.55 },
-  { k: 'camUp', label: 'Camera height', unit: 'm', min: -0.2, max: 0.8, step: 0.05, v: 0.25 },
+  { g: 'Camera', k: 'camRight', label: 'Shoulder offset (to the right)', unit: 'm', min: 0, max: 1.6, step: 0.05, v: 0.8 },
+  { k: 'camUp', label: 'Camera height (above the head)', unit: 'm', min: -0.2, max: 1.2, step: 0.05, v: 0.4 },
+  { k: 'aimDist', label: 'Camera distance while aiming', unit: 'm', min: 0.8, max: 3, step: 0.1, v: 1.7 },
+  { k: 'aimSpread', label: 'Spread while aiming', unit: '×', min: 0.2, max: 1, step: 0.05, v: 0.55 },
   { k: 'camLift', label: 'Lift smoothing', unit: 's', min: 0, max: 0.2, step: 0.01, v: 0.07 },
   { k: 'recoil', label: 'Camera kick', min: 0, max: 3, step: 0.1, v: 1 },
 
   { g: 'Building', k: 'reachWall', label: 'Wall reach', unit: 'm', min: 3, max: 8, step: 0.25, v: 5 },
   { k: 'reachFloor', label: 'Floor reach', unit: 'm', min: 3, max: 8, step: 0.25, v: 5 },
-  { k: 'rampFocus', label: 'Ramp / roof distance', unit: 'm', min: 1, max: 4, step: 0.1, v: 2.2 },
+  { k: 'rampFocus', label: 'Ramp / roof distance', unit: 'm', min: 0.5, max: 4, step: 0.1, v: 1.6 },
   { k: 'buildRepeat', label: 'Hold-to-build repeat', unit: 's', min: 0, max: 0.3, step: 0.01, v: 0.05 },
   { k: 'placePop', label: 'Pop-in time', unit: 's', min: 0, max: 0.25, step: 0.01, v: 0.07 },
   { k: 'pushOut', label: 'Push-out speed', unit: 'm/s', min: 2, max: 30, step: 1, v: 9 },
@@ -32,14 +34,21 @@ export const DEFS = [
 
   { g: 'Editing', k: 'editReach', label: 'Edit reach', unit: 'm', min: 3, max: 10, step: 0.25, v: 6 },
 
-  { g: 'Breaker (shotgun)', k: 'brkDmg', label: 'Damage per pellet', min: 4, max: 25, step: 1, v: 11 },
+  { g: 'Pickaxe', k: 'pickDmg', label: 'Damage to builds', min: 10, max: 150, step: 5, v: 50 },
+  { k: 'pickDummyDmg', label: 'Damage to dummies', min: 5, max: 100, step: 5, v: 20 },
+  { k: 'pickRate', label: 'Swings per second', min: 1, max: 5, step: 0.1, v: 2.2 },
+  { k: 'pickReach', label: 'Reach', unit: 'm', min: 1.5, max: 6, step: 0.25, v: 2.75 },
+
+  { g: 'Breaker (shotgun)', k: 'brkZoom', label: 'Zoom while aiming', unit: '×', min: 1, max: 3, step: 0.05, v: 1.25 },
+  { k: 'brkDmg', label: 'Damage per pellet', min: 4, max: 25, step: 1, v: 11 },
   { k: 'brkPellets', label: 'Pellets', min: 1, max: 14, step: 1, v: 9 },
   { k: 'brkDelay', label: 'Time between shots', unit: 's', min: 0.2, max: 1.5, step: 0.05, v: 0.85 },
   { k: 'brkMag', label: 'Shells', min: 1, max: 12, step: 1, v: 5 },
   { k: 'brkReload', label: 'Reload time', unit: 's', min: 0.5, max: 4, step: 0.1, v: 2.1 },
   { k: 'brkSpread', label: 'Spread', unit: '°', min: 0.5, max: 8, step: 0.1, v: 3.2 },
 
-  { g: 'Ranger (rifle)', k: 'rngDmg', label: 'Damage', min: 10, max: 60, step: 1, v: 28 },
+  { g: 'Ranger (rifle)', k: 'rngZoom', label: 'Zoom while aiming', unit: '×', min: 1, max: 4, step: 0.05, v: 1.8 },
+  { k: 'rngDmg', label: 'Damage', min: 10, max: 60, step: 1, v: 28 },
   { k: 'rngRate', label: 'Shots per second', min: 2, max: 12, step: 0.5, v: 5.5 },
   { k: 'rngMag', label: 'Magazine', min: 5, max: 60, step: 1, v: 30 },
   { k: 'rngReload', label: 'Reload time', unit: 's', min: 0.5, max: 4, step: 0.1, v: 2.2 },
@@ -47,7 +56,8 @@ export const DEFS = [
   { k: 'rngBloom', label: 'Spread added per shot', unit: '°', min: 0, max: 1.5, step: 0.05, v: 0.3 },
   { k: 'rngMaxSpread', label: 'Largest spread', unit: '°', min: 0.5, max: 6, step: 0.1, v: 2.4 },
 
-  { g: 'Hornet (SMG)', k: 'hrnDmg', label: 'Damage', min: 5, max: 40, step: 1, v: 15 },
+  { g: 'Hornet (SMG)', k: 'hrnZoom', label: 'Zoom while aiming', unit: '×', min: 1, max: 3, step: 0.05, v: 1.4 },
+  { k: 'hrnDmg', label: 'Damage', min: 5, max: 40, step: 1, v: 15 },
   { k: 'hrnRate', label: 'Shots per second', min: 5, max: 20, step: 0.5, v: 12 },
   { k: 'hrnMag', label: 'Magazine', min: 10, max: 60, step: 1, v: 30 },
   { k: 'hrnReload', label: 'Reload time', unit: 's', min: 0.5, max: 4, step: 0.1, v: 1.9 },
