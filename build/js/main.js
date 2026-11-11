@@ -101,6 +101,12 @@ function confirmEdit() {
   setMode(game.before);
 }
 
+// Reset in one press: the piece under the crosshair, or the one being edited.
+function quickReset() {
+  if (game.mode === 'edit') { editor.reset(); return confirmEdit(); }
+  if (!editor.resetPiece()) sfx.deny();
+}
+
 function editKey() {
   if (game.mode === 'edit') return confirmEdit();
   if (editor.start()) {
@@ -126,6 +132,7 @@ input.handlers.press = (id) => {
     case 'gun3': pickGun(2); break;
     case 'edit': editKey(); break;
     case 'editReset': if (game.mode === 'edit') editor.reset(); break;
+    case 'quickReset': quickReset(); break;
     case 'reload': if (game.mode === 'gun') arsenal.reload(); break;
     case 'resetArena': resetArena(); break;
   }
@@ -306,6 +313,7 @@ function tick(dt) {
     hud.ammo(gun, arsenal.ammo[arsenal.current], arsenal.reloading, arsenal.reloadLeft);
     if (gun) hud.spread(arsenal.spread);
     hud.tipText(TIPS[game.mode] ? TIPS[game.mode]() : '');
+    hud.stamina(player.stamina);
     hud.stats(`Height ${Math.max(0, Math.round(player.body.y))} m · Dummies down ${targets.downs} · Pieces placed ${builder.placed}`);
     hud.update(dt, targets.list);
   } else if (game.state === 'menu') {
@@ -343,5 +351,5 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 // For testing from the console: __game.manual = true stops the clock, tick(dt) moves it by hand.
 window.__game = Object.assign(game, {
   T, GUNS, SPAWN, settings, input, pieces, world, player, builder, editor, arsenal, pickaxe, targets, hud, camera, scene, renderer,
-  manual: false, noRender: false, freeLook: false, tick, start, pause, resetArena, setMode, pickGun, pickTool, pickPiece, editKey,
+  manual: false, noRender: false, freeLook: false, tick, start, pause, resetArena, setMode, pickGun, pickTool, pickPiece, editKey, quickReset,
 });

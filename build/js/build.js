@@ -146,9 +146,10 @@ export class Builder {
     const ps = this.pieces, b = this.player.body;
     const [i, j] = this.focus(a, cut);
     const feet = Math.floor((b.y + 1) / L);
-    const k = Math.max(1, Math.min(H, a.dy < DOWN ? feet : feet + 1));
+    // Over my head, or at my feet when I look down. On the bare ground it lands on the ground.
+    const k = Math.max(0, Math.min(H, a.dy < DOWN ? feet : feet + 1));
     if (ps.has('c', i, k, j)) return null;
-    for (let kk = k; kk >= Math.max(1, k - 1); kk--) {
+    for (let kk = k; kk >= Math.max(0, k - 1); kk--) {
       if (this.ok('c', i, kk, j)) return { type: 'c', i, k: kk, j, dir: 0, valid: true };
     }
     return { type: 'c', i, k, j, dir: 0, valid: false };

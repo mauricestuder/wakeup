@@ -56,6 +56,20 @@ export class Editor {
     return h.piece;
   }
 
+  // One press: the own piece under the crosshair goes back to how it was
+  // placed. Returns false when there is no such piece.
+  resetPiece() {
+    const p = this.pick(), ps = this.pieces;
+    if (!p) return false;
+    const before = p.mesh.geometry;
+    if (p.type === 'r') { if (p.form !== 'F') ps.setRamp(p, 'F', p.dir, 0); } else ps.setMask(p, FULL[p.type]);
+    if (p.mesh.geometry !== before) {
+      sfx.editReset();
+      if (p.type === 'r' || p.type === 'c') this.world.onTurned(p, this.player.body);
+    }
+    return true;
+  }
+
   // Edit key outside edit mode. Returns true when editing started.
   start() {
     const p = this.pick();

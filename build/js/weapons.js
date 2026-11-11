@@ -2,7 +2,6 @@
 
 import * as THREE from '../../game/vendor/three.module.min.js';
 import { T } from './tuning.js';
-import { CROUCH } from './collide.js';
 import { sfx } from './audio.js';
 
 export const GUNS = [
@@ -133,7 +132,7 @@ export class Arsenal {
     rx /= rl; rz /= rl;
     const ux = -rz * a.dy, uy = rz * a.dx - rx * a.dz, uz = rx * a.dy;
 
-    const cy = b.y + (b.h === CROUCH ? 0.8 : 1.2);
+    const cy = b.y + b.h * 0.67;
     const dummies = new Map(), pieces = new Map();
     pl.muzzle(this.v);
     for (let n = 0; n < pellets; n++) {

@@ -50,9 +50,14 @@
       letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
     .slot.on { background: rgba(26,37,49,.92); border-color: var(--amber); color: #fff; transform: translateY(-4px); }
     .slot.on i { color: #fff; }
-    #tip { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 13px; color: #fff;
+    #tip { position: absolute; left: 50%; bottom: 98px; transform: translateX(-50%); font-size: 13px; color: #fff;
       letter-spacing: .02em; white-space: nowrap; padding: 4px 12px; border-radius: 5px; background: rgba(17,25,35,.6); }
     #tip:empty { display: none; }
+    #stamina { position: absolute; left: 50%; bottom: 84px; width: 180px; height: 5px; margin-left: -90px; border-radius: 3px;
+      background: rgba(17,25,35,.6); overflow: hidden; opacity: 0; transition: opacity .25s; }
+    #stamina.show { opacity: 1; }
+    #stamina i { display: block; height: 100%; width: 100%; background: var(--blue); }
+    #stamina.low i { background: var(--red); }
     #ammo { position: absolute; right: 20px; bottom: 16px; padding: 8px 14px 10px; border-radius: 10px; background: rgba(17,25,35,.62); text-align: right; }
     #gunName { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #dbe5ee; }
     #ammoNow { font-size: 54px; font-weight: 800; line-height: 1; }
@@ -129,6 +134,7 @@
     <div id="hints"></div>
     <div id="stats"></div>
     <div id="toast"></div>
+    <div id="stamina"><i></i></div>
     <div id="tip"></div>
     <div id="slots"></div>
     <div id="ammo">

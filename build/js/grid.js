@@ -34,7 +34,7 @@ export function inBounds(type, i, k, j) {
     case 'wz': return i >= 0 && i <= N - 1 && j >= 1 && j <= N - 1 && k >= 0 && k <= H - 1;
     case 'f': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 1 && k <= H;
     case 'r': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 0 && k <= H - 1;
-    case 'c': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 1 && k <= H;
+    case 'c': return i >= 0 && i <= N - 1 && j >= 0 && j <= N - 1 && k >= 0 && k <= H;
     default: return false;
   }
 }
