@@ -279,8 +279,23 @@ addEventListener('contextmenu', (e) => e.preventDefault());
 const touch = isTouch ? initTouch(game, { keys, firing, pause }) : null;
 
 // ---------- loop ----------
+// Size the picture to the canvas as it is really shown. iPhones and iPads
+// sometimes report the old window size during a rotation or when the
+// address bar moves, which stretched the picture, so this also runs every
+// frame and fixes any mismatch.
+var viewW = 0, viewH = 0; // var: resize() can run before this line (from the settings)
+function viewSize() {
+  const c = renderer.domElement;
+  return [c.clientWidth || innerWidth, c.clientHeight || innerHeight];
+}
+function checkSize() {
+  const [w, h] = viewSize();
+  if (w !== viewW || h !== viewH) resize();
+}
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const [w, h] = viewSize();
+  if (!w || !h) return;
+  viewW = w; viewH = h;
   renderer.setSize(w, h, false);
   ps1.setSize(w, h);
   camera.aspect = vmCamera.aspect = w / h;
@@ -288,6 +303,8 @@ function resize() {
   vmCamera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 300));
+visualViewport?.addEventListener('resize', resize);
 resize();
 
 let last = performance.now();
@@ -295,6 +312,7 @@ let monitorT = 0;
 let dividendT = 5;
 function frame(now) {
   requestAnimationFrame(frame);
+  checkSize();
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   step(dt);

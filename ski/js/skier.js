@@ -1,5 +1,6 @@
 // The skier: a small rigged model, ground/air/rail physics and trick tracking.
 import * as THREE from '../../game/vendor/three.module.min.js';
+import { partTextures } from './skins.js';
 import { height, normal, rails, obstacleHit, inPipe, PIPE, JUMP, jumpU, onJumpHill, jumpDistance, smooth } from './terrain.js';
 
 const G = 9.81;
@@ -13,7 +14,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const DEG = 180 / Math.PI;
 const PIVOT = 0.85; // height of the body's centre above the feet
-const BOARD_YAW = -1.35; // a snowboarder's body faces this far round from the board
+const BOARD_YAW = -1.1; // a snowboarder's body faces this far round from the board
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -43,7 +44,7 @@ function buildModel() {
   root.add(body);
   // Shared materials by role, so a skin can recolour the whole rider at once.
   const L = (color) => new THREE.MeshLambertMaterial({ color });
-  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da) };
+  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da), trim: L(0x15181c) };
   const mb = (w, h, d, mat, y = 0) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y, 0), mat);
 
   const skis = [];
@@ -87,7 +88,7 @@ function buildModel() {
     thigh.add(mb(0.15, 0.46, 0.17, mats.pants, -0.23));
     const shin = new THREE.Group();
     shin.position.y = -0.46;
-    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23));
+    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23), mb(0.155, 0.07, 0.175, mats.trim, -0.42));
     thigh.add(shin);
     hips.add(thigh);
     legs.push({ thigh, shin, side });
@@ -97,7 +98,10 @@ function buildModel() {
   torso.add(mb(0.4, 0.56, 0.25, mats.jacket, 0.28));
   const zip = mb(0.03, 0.5, 0.01, mats.accent, 0.28); zip.position.z = 0.13;
   const pack = new THREE.Group(); // extras some characters wear on the back
-  torso.add(zip, pack);
+  const collar = mb(0.3, 0.07, 0.2, mats.trim, 0.585);
+  const belt = mb(0.42, 0.06, 0.27, mats.trim, 0.03);
+  const hood = mb(0.26, 0.12, 0.08, mats.jacket, 0.54); hood.position.z = -0.15;
+  torso.add(zip, pack, collar, belt, hood);
   const head = new THREE.Group();
   head.position.y = 0.66;
   torso.add(head);
@@ -108,7 +112,7 @@ function buildModel() {
     upper.add(mb(0.12, 0.34, 0.13, mats.jacket, -0.17));
     const fore = new THREE.Group();
     fore.position.y = -0.34;
-    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16));
+    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16), mb(0.125, 0.06, 0.135, mats.trim, -0.29));
     fore.add(mb(0.11, 0.1, 0.12, mats.dark, -0.36));
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 5).translate(0, -0.5, 0), mats.pole);
     pole.position.y = -0.36;
@@ -150,11 +154,6 @@ const HEADS = {
     h.add(at(cone(0.04, 0.12, m.beak), 0, -0.02, 0.19));
     for (const s of [1, -1]) h.add(at(sphere(0.022, m.black), s * 0.05, 0.04, 0.135));
   },
-  robot: (h, m) => {
-    h.add(box3(0.26, 0.24, 0.24, m.metal), at(box3(0.22, 0.07, 0.02, m.glow), 0, 0.02, 0.125));
-    h.add(at(box3(0.02, 0.12, 0.02, m.metal), 0.07, 0.17, 0), at(sphere(0.03, m.glow), 0.07, 0.24, 0));
-    for (const s of [1, -1]) h.add(at(box3(0.03, 0.08, 0.08, m.dark), s * 0.145, 0, 0));
-  },
   yeti: (h, m) => {
     h.add(squash(ico(0.17, m.yfur), 1.05, 1, 1), at(squash(sphere(0.1, m.yface), 1, 0.9, 0.6), 0, -0.02, 0.1));
     for (const s of [1, -1]) {
@@ -162,15 +161,8 @@ const HEADS = {
       h.add(horn, at(sphere(0.02, m.black), s * 0.04, 0.02, 0.17));
     }
   },
-  astro: (h, m) => {
-    h.add(sphere(0.19, m.white), at(squash(sphere(0.15, m.visor), 1, 0.8, 0.6), 0, 0, 0.1));
-    h.add(at(box3(0.05, 0.05, 0.05, m.glow), 0.17, 0.06, 0));
-  },
 };
-const PACKS = {
-  astro: (p, m) => { p.add(at(box3(0.3, 0.36, 0.14, m.white), 0, 0.3, -0.19)); },
-  robot: (p, m) => { p.add(at(box3(0.22, 0.3, 0.1, m.metal), 0, 0.3, -0.17), at(box3(0.06, 0.06, 0.02, m.glow), 0, 0.36, -0.225)); },
-};
+const PACKS = {};
 const box3 = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const sphere = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
 const ico = (r, mat) => new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), mat);
@@ -374,13 +366,23 @@ export class Skier {
 
   // Looks from the locker: skin colours { jacket, pants, gear, accent, glow }
   // and a character id for the head.
-  applyLook(skin, character) {
+  applyLook(skin, character, skinId = 'x') {
     const m = this.model.mats;
-    for (const k of ['jacket', 'pants', 'gear', 'accent']) {
-      m[k].color.setHex(skin[k]);
-      m[k].emissive.setHex(0);
+    for (const k of ['jacket', 'pants', 'gear', 'accent', 'trim']) {
+      const mat = m[k];
+      const tx = k === 'accent' || k === 'trim' ? null : partTextures(skinId, skin, k);
+      const hadMap = !!mat.map, hadGlow = !!mat.emissiveMap;
+      mat.map = tx ? tx.map : null;
+      mat.emissiveMap = tx && tx.glow ? tx.glow : null;
+      mat.color.setHex(tx ? 0xffffff : k === 'trim' ? (skin.trim ?? 0x15181c) : skin[k]);
+      mat.emissive.setHex(mat.emissiveMap ? 0xffffff : 0);
+      mat.emissiveIntensity = mat.emissiveMap ? (skin.glowK ?? 0.8) : 1;
+      if (!mat.emissiveMap && skin.glow?.includes(k)) mat.emissive.setHex(k === 'trim' ? skin.trim : skin[k]).multiplyScalar(0.35);
+      if (hadMap !== !!mat.map || hadGlow !== !!mat.emissiveMap) mat.needsUpdate = true;
     }
-    if (skin.glow) for (const k of skin.glow) m[k].emissive.copy(m[k].color).multiplyScalar(0.35);
+    HEAD_MATS.helmet.color.setHex(skin.helmet ?? 0xf2f2f2);
+    HEAD_MATS.lens.color.setHex(skin.lens ?? 0xffb02e);
+    HEAD_MATS.lens.emissive.setHex(skin.lens ?? 0xffb02e).multiplyScalar(0.33);
     if (this.model.character !== character) setHead(this.model, character);
   }
 
@@ -1091,7 +1093,10 @@ export class Skier {
       this.renderQ.premultiply(q1);
     } else {
       this.groundQuat(target);
-      q1.setFromAxisAngle(Z, this.switch ? -this.lean : this.lean);
+      // On a board the rider stays almost upright and the board tips on
+      // its edge, so a left turn looks and feels like a right turn.
+      const lk = this.board ? 0.3 + 0.35 * (this.square || 0) : 1;
+      q1.setFromAxisAngle(Z, (this.switch ? -this.lean : this.lean) * lk);
       target.multiply(q1);
       if (this.butter) {
         // Swing round to the new direction instead of snapping.
@@ -1136,7 +1141,11 @@ export class Skier {
     M.head.rotation.x = -0.1 - P.crouch * 0.45;
     // On a board the body stands sideways (left foot forward) and the head
     // looks down the hill.
-    const yaw = this.board ? BOARD_YAW : 0;
+    // In a turn on a board the rider squares up towards the fall line the
+    // same amount either way, so toeside and heelside turns look alike.
+    const turning = this.board && this.state === 'ground' ? Math.min(1, Math.abs(this.lean) / 0.35) : 0;
+    this.square = (this.square || 0) + (turning - (this.square || 0)) * (1 - Math.exp(-8 * dt));
+    const yaw = this.board ? BOARD_YAW * (1 - 0.85 * this.square) : 0;
     M.body.rotation.y = yaw + (this.state === 'ground' ? this.skid * (this.switch ? -1 : 1) * (this.board ? 0.4 : 1) : 0);
     M.head.rotation.y = -yaw * 0.8;
     if (this.board) {
@@ -1144,7 +1153,8 @@ export class Skier {
       // stands on its binding.
       const a = P.skis[0], b = P.skis[1], B = M.board;
       B.position.set(0, (a.y + b.y) / 2, (a.z + b.z) / 2);
-      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2);
+      const edge = this.state === 'ground' ? (this.switch ? -this.lean : this.lean) * 0.9 : 0;
+      B.rotation.set((a.rx + b.rx) / 2, (a.ry + b.ry) / 2, (a.rz + b.rz) / 2 + edge);
       B.updateMatrix();
       M.skis.forEach((ski, i) => {
         ski.position.set(0, 0, i ? -0.26 : 0.26).applyMatrix4(B.matrix);
