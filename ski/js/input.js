@@ -6,7 +6,7 @@ const STICK_R = 58;
 // On a keyboard the touch buttons stay on screen with their key under them:
 // a button lights up while its key is held, H hides the key labels.
 const KEY_BTN = {
-  Space: 'jump', ShiftLeft: 'grab', ShiftRight: 'grab', KeyJ: 'grab', KeyK: 'style', KeyL: 'style',
+  Space: 'jump', KeyK: 'grab', KeyL: 'grab', ShiftLeft: 'style', ShiftRight: 'style', KeyJ: 'style',
   KeyR: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyE: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
 };
 function lightKey(code, on) {
@@ -20,8 +20,8 @@ function toggleKeyHints() {
   if (onKeyHints) onKeyHints(!off);
 }
 
-const GRAB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
-const STYLE_KEYS = ['KeyK', 'KeyL'];
+const GRAB_KEYS = ['KeyK', 'KeyL'];
+const STYLE_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyJ'];
 const BUTTER_KEYS = ['KeyR', 'ControlLeft'];
 
 export class Input {
