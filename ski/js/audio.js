@@ -91,5 +91,16 @@ export const sfx = {
     const notes = [523, 659, 784, 1047];
     for (let i = 0; i < Math.min(4, 1 + level); i++) tone(notes[i], i * 0.07, 0.25, 0.12);
   },
+  boost() { burst(700, 0.5, 0.35, 'bandpass'); burst(2200, 0.35, 0.18, 'bandpass'); },
+  // The yeti: a low growl that rises into a roar.
+  roar() {
+    if (!ctx) return;
+    burst(220, 1.1, 0.9);
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    o.type = 'sawtooth'; f.type = 'lowpass'; f.frequency.value = 900;
+    o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(150, t + 0.35); o.frequency.linearRampToValueAtTime(85, t + 1.1);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 1.25);
+  },
   bank() { if (ctx) { tone(784, 0, 0.18, 0.1); tone(1175, 0.09, 0.3, 0.1); } },
 };

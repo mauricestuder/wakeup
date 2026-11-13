@@ -155,7 +155,7 @@ export function baseHeight(x, z) {
   let h = fallLine(z) + ax * 0.035;
   const no = MAP.noise; // each map has its own bumps
   h += wild * ((fbm(x / 95 + no, z / 95) - 0.5) * 22 * MAP.rough + (vnoise(x / 32 + 50 + no, z / 32) - 0.5) * 4);
-  const e = Math.max(0, ax - 195);
+  const e = Math.max(0, ax - 222); // a low rise at the very edge; the yeti guards the rest
   h += e * e * 0.014;
   // The pipe sits on a smooth groomed plane.
   const pd = Math.abs(x - PIPE.x);

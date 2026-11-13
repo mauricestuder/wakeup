@@ -117,6 +117,14 @@
     [data-btn="butter"] { --c: #2ed3b7; width: 62px; height: 62px; font-size: 13px;
       right: calc(34px + env(safe-area-inset-right)); bottom: calc(128px + env(safe-area-inset-bottom)); }
     /* Roll buttons: above the stick, to straighten up in the air. */
+    /* Boost: a dark sweep runs round the button while it recharges. */
+    [data-btn="boost"] { --c: #ff3d81; --cd: 0; width: 58px; height: 58px; font-size: 12px; right: calc(44px + env(safe-area-inset-right)); bottom: calc(262px + env(safe-area-inset-bottom));
+      border-color: #ff3d81; box-shadow: 0 0 14px rgba(255,61,129,.55); }
+    [data-btn="boost"]::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none;
+      background: conic-gradient(rgba(10,14,30,.72) calc(var(--cd) * 360deg), transparent 0); }
+    [data-btn="boost"].cooling { box-shadow: none; opacity: .8; }
+    @media (max-height: 420px) { [data-btn="boost"] { width: 50px; height: 50px; right: calc(30px + env(safe-area-inset-right)); bottom: calc(190px + env(safe-area-inset-bottom)); } }
+    body:not(.nokeys) [data-btn="boost"] { right: calc(44px + env(safe-area-inset-right)); bottom: calc(258px + env(safe-area-inset-bottom)); }
     .btn.roll { --c: #c58cff; width: 50px; height: 50px; bottom: calc(232px + env(safe-area-inset-bottom)); }
     [data-btn="rollL"] { left: calc(46px + env(safe-area-inset-left)); }
     [data-btn="rollR"] { left: calc(116px + env(safe-area-inset-left)); }
@@ -388,6 +396,7 @@
     <div class="btn roll" data-btn="rollL" title="Roll left (Q)"><svg viewBox="0 0 24 24"><path d="M5 13a7 7 0 1 0 3-6.3"/><path d="M8 2v5h5"/></svg><kbd class="kb">Q</kbd></div>
     <div class="btn roll" data-btn="rollR" title="Roll right (E)"><svg viewBox="0 0 24 24"><path d="M19 13a7 7 0 1 1-3-6.3"/><path d="M16 2v5h-5"/></svg><kbd class="kb">E</kbd></div>
     <div class="btn tc" data-btn="butter">180<kbd class="kb">R</kbd></div>
+    <div class="btn tc" data-btn="boost" title="Speed boost (F)">BOOST<kbd class="kb">F</kbd></div>
     <div class="btn tc" data-btn="style">STYLE<kbd class="kb">Shift</kbd></div>
     <div class="btn tc" data-btn="grab">GRAB<kbd class="kb">K</kbd></div>
     <div class="btn tc" data-btn="jump">JUMP<kbd class="kb">Space</kbd></div>
@@ -482,8 +491,11 @@
           <div data-spane="controls" hidden>
             <h3>How to ride</h3>
             <div class="controls">
-              <b class="tch">Joystick</b><span class="tch">Steer · up = tuck/skate · down = brake</span>
-          <b class="kb">WASD / Arrows</b><span class="kb">Steer · W = tuck/skate · S = brake</span>
+              <b class="tch">Joystick</b><span class="tch">Steer · up = swing the poles (on skis) / tuck · down = brake</span>
+          <b class="kb">WASD / Arrows</b><span class="kb">Steer · W = swing the poles (on skis) / tuck · S = brake</span>
+          <b class="tch">BOOST</b><span class="tch">A burst of speed on the snow, then 8 s to recharge</span>
+          <b class="kb">F</b><span class="kb">Speed boost on the snow, then 8 s to recharge</span>
+          <b>Out of bounds</b><span>Ride too far off the side and the yeti gets you</span>
           <b class="tch">Hold JUMP</b><span class="tch">Crouch, release to pop (time it on the lip)</span>
           <b class="kb">Hold Space</b><span class="kb">Crouch, release to pop (time it on the lip)</span>
           <b>In the air</b><span>Stick sideways = spin · up/down = front/back flip · diagonal = cork</span>

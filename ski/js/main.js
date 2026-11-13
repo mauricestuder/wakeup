@@ -2,14 +2,16 @@
 import * as THREE from '../../game/vendor/three.module.min.js';
 import { buildTerrain, height, WORLD, dropIns, LANE, JUMP, jumpU, onJumpHill, loadMap, currentMap } from './terrain.js';
 import { MAPS, mapById } from './maps.js';
-import { Skier, showName } from './skier.js';
+import { Skier, showName, BOOST } from './skier.js';
 import { Input, isTouch, keyHintsChanged } from './input.js';
 import { initAudio, setMix, sfx, setVolume } from './audio.js';
 import { initLobby, profile, saveProfile, flakesFor } from './lobby.js';
 import { Trail } from './trail.js';
+import { Yeti, YETI_LINE } from './yeti.js';
 import { Spray } from './spray.js';
 
 const $ = (id) => document.getElementById(id);
+const $q = (s) => document.querySelector(s);
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 2 : 1.5));
@@ -125,6 +127,7 @@ function setMap(m) {
 const skier = new Skier(scene);
 const spray = new Spray(scene);
 const trail = new Trail(scene);
+const yeti = new Yeti(scene);
 
 let mode = 'menu';
 let dropIn = 'summit';
@@ -159,7 +162,12 @@ function showPop(name, pts, tag, kind = '') {
   popTimer = 1.8;
 }
 let shownScore = 0;
+const boostBtn = $q('[data-btn="boost"]');
 function updateHud(dt) {
+  // Boost button: a dark sweep shows the cooldown.
+  const cd = (skier.boostCD || 0) / BOOST.cooldown;
+  boostBtn.style.setProperty('--cd', cd.toFixed(3));
+  boostBtn.classList.toggle('cooling', cd > 0);
   // The score counts up rather than jumping.
   if (shownScore !== run.score) {
     shownScore += (run.score - shownScore) * (1 - Math.exp(-7 * dt));
@@ -334,8 +342,10 @@ function handleEvents() {
       shake = 0.6;
       const lost = run.combo.length;
       run.combo = []; run.comboPts = 0;
-      showPop(e.reason.toUpperCase(), 0, lost ? 'COMBO LOST' : '', 'crash');
+      if (e.reason === 'Yeti') showPop("YETI'D!", 0, lost ? 'COMBO LOST  ·  STAY ON THE MOUNTAIN' : 'STAY ON THE MOUNTAIN', 'crash');
+      else showPop(e.reason.toUpperCase(), 0, lost ? 'COMBO LOST' : '', 'crash');
     }
+    if (e.type === 'boost') { sfx.boost(); fovKick = 14; shake = Math.max(shake, 0.15); }
   }
   skier.events.length = 0;
 }
@@ -345,7 +355,7 @@ function handleEvents() {
 const camDir = new THREE.Vector3(0, 0, 1);
 const camPos = new THREE.Vector3();
 const look = new THREE.Vector3();
-let shake = 0;
+let shake = 0, fovKick = 0;
 function updateCamera(dt, snap = false) {
   const vh = new THREE.Vector3(skier.v.x, 0, skier.v.z);
   if (skier.state !== 'crash' && vh.lengthSq() > 1) camDir.lerp(vh.normalize(), snap ? 1 : 1 - Math.exp(-(skier.state === 'air' ? 1.5 : 3.5) * dt)).normalize();
@@ -369,7 +379,8 @@ function updateCamera(dt, snap = false) {
   }
   look.copy(skier.p).addScaledVector(camDir, 4).add(new THREE.Vector3(0, 0.9, 0));
   camera.lookAt(look);
-  camera.fov += ((innerWidth < innerHeight ? 80 : 66) + sp * 8 - camera.fov) * (1 - Math.exp(-3 * dt));
+  fovKick *= Math.exp(-2.5 * dt); // widens for a moment on a boost
+  camera.fov += ((innerWidth < innerHeight ? 80 : 66) + sp * 8 + fovKick - camera.fov) * (1 - Math.exp(-6 * dt));
   camera.updateProjectionMatrix();
   sun.position.copy(skier.p).add(SUN_OFF);
   sun.target.position.copy(skier.p);
@@ -397,6 +408,8 @@ function payRun() {
 
 function startRun(where, quick = false) {
   if (!quick) payRun();
+  yeti.reset();
+  skier.boostCD = 0;
   dropIn = where;
   const d = dropIns[where];
   skier.spawn(d.x, d.z, 0, d.speed);
@@ -436,6 +449,7 @@ function toLobby(newMap = true) {
   payRun();
   if (run.score > best) { best = run.score; store.set('best', best); }
   mode = 'menu';
+  yeti.reset();
   skier.spawn(LOBBY.x, LOBBY.z, 0);
   if (newMap && !fixedMap) setMap(nextMap());
   show('lobby');
@@ -572,10 +586,15 @@ function frame(now) {
     input.read();
     acc += dt;
     while (acc >= STEP) {
-      skier.step(STEP, input);
+      if (!yeti.holding) skier.step(STEP, input); // the yeti has you: no riding
       input.consume();
       acc -= STEP;
     }
+    // Out of bounds: here comes the yeti.
+    if (!yeti.active && skier.state !== 'crash' && Math.abs(skier.p.x) > YETI_LINE) { yeti.start(skier); sfx.roar(); showPop('YETI!', 0, 'RUN!', 'crash'); }
+    const ye = yeti.update(dt, skier);
+    if (ye === 'grab') { skier.crash('Yeti'); shake = 0.5; }
+    if (ye === 'throw') sfx.roar();
     handleEvents();
     if (run.combo.length && skier.state === 'ground' && (run.comboT -= dt) <= 0) bankCombo();
     skier.render(dt);
@@ -583,7 +602,7 @@ function frame(now) {
     // Trail from the feet while flying or grinding.
     _tp.copy(skier.model.root.position).addScaledVector(_ts.set(0, 1, 0).applyQuaternion(skier.renderQ), 0.08);
     _ts.set(1, 0, 0).applyQuaternion(skier.renderQ);
-    trail.update(dt, _tp, _ts, skier.state === 'air' || skier.state === 'grind');
+    trail.update(dt, _tp, _ts, skier.state === 'air' || skier.state === 'grind' || skier.boostT > 0);
     updateCamera(dt);
     updateHud(dt);
     setMix(skier.speed, skier.scrub, skier.state === 'ground' || skier.state === 'crash', false, skier.board);

@@ -7,7 +7,7 @@ const STICK_R = 58;
 // a button lights up while its key is held, H hides the key labels.
 const KEY_BTN = {
   Space: 'jump', KeyK: 'grab', KeyL: 'grab', ShiftLeft: 'style', ShiftRight: 'style', KeyJ: 'style',
-  KeyR: 'butter', ControlLeft: 'butter', KeyQ: 'rollL', KeyE: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
+  KeyR: 'butter', ControlLeft: 'butter', KeyF: 'boost', KeyQ: 'rollL', KeyE: 'rollR', KeyT: 'reset', Escape: 'pause', KeyP: 'pause',
 };
 function lightKey(code, on) {
   const el = KEY_BTN[code] && document.querySelector(`[data-btn="${KEY_BTN[code]}"]`);
@@ -52,6 +52,7 @@ export class Input {
       if (GRAB_KEYS.includes(e.code)) this.grab = true;
       if (STYLE_KEYS.includes(e.code)) this.style = true;
       if (BUTTER_KEYS.includes(e.code) && !e.repeat) this.butter = true;
+      if (e.code === 'KeyF') this.boost = true;
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
@@ -112,6 +113,7 @@ export class Input {
         if (act === 'grab') this.grab = true;
         if (act === 'style') this.style = true;
         if (act === 'butter') this.butter = true;
+        if (act === 'boost') this.boost = true;
         if (act === 'pause') this.onPause();
         if (act === 'reset') this.onReset();
         if (act === 'rollL') this.touchRoll = -1;
@@ -148,10 +150,10 @@ export class Input {
   }
 
   // Release events last one physics step.
-  consume() { this.jumpReleased = this.butter = false; }
+  consume() { this.jumpReleased = this.butter = this.boost = false; }
 
   clear() {
-    this.jump = this.grab = this.style = this.butter = this.jumpReleased = false;
+    this.jump = this.grab = this.style = this.butter = this.boost = this.jumpReleased = false;
     this.stick.x = this.stick.y = this.touchRoll = this.roll = 0;
   }
 }

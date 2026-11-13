@@ -287,6 +287,9 @@ const BOARD_NAMES = {
   'Iron Cross': 'Crail', 'Spread Eagle': 'Rocket Air', Daffy: 'Nose Bone', Backscratcher: 'Tail Bone',
 };
 let BOARD = false;
+const POLE_CYCLE = 0.72; // seconds per pole swing
+// Speed boost: how long it pushes, how hard, up to what speed, and the wait.
+export const BOOST = { time: 0.7, accel: 13, max: 40, cooldown: 8 };
 export const showName = (n) => (BOARD && BOARD_NAMES[n]) || n;
 
 // Eight stick directions plus centre pick the grab.
@@ -395,6 +398,7 @@ export class Skier {
     this.wallF = null;
     this.state = 'ground';
     this.air = this.grind = this.press = this.landAnim = this.butter = null;
+    this.boostT = 0;
     this.charge = 0;
     this.groundQuat(this.renderQ);
     this.pivotUp.set(0, 1, 0).applyQuaternion(this.renderQ);
@@ -414,6 +418,12 @@ export class Skier {
   // input: { x, y, jump, grab, style, tuck, jumpReleased }
   step(dt, input) {
     this.time += dt;
+    // Speed boost: a shove forward on the snow, then a cooldown.
+    this.boostCD = Math.max(0, (this.boostCD || 0) - dt);
+    if (input.boost && this.boostCD <= 0 && this.state === 'ground') {
+      this.boostT = BOOST.time; this.boostCD = BOOST.cooldown;
+      this.emit('boost');
+    }
     // Snowboard wind-up: holding the stick sideways while crouched for a pop
     // twists the shoulders the other way, ready to unwind off the lip.
     const want = this.board && this.state === 'ground' && input.jump ? Math.max(-1, Math.min(1, input.x || 0)) : 0;
@@ -483,6 +493,14 @@ export class Skier {
     if (inrun) input = { ...input, x: Math.max(-1, Math.min(1, (this.p.x - JUMP.x) * 0.5 + this.heading * 3)), y: -1 };
     const tuck = input.y < -0.35 && speed > 5;
     this.tuck = tuck;
+    // On skis, holding forward swings the poles: plant, push, swing through.
+    // Each plant gives a little shove while you're still slow.
+    this.poling = input.y < -0.35 && !inrun && !this.board && !this.press;
+    if (this.poling) {
+      const before = Math.floor((this.poleT || 0) / POLE_CYCLE);
+      this.poleT = (this.poleT || 0) + dt;
+      if (Math.floor(this.poleT / POLE_CYCLE) !== before && speed < 14) this.v.addScaledVector(new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)), 0.7);
+    } else this.poleT = 0;
     if (this.butter && (this.butter.t += dt) > 0.4) this.butter = null;
     if (input.butter && !inrun && !this.press && !this.butter && speed > 1.5) {
       // Butter 180: swing the skis round and ride the other way.
@@ -517,6 +535,10 @@ export class Skier {
     const scale = spd > 1e-4 ? newSpd / spd : 0;
     const vt = f.clone().multiplyScalar(vf * scale).addScaledVector(l, newL * scale);
     if (push) vt.addScaledVector(f, push);
+    if (this.boostT > 0) {
+      this.boostT -= dt;
+      if (vt.length() < BOOST.max) vt.addScaledVector(f, BOOST.accel * dt);
+    }
     this.v.copy(vt).addScaledVector(n, vn);
 
     this.scrub = Math.min(1, removed / dt / 14 + brake * Math.min(1, spd / 8) + (this.press ? 0.25 : 0));
@@ -980,7 +1002,8 @@ export class Skier {
     this.crashT += dt;
     this.v.y -= G * dt;
     const vh = new THREE.Vector3(this.v.x, 0, this.v.z);
-    vh.multiplyScalar(Math.exp(-2.2 * dt));
+    // Slide to a stop on the snow; in the air (thrown by the yeti) fly on.
+    vh.multiplyScalar(Math.exp((this.p.y > height(this.p.x, this.p.z) + 0.3 ? -0.2 : -2.2) * dt));
     this.v.x = vh.x; this.v.z = vh.z;
     this.p.addScaledVector(this.v, dt);
     const gy = height(this.p.x, this.p.z);
@@ -1019,7 +1042,21 @@ export class Skier {
 
     if (this.state === 'ground') {
       both((s, i) => { T.skis[i].ry = this.skid * 0.8 * sw; });
-      if (this.tuck) {
+      if (this.poling) {
+        // Double-pole: reach forward, plant, push back past the hips, swing through.
+        const ph = (this.poleT % POLE_CYCLE) / POLE_CYCLE;
+        const push = ph < 0.45, k = push ? ph / 0.45 : (ph - 0.45) / 0.55;
+        const e = k * k * (3 - 2 * k);
+        const a = push ? e : 1 - e; // 0 = forward and high, 1 = back and low
+        T.crouch = 0.25 + 0.3 * Math.sin(Math.PI * (push ? k : 0));
+        T.tx = 0.25 + 0.45 * Math.sin(Math.PI * (push ? k : 0));
+        T.rate = 22;
+        both((s, i) => {
+          T.hands[i].set(s * (0.3 + 0.04 * a), hipY + 0.4 - 0.45 * a, 0.55 - 0.9 * a);
+          if (push) T.poles[i].set(s * 0.06, -0.95 + 0.6 * a, 0.25 - 1.2 * a).normalize();
+          else T.poles[i].set(s * 0.06, -0.55 - 0.4 * (1 - a), -0.95 + 1.2 * (1 - a)).normalize();
+        });
+      } else if (this.tuck) {
         both((s, i) => { T.hands[i].set(s * 0.12, hipY + 0.25, 0.5); T.poles[i].set(s * 0.05, -0.15, -1); });
       }
       if (this.press) {
@@ -1089,7 +1126,7 @@ export class Skier {
       target.copy(this.q);
       this.renderQ.copy(target);
     } else if (this.state === 'crash') {
-      q1.setFromAxisAngle(this.tumbleAxis, dt * 9 * Math.max(0, 1 - this.crashT / 0.9));
+      q1.setFromAxisAngle(this.tumbleAxis, dt * 9 * Math.min(1.6, Math.max(0, 1 - this.crashT / 0.9)));
       this.renderQ.premultiply(q1);
     } else {
       this.groundQuat(target);
