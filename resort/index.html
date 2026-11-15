@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#14202e">
+  <meta name="description" content="First Chair: build and run a ski resort. Lifts, pistes, huts and hotels on a 3D mountain, with guests who queue, ski, eat and judge you. Plays in the browser on phone and PC.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>First Chair</title>
+  <style>
+    :root { --ink: #14202e; --panel: rgba(20, 32, 46, .88); --solid: #1b2a3b; --line: rgba(255, 255, 255, .13); --text: #eef3f8; --dim: #9db0c4;
+      --gold: #ffc247; --good: #46c979; --bad: #ff6b5e; --blue: #5cb3ff;
+      --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--text); font-family: var(--font);
+      user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    [hidden] { display: none !important; }
+    button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+    svg.ic { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.25em; }
+    b, h1, h2, h3 { font-weight: 750; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+    #hud > * { pointer-events: auto; }
+    #top { position: absolute; left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(8px + var(--st)); display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; pointer-events: none; }
+    #top > * { pointer-events: auto; }
+    .stat { display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 11px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line);
+      font-size: 15px; white-space: nowrap; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .stat small { color: var(--dim); font-size: 12px; }
+    #sMoney svg { color: var(--gold); } #sMoney.neg b { color: var(--bad); }
+    #sStars { letter-spacing: 1px; font-size: 16px; }
+    .stars { color: var(--gold); white-space: nowrap; } .stars i { font-style: normal; color: rgba(255, 255, 255, .22); }
+    .stars .half { background: linear-gradient(90deg, var(--gold) 50%, rgba(255, 255, 255, .22) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .grow { flex: 1 1 0; min-width: 0; }
+    #speed { display: flex; height: 38px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    #speed button { width: 40px; font-size: 14px; font-weight: 700; color: var(--dim); }
+    #speed button.on { background: var(--gold); color: #1b1407; }
+    #menuBtn { width: 40px; justify-content: center; padding: 0; }
+
+    #goalChip { position: absolute; left: calc(8px + var(--sl)); top: calc(54px + var(--st)); max-width: min(420px, calc(100vw - 16px)); text-align: left;
+      padding: 8px 12px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); font-size: 13.5px; line-height: 1.35;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    #goalChip b { color: var(--gold); } #goalChip span { display: block; color: var(--dim); margin-top: 3px; }
+    #goalChip .rw { color: var(--good); font-weight: 700; white-space: nowrap; }
+
+    #labels { position: absolute; inset: 0; pointer-events: none !important; overflow: hidden; }
+    .tag { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); padding: 2px 7px; border-radius: 9px; font-size: 12px; font-weight: 700;
+      background: rgba(20, 32, 46, .82); border: 1px solid var(--line); white-space: nowrap; will-change: transform; }
+    .tag.warn { background: #b9831c; } .tag.bad { background: #b3392f; } .tag.off { background: #555c66; color: #dfe4ea; }
+
+    #bar { position: absolute; left: 50%; bottom: calc(10px + var(--sb)); transform: translateX(-50%); display: flex; gap: 4px; padding: 5px; border-radius: 16px;
+      background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); max-width: calc(100vw - 12px); }
+    #bar button { width: 62px; height: 54px; border-radius: 12px; display: grid; place-items: center; align-content: center; gap: 2px; font-size: 11px; color: var(--dim); }
+    #bar button svg { width: 24px; height: 24px; color: var(--text); }
+    #bar button.on { background: var(--gold); color: #1b1407; } #bar button.on svg { color: #1b1407; }
+    #bar i { width: 1px; margin: 8px 2px; background: var(--line); }
+    #bar button .dot { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); margin: -40px 0 0 34px; }
+
+    #sub { position: absolute; left: 50%; bottom: calc(84px + var(--sb)); transform: translateX(-50%); width: min(430px, calc(100vw - 16px)); max-height: 60vh; overflow: auto;
+      padding: 6px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); touch-action: pan-y; }
+    .opt { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; text-align: left; padding: 9px 11px; border-radius: 11px; }
+    .opt:hover, .opt:active { background: rgba(255, 255, 255, .08); }
+    .opt b { font-size: 15px; } .opt em { font-style: normal; color: var(--gold); font-weight: 700; font-size: 14px; }
+    .opt span { grid-column: 1 / -1; color: var(--dim); font-size: 12.5px; line-height: 1.35; }
+    .opt.locked { opacity: .55; } .opt.locked em { color: var(--dim); font-weight: 500; font-size: 12.5px; }
+    .opt.poor em { color: var(--bad); }
+
+    #confirm { position: absolute; left: 50%; bottom: calc(84px + var(--sb)); transform: translateX(-50%); width: min(460px, calc(100vw - 16px));
+      padding: 10px 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    #cText { font-size: 14px; line-height: 1.4; } #cText b { font-size: 15px; }
+    #cText .why { color: var(--bad); font-weight: 600; } #cText .ok { color: var(--good); } #cText .warn { color: var(--gold); } #cText small { display: block; color: var(--dim); font-size: 12.5px; }
+    .row { display: flex; gap: 8px; margin-top: 9px; }
+    .btn { flex: 1; height: 42px; padding: 0 14px; border-radius: 11px; background: rgba(255, 255, 255, .1); font-weight: 700; font-size: 15px; white-space: nowrap; }
+    .btn.go { background: var(--good); color: #062312; } .btn.gold { background: var(--gold); color: #1b1407; } .btn.red { background: #c9483d; }
+    .btn:disabled { opacity: .4; cursor: default; } .btn.small { flex: none; height: 34px; font-size: 13.5px; padding: 0 11px; }
+
+    #card { position: absolute; right: calc(8px + var(--sr)); top: calc(54px + var(--st)); width: min(300px, calc(100vw - 16px)); padding: 12px; border-radius: 16px;
+      background: var(--panel); border: 1px solid var(--line); font-size: 13.5px; line-height: 1.45; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    #card h3 { margin: 0 26px 2px 0; font-size: 16px; display: flex; align-items: center; gap: 7px; }
+    #card .sub { color: var(--dim); margin-bottom: 6px; } #card .x { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; font-size: 20px; color: var(--dim); }
+    #card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 6px 0 0; } #card dt { color: var(--dim); } #card dd { margin: 0; text-align: right; }
+    .dotc { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1.5px solid rgba(255, 255, 255, .7); flex: none; }
+    .meter { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .13); overflow: hidden; margin-top: 6px; } .meter i { display: block; height: 100%; border-radius: 4px; background: var(--good); }
+    .quote { margin-top: 8px; padding: 7px 9px; border-radius: 9px; background: rgba(255, 255, 255, .07); font-style: italic; }
+
+    #toasts { position: absolute; left: 50%; top: calc(100px + var(--st)); transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; pointer-events: none !important; width: min(440px, calc(100vw - 16px)); }
+    .toast { padding: 9px 14px; border-radius: 12px; background: rgba(20, 32, 46, .94); border: 1px solid var(--line); font-size: 14px; text-align: center; animation: pop .25s ease-out; }
+    .toast.good { border-color: var(--good); } .toast.bad { border-color: var(--bad); } .toast.star { border-color: var(--gold); } .toast b { color: var(--gold); }
+    .toast.out { opacity: 0; transition: opacity .4s; }
+    @keyframes pop { from { transform: translateY(-8px); opacity: 0; } }
+
+    /* ---------- screens and sheets ---------- */
+    .screen { position: fixed; inset: 0; z-index: 5; overflow: auto; touch-action: pan-y; padding: calc(18px + var(--st)) calc(16px + var(--sr)) calc(18px + var(--sb)) calc(16px + var(--sl));
+      background: linear-gradient(180deg, rgba(14, 24, 36, .45), rgba(14, 24, 36, .86) 55%); display: grid; align-content: center; justify-items: center; }
+    #menu h1 { font-size: clamp(44px, 9vw, 84px); margin: 0; letter-spacing: -.02em; line-height: 1; text-shadow: 0 3px 24px rgba(0, 0, 0, .45); }
+    #menu h1 span { color: var(--gold); }
+    #menu .lead { margin: 8px 0 20px; color: #d5e0ea; font-size: 16px; text-align: center; text-shadow: 0 1px 8px rgba(0, 0, 0, .5); }
+    #maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; width: min(900px, 100%); }
+    .map { text-align: left; padding: 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); display: grid; gap: 6px; align-content: start; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .map h2 { margin: 0; font-size: 21px; } .map .tagl { color: var(--gold); font-size: 13px; font-weight: 700; }
+    .map p { margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.4; min-height: 3.8em; }
+    .map .state { font-size: 13px; color: #d5e0ea; min-height: 1.4em; }
+    .map.locked { opacity: .6; }
+    .menurow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+    .check { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); font-size: 14.5px; }
+    .check input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+    #sheet { position: fixed; inset: 0; z-index: 6; background: rgba(8, 14, 22, .55); display: grid; place-items: center; padding: calc(12px + var(--st)) 12px calc(12px + var(--sb)); }
+    #sheetBox { width: min(520px, 100%); max-height: 100%; overflow: auto; touch-action: pan-y; padding: 16px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); position: relative; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+    #sheetBox h2 { margin: 0 34px 10px 0; font-size: 21px; }
+    #sheetBox .x { position: absolute; right: 8px; top: 8px; width: 38px; height: 38px; font-size: 24px; color: var(--dim); }
+    #sheetBody { font-size: 14.5px; line-height: 1.5; }
+    #sheetBody p { margin: 0 0 10px; color: #d5e0ea; }
+    .big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 12px; }
+    .big div { padding: 10px 8px; border-radius: 12px; background: rgba(255, 255, 255, .06); text-align: center; }
+    .big b { display: block; font-size: 21px; } .big small { color: var(--dim); font-size: 12px; }
+    .pos { color: var(--good); } .neg { color: var(--bad); }
+    table.t { width: 100%; border-collapse: collapse; font-size: 14px; } table.t td { padding: 3px 0; } table.t td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    table.t tr.sum td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 6px; } table.t .h td { color: var(--dim); font-size: 12.5px; padding-top: 8px; }
+    .note { padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); margin: 6px 0; font-size: 13.5px; } .note b { color: var(--gold); }
+    .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; margin: 10px 0; } .slider label { color: var(--dim); font-size: 13.5px; } .slider output { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--gold); height: 28px; touch-action: pan-x; } .slider small { grid-column: 1 / -1; color: var(--dim); font-size: 12.5px; }
+    .goal { display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 8px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: start; }
+    .goal .tick { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 13px; }
+    .goal.done .tick { background: var(--good); border-color: var(--good); color: #062312; } .goal.done b { color: var(--dim); font-weight: 500; }
+    .goal em { font-style: normal; color: var(--good); font-weight: 700; font-size: 13.5px; } .goal span { grid-column: 2 / -1; color: var(--dim); font-size: 13px; }
+    .goal.now { background: rgba(255, 194, 71, .08); margin: 0 -8px; padding: 8px; border-radius: 10px; border-bottom-color: transparent; }
+    .chart { display: flex; align-items: center; gap: 2px; height: 90px; margin: 8px 0 2px; } .chart i { flex: 1; min-width: 2px; border-radius: 2px; background: var(--good); align-self: flex-end; } .chart i.n { background: var(--bad); align-self: flex-start; }
+    .chart .col { flex: 1; height: 100%; display: flex; flex-direction: column; } .chart .col > div { flex: 1; display: flex; }
+    kbd { padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .12); font: inherit; font-size: 12.5px; }
+
+    @media (max-width: 640px) {
+      .stat { height: 34px; padding: 0 8px; font-size: 13.5px; gap: 4px; } #speed { height: 34px; } #speed button { width: 34px; font-size: 13px; }
+      #sStars { font-size: 13.5px; letter-spacing: 0; } #sClock small { display: none; }
+      #goalChip { top: calc(88px + var(--st)); font-size: 12.5px; padding: 6px 10px; } #card { top: auto; bottom: calc(84px + var(--sb)); right: 50%; transform: translateX(50%); }
+      #bar button { width: calc((100vw - 60px) / 7); max-width: 58px; height: 50px; font-size: 10px; } #bar { gap: 2px; } #bar i { margin: 8px 0; }
+      #toasts { top: 44%; }
+      /* With a tool in hand the confirm bar takes the toolbar's place, to keep the mountain free. */
+      body.tooling #bar { display: none; } body.tooling #confirm { bottom: calc(10px + var(--sb)); } body.tooling #goalChip span { display: none; }
+      #confirm .row { margin-top: 7px; } #confirm .btn { height: 40px; }
+    }
+    @media (max-height: 460px) {
+      #goalChip span { display: none; } #bar button { height: 44px; font-size: 0; gap: 0; } #sub, #confirm, #card { bottom: calc(66px + var(--sb)); } #sub { max-height: 55vh; }
+      #card { top: auto; right: calc(8px + var(--sr)); transform: none; max-height: calc(100vh - 130px); overflow: auto; }
+      body.tooling #bar { display: none; } body.tooling #confirm { bottom: calc(8px + var(--sb)); left: auto; right: calc(8px + var(--sr)); transform: none; width: min(380px, 55vw); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="labels"></div>
+    <div id="top">
+      <div class="stat" id="sMoney" title="Money"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.7.8 2.7 2-1.1 2-2.7 2c-1.2 0-2.2-.5-2.7-1.3M12 6.5V8m0 8v1.5"/></svg><b id="money" class="num">0</b></div>
+      <div class="stat" id="sGuests" title="Guests on the mountain"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.700 6 6M16 5.200a3.200 3.200 0 0 1 0 6M18 14.500c1.800.900 3 2.900 3 5.500"/></svg><b id="guests" class="num">0</b></div>
+      <div class="stat" id="sStars" title="Resort rating"></div>
+      <div class="stat" id="sClock"><span id="wIcon"></span><b id="clock" class="num">Mon 08:00</b><small id="dayNo">Day 1</small></div>
+      <div class="grow"></div>
+      <div id="speed">
+        <button data-s="0" title="Pause (Space)">&#10074;&#10074;</button><button data-s="1" title="Normal speed (1)">1&times;</button><button data-s="2" title="Double speed (2)">2&times;</button><button data-s="4" title="Four times speed (3)">4&times;</button>
+      </div>
+      <button class="stat" id="menuBtn" title="Menu"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+    <button id="goalChip"></button>
+    <div id="toasts"></div>
+    <div id="card" hidden></div>
+    <div id="sub" hidden></div>
+    <div id="confirm" hidden>
+      <div id="cText"></div>
+      <div class="row"><button class="btn" id="cCancel">Cancel</button><button class="btn" id="cUndo" hidden>Undo point</button><button class="btn go" id="cOk">Build</button></div>
+    </div>
+    <div id="bar"></div>
+  </div>
+
+  <section id="menu" class="screen">
+    <h1>First <span>Chair</span></h1>
+    <div class="lead">Build the lifts. Cut the pistes. Run the mountain.</div>
+    <div id="maps"></div>
+    <div class="menurow">
+      <label class="check"><input type="checkbox" id="sandbox"> Sandbox: unlimited money</label>
+      <button class="btn small" id="howBtn" style="height:42px">How to play</button>
+      <button class="btn small" id="setBtn" style="height:42px">Settings</button>
+    </div>
+  </section>
+
+  <div id="sheet" hidden><div id="sheetBox"><button class="x" id="sheetX" aria-label="Close">&times;</button><h2 id="sheetTitle"></h2><div id="sheetBody"></div></div></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -108,6 +108,55 @@ register it in `js/challenges/index.js`, and it appears in the chain selector.
 Call `onActivity()` on every user interaction (resets the idle timer) and
 `onPass()` when solved.
 
+## Games in this repository
+
+Four browser games live next to the alarm, each in its own folder. No build
+step: open the folder's `index.html` through any web server, or on GitHub Pages
+at `https://mauricestuder.github.io/wakeup/<folder>/`.
+
+| Folder | Game |
+|---|---|
+| `game/` | First-person escape shooter with a PS1 look |
+| `ski/` | **Fresh Line**: snowboard and ski tricks down ten mountains |
+| `build/` | **High Ground**: build, edit and aim trainer |
+| `resort/` | **First Chair**: build and run a ski resort (see below) |
+
+### First Chair (`resort/`)
+
+A 3D ski resort tycoon for phone and PC. Build lifts and pistes on a mountain,
+guests arrive at the car park every morning, ski, queue, eat and judge you.
+Happy guests raise the star rating, stars bring more guests, goals unlock
+chairlifts, gondolas, hotels and two harder mountains.
+
+- **Touch:** one finger moves the camera, two fingers zoom, twist and tilt.
+- **Mouse:** drag moves, right-drag turns, wheel zooms. Keys: W A S D, Q E,
+  Space pauses, 1 2 3 set the speed, Esc cancels.
+- Everything you build shows a preview first and needs a Build tap.
+- Progress saves in the browser (`localStorage`, keys `firstchair.*`), one
+  save per mountain.
+
+```
+resort/
+  index.html            markup and styling
+  js/tuning.js          every balance number: prices, speeds, needs
+  js/maps.js            the three mountains
+  js/terrain.js         heights, slopes, forest          (no rendering)
+  js/network.js         lift and piste shapes, routing   (no rendering)
+  js/guests.js          guest behaviour                  (no rendering)
+  js/economy.js         money, demand, snow, rating      (no rendering)
+  js/goals.js           goals and unlocks
+  js/sim.js             game state, day cycle, build actions
+  js/save.js            save and load
+  js/view/              three.js scene, camera, lifts, pistes, buildings, guests
+  js/build.js           build tools and previews
+  js/ui.js              top bar, toolbar, panels
+  js/audio.js           synthesised sound
+  js/main.js            boot and game loop
+```
+
+The modules marked "no rendering" import nothing from three.js or the page, so
+the rules can be run in plain Node to test balance changes.
+
 ## Known limits of the PWA approach
 
 - The phone's browser must stay open and in the foreground all night. Closing
