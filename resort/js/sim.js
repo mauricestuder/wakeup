@@ -147,6 +147,7 @@ export function tick(state, ter, dt) {
   updateGuests(state, ter, dt, state.rnd);
   if (state.guests.length > state.today.peak) state.today.peak = state.guests.length;
   if (state.today.runs > state.best.runs) state.best.runs = state.today.runs;
+  if (state.today.arrived > state.best.guests) state.best.guests = state.today.arrived; // guest goals tick off during the day
   if (++goalTick % 10 === 0) checkGoals(state);
   if (state.clock >= T.DAY_END || (state.closing && state.guests.length === 0)) endDay(state, ter);
 }
