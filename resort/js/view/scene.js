@@ -123,21 +123,50 @@ export function createScene(canvas, opts) {
     land.receiveShadow = true;
     world.add(land);
 
-    // The sides of the block, so the mountain looks like a model on a table.
-    const side = [], sc = [];
-    const wall = (x0, z0, x1, z1) => {
-      const y0 = ter.height(x0, z0), y1 = ter.height(x1, z1), B = -6;
-      side.push(x0, y0, z0, x0, B, z0, x1, y1, z1, x1, y1, z1, x0, B, z0, x1, B, z1);
-      for (const y of [y0, B, y1, y1, B, B]) { const s = y === B ? 0.2 : 0.42; sc.push(s * 0.95, s * 0.9, s * 0.88); }
-    };
-    for (let i = 0; i < N; i++) {
-      wall(i + 1, N, i, N); wall(i, 0, i + 1, 0); wall(0, i + 1, 0, i); wall(N, i, N, i + 1);
+    buildFar();
+  }
+
+  // The land around the mountain: a coarse mesh that is fine only where it meets the
+  // real one, so the two join without gaps. Painted once, it never changes.
+  function buildFar() {
+    const N = ter.N, steps = [2, 5, 9, 14, 20, 28, 40, 56, 80, 112, 152, 200, 256, 320, 384, 448];
+    const line = [];
+    for (let i = steps.length - 1; i >= 0; i--) line.push(-steps[i]);
+    for (let i = 0; i <= N; i++) line.push(i);
+    for (const d of steps) line.push(N + d);
+    const n = line.length, hs = new Float32Array(n * n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hs[j * n + i] = ter.ground(line[i], line[j]);
+    // One colour per corner, so the far slopes shade softly instead of in flat patches.
+    const pos = new Float32Array(n * n * 3), col = new Float32Array(n * n * 3), idx = [];
+    const FOREST = new THREE.Color(0.3, 0.42, 0.36), nn = new THREE.Vector3();
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const k = (j * n + i) * 3, x = line[i], z = line[j], y = hs[j * n + i];
+      // Slightly sunk where it meets the real mountain, so the two never fight over the same spot.
+      const out = Math.hypot(Math.max(0, -x, x - N), Math.max(0, -z, z - N));
+      pos[k] = x; pos[k + 1] = y - (out > 0 ? 0 : 0.03); pos[k + 2] = z;
+      const e = 1.5 + out * 0.05;
+      nn.set(ter.ground(x - e, z) - ter.ground(x + e, z), 2 * e, ter.ground(x, z - e) - ter.ground(x, z + e)).normalize();
+      const steep = Math.sqrt(Math.max(0, 1 - nn.y * nn.y)) / Math.max(0.05, nn.y), ns = ter.noise(x * 0.9, z * 0.9);
+      tmpC.copy(SNOW).lerp(SHADE, clamp(0.35 - nn.x * 0.9 + nn.z * 0.5 + (ns - 0.5) * 0.4, 0, 1) * 0.55);
+      // Far away the forest is only a colour on the slope. Close by, real trees stand there.
+      const w = ter.woods(x, z, y) * smooth(18, 46, out);
+      if (w > 0 && !(z > N - 2.5 && z < N + 13)) tmpC.lerp(FOREST, Math.min(0.75, w * 0.9));
+      const rock = smooth(0.72, 1.0, steep + (ns - 0.5) * 0.25);
+      if (rock > 0) tmpC.lerp(ROCK, rock * 0.9);
+      col[k] = tmpC.r; col[k + 1] = tmpC.g; col[k + 2] = tmpC.b;
     }
-    const sg = new THREE.BufferGeometry();
-    sg.setAttribute('position', new THREE.Float32BufferAttribute(side, 3));
-    sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
-    sg.computeVertexNormals();
-    world.add(new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+    const i0 = steps.length, i1 = steps.length + N; // the real mountain covers the cells from i0 to i1
+    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
+      if (i >= i0 && i < i1 && j >= i0 && j < i1) continue;
+      const a = j * n + i, b = a + n;
+      idx.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    world.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
   }
 
   // Colour every triangle: snow, bare ground where the snow is gone, rock on cliffs.
@@ -190,9 +219,9 @@ export function createScene(canvas, opts) {
       cone(0.46, 0.8, 0.72, 0x2f5d43), cone(0.36, 0.7, 1.12, 0x356a4b), cone(0.25, 0.6, 1.5, 0x3d7654),
       cone(0.3, 0.26, 1.12 + 0.24, 0xf4f8ff), cone(0.2, 0.3, 1.66, 0xf4f8ff),
     ]);
-    trees = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ter.trees.length);
+    trees = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ter.trees.length + ter.outer.length);
     trees.castShadow = treeShadows;
-    trees.receiveShadow = false;
+    trees.receiveShadow = false; trees.frustumCulled = false;
     world.add(trees);
     updateTrees();
   }
@@ -204,6 +233,15 @@ export function createScene(canvas, opts) {
       tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
       tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(s, s * (0.9 + (i % 7) * 0.04), s));
       trees.setMatrixAt(i, tmpM);
+    }
+    if (!trees.outerDone) {
+      trees.outerDone = true;
+      for (let i = 0; i < ter.outer.length; i++) {
+        const t = ter.outer[i];
+        tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
+        tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(t.s, t.s * (0.9 + (i % 7) * 0.04), t.s));
+        trees.setMatrixAt(ter.trees.length + i, tmpM);
+      }
     }
     trees.instanceMatrix.needsUpdate = true;
   }

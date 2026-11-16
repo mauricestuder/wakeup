@@ -19,9 +19,11 @@ export function createCamera(camera, canvas, hooks) {
 
   const limit = () => {
     const N = ter ? ter.N : 96;
-    goal.x = clamp(goal.x, -4, N + 4); goal.z = clamp(goal.z, -4, N + 8);
-    goal.pitch = clamp(goal.pitch, 0.3, 1.45);
-    goal.dist = clamp(goal.dist, 9, 190);
+    // The invisible wall: the camera stays over the resort, never too far out and never
+    // too flat, so the far end of the land is always lost in the haze.
+    goal.x = clamp(goal.x, 8, N - 8); goal.z = clamp(goal.z, 10, N + 1);
+    goal.pitch = clamp(goal.pitch, 0.42, 1.45);
+    goal.dist = clamp(goal.dist, 9, 150);
   };
 
   // Move the target along the ground, relative to where the camera looks.
@@ -153,8 +155,7 @@ export function createCamera(camera, canvas, hooks) {
     camera.position.set(now.x + Math.sin(now.yaw) * cp * now.dist, now.y + spt * now.dist, now.z + Math.cos(now.yaw) * cp * now.dist);
     // Never let the camera sink into a ridge behind the target.
     if (ter) {
-      const cx = camera.position.x, cz = camera.position.z;
-      if (cx >= 0 && cz >= 0 && cx <= ter.N && cz <= ter.N) camera.position.y = Math.max(camera.position.y, ter.height(cx, cz) + 2.5);
+      camera.position.y = Math.max(camera.position.y, ter.ground(camera.position.x, camera.position.z) + 2.5);
     }
     camera.lookAt(target);
   }
@@ -175,7 +176,7 @@ export function createCamera(camera, canvas, hooks) {
       const L = free.left || 0, R = free.right || 0, U = free.top || 0, D = free.bottom || 0;
       const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), pitch = 0.84;
       const tan = Math.tan(camera.fov * Math.PI / 360) * 2;
-      const dist = clamp(Math.max((z1 - z0 + 5) * Math.sin(pitch) / (tan * (1 - U - D)), (x1 - x0 + 6) / (tan * aspect * (1 - L - R))) * 1.1, 22, 170);
+      const dist = clamp(Math.max((z1 - z0 + 5) * Math.sin(pitch) / (tan * (1 - U - D)), (x1 - x0 + 6) / (tan * aspect * (1 - L - R))) * 1.1, 22, 150);
       // Shift the target so the points sit in the middle of the free part, not of the whole screen.
       this.view((x0 + x1) / 2 + (R - L) / 2 * tan * dist * aspect, (z0 + z1) / 2 + (D - U) / 2 * tan * dist / Math.sin(pitch), dist, 0, pitch, snap);
     },

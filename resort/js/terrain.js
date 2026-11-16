@@ -99,7 +99,7 @@ export function makeTerrain(map) {
     const line = map.treeline + (noise(cx * 0.13, cz * 0.13 + 9) - 0.5) * 0.22;
     const dens = fbm(cx * 0.085 + 50, cz * 0.085 + 50, 3);
     const r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd(), r6 = rnd();
-    if (a > line || slope(cx, cz) > 0.85 || Math.hypot(cx - base.x, cz - base.z) < 7.5) continue;
+    if (a > line || slope(cx, cz) > 0.85 || Math.hypot(cx - base.x, cz - base.z) < 7.5 || cz > N - 2.5) continue;
     // The forest thins out gradually: dense cores, loose edges, and single trees and
     // small groups across the open slopes, fewer towards the treeline.
     const edge = smooth(0.34, 0.56, dens), high = 1 - smooth(line - 0.22, line, a);
@@ -131,5 +131,44 @@ export function makeTerrain(map) {
     return out;
   };
 
-  return { N, W, H, top, h, base, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm };
+  // ---------- the land around the mountain ----------
+  // Outside the N x N square the ground carries on: a flat valley floor in front, where
+  // the road runs, and other ridges to the sides, behind the summit and across the valley.
+  const FRONT = 12;
+  const far = (x, z) => {
+    const cx = clamp(x, 0, N), cz = clamp(z, 0, N), e = height(cx, cz);
+    const dx = Math.abs(x - cx), db = Math.max(0, -z), df = Math.max(0, z - N), side = Math.hypot(dx, db);
+    const up = smooth(N - 1, N - 13, z); // 0 in the valley, 1 on the mountain side
+    const f = smooth(0, 3, df);
+    let v = df > 0 ? e * (1 - f) + 0.2 * f : e * (1 - 0.5 * smooth(0, 90, db));
+    v += smooth(3, 110, side) * H * (0.3 + 1.6 * fbm(x * 0.011 + 20, z * 0.011 + 20, 3)) * up;
+    v += smooth(FRONT, FRONT + 110, df) * H * (0.2 + 1.1 * fbm(x * 0.012 + 70, z * 0.012 + 70, 3));
+    v += (fbm(x * 0.06 + 5, z * 0.06 + 5, 2) - 0.5) * 4 * smooth(2, 30, side * up + Math.max(0, df - FRONT));
+    return Math.max(0.05, v);
+  };
+  const ground = (x, z) => (x >= 0 && z >= 0 && x <= N && z <= N ? height(x, z) : far(x, z));
+  // How thick the forest is at a spot (0 to 1), given the ground height there.
+  const woods = (x, z, y) => {
+    const a = clamp(y / top, 0, 1), line = map.treeline + (noise(x * 0.13, z * 0.13 + 9) - 0.5) * 0.22;
+    if (a > line) return 0;
+    return smooth(0.34, 0.56, fbm(x * 0.085 + 50, z * 0.085 + 50, 3)) * (0.35 + 0.65 * (1 - smooth(line - 0.22, line, a)));
+  };
+  // Trees just outside the square, so the forest does not stop at a line. They are never cut.
+  const outer = [], RING = 46, r2 = rngFrom([map.seed ^ 0x77aa]);
+  for (let j = -RING; j < N + RING; j++) for (let i = -RING; i < N + RING; i++) {
+    const a = r2(), b2 = r2(), c2 = r2();
+    if (i >= 0 && j >= 0 && i < N && j < N) continue;
+    const x = i + 0.15 + b2 * 0.7, z = j + 0.15 + c2 * 0.7;
+    if (z > N - 2.5 && z < N + FRONT + 1) continue; // the valley floor stays open
+    const out = Math.hypot(Math.max(0, -x, x - N), Math.max(0, -z, z - N)), y = far(x, z);
+    const w = woods(x, z, y);
+    if (a > (0.02 + w * 0.26) * (1 - smooth(RING * 0.5, RING, out))) continue;
+    if (Math.hypot(far(x + 0.5, z) - far(x - 0.5, z), far(x, z + 0.5) - far(x, z - 0.5)) > 0.85) continue;
+    outer.push({ x, z, y, s: 0.55 + w * 0.35 + c2 * 0.6 });
+  }
+  // The road along the valley, the parking bays beside it and the coach stop.
+  const road = { z: N + 2.6, y: 0.4, x0: -115, x1: N + 130, bays: [], bayZ: N + 0.3, stop: base.x + 16 };
+  for (let i = 0; i < 20; i++) road.bays.push(base.x - 9.975 + i * 1.05);
+
+  return { N, W, H, top, h, base, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm, far, ground, woods, outer, road };
 }

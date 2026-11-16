@@ -136,8 +136,11 @@ something. You spend the money on wooden upgrade boards.
 - **Snow guns**, **Ski school**, **Night skiing** and **Restaurant** unlock as
   you play (rides sold, minutes played, lifts opened).
 - **Rush hour** is a 30 second boost with a 2 minute recharge.
-- 26 quests pay bonuses; tap the quest marker to see them all. When every lift
-  is a gondola you move to the next of three mountains and all income doubles.
+- 26 quests pay bonuses. Three are open at a time; finishing one unlocks the
+  next. Tap the quest marker to see them. When every lift is a gondola you move
+  to the next of three mountains and all income doubles.
+- Guests arrive by car and coach on the valley road. Skiers and snowboarders
+  share the pistes. All prices are whole dollars.
 - Hold a board to keep buying. Keys 1 to 6 press the first six boards, Space
   starts rush hour.
 - Camera: drag moves, pinch or wheel zooms, two fingers or right-drag turn.

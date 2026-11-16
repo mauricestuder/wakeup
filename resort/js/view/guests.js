@@ -10,24 +10,31 @@ const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(0
 const SCALE = 1.55, SIDE = 0.36;
 
 export function createGuestView(scene, cap = 440) {
-  const geo = merge([
+  const body = [
     [box(0.24, 0.3, 0.16), 0xffffff, at(0, 0.43, 0)],     // jacket
     [box(0.17, 0.17, 0.17), 0x8c8c8c, at(0, 0.67, 0)],    // helmet, a darker shade of the jacket
     [box(0.2, 0.28, 0.14), 0x3a3a3a, at(0, 0.16, 0)],     // trousers
-    [box(0.06, 0.03, 0.66), 0x151515, at(-0.07, 0.015, 0.05)], [box(0.06, 0.03, 0.66), 0x151515, at(0.07, 0.015, 0.05)],
-  ]);
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), cap);
-  mesh.castShadow = true; mesh.frustumCulled = false; mesh.count = 0;
-  mesh.setColorAt(0, JACKETS[0]);
-  const slot = new Int8Array(cap).fill(-1); slot[0] = 0;
-  scene.add(mesh);
+  ];
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // Two kinds: skiers on two skis, snowboarders on one wide board.
+  const kinds = [
+    merge([...body, [box(0.06, 0.03, 0.66), 0x151515, at(-0.07, 0.015, 0.05)], [box(0.06, 0.03, 0.66), 0x151515, at(0.07, 0.015, 0.05)]]),
+    merge([...body, [box(0.7, 0.035, 0.2), 0x151515, at(0, 0.017, 0)], [box(0.5, 0.012, 0.14), 0xffffff, at(0, 0.04, 0)]]),
+  ].map((geo) => {
+    const mesh = new THREE.InstancedMesh(geo, mat, cap);
+    mesh.castShadow = true; mesh.frustumCulled = false; mesh.count = 0;
+    mesh.setColorAt(0, JACKETS[0]);
+    scene.add(mesh);
+    const slot = new Int8Array(cap).fill(-1); slot[0] = 0;
+    return { mesh, slot, n: 0, dirty: false };
+  });
 
   function update(state, ter, dt, speed) {
     for (const l of state.lifts) for (let i = 0; i < l.queue.length; i++) l.queue[i].qi = i;
     // Positions come fresh from the rules every frame, so skiers are drawn where they are.
     // Only the hop between two states (queue to chair, chair to piste) and the queue itself are blended.
     const soft = 1 - Math.exp(-dt * 12 * Math.max(1, speed)), turn = 1 - Math.exp(-dt * 12);
-    let n = 0, dirty = false;
+    for (const k of kinds) { k.n = 0; k.dirty = false; }
     for (const g of state.guests) {
       let x = g.x, z = g.z, y, yaw = g.face, roll = 0, show = true, lift = 0, flip = 0;
       if (g.st === 'queue') {
@@ -44,19 +51,21 @@ export function createGuestView(scene, cap = 440) {
           const L = LIFTS[l.type], dx = Math.sin(l.dir), dz = Math.cos(l.dir);
           const across = SIDE + (L.seats > 1 ? ((g.seat || 0) - (L.seats - 1) / 2) * 0.22 : 0);
           x += dz * across; z -= dx * across;
-          y = L.ground ? ter.height(x, z) : g.y - 1.12 * 1; // sitting just under the cable
+          y = L.ground ? ter.ground(x, z) : g.y - 1.12 * 1; // sitting just under the cable
           if (l.type === 'gondola') show = false;
           if (l.type === 'chair') y = g.y - 1.0;
         }
       } else if (g.st === 'ski') {
         // Carving: swing left and right across the piste.
-        const ph = g.s * 0.8 + g.seed * 6.28, sw = Math.sin(ph) * 0.75;
+        // Snowboarders stand sideways and draw longer, wider turns.
+        const ph = g.s * (g.board ? 0.55 : 0.8) + g.seed * 6.28, sw = Math.sin(ph) * (g.board ? 0.95 : 0.75);
         x += Math.cos(g.face) * sw; z -= Math.sin(g.face) * sw;
         yaw = g.face + Math.cos(ph) * 0.55; roll = -Math.cos(ph) * 0.3;
+        if (g.board) { yaw += 1.25; flip = -Math.cos(ph) * 0.28; roll = 0; }
         // Off a kicker: up in an arc, with a full spin.
-        if (g.air > 0) { const t = 1 - g.air / AIR; lift = Math.sin(t * Math.PI) * 1.9; yaw = g.face + t * Math.PI * 2; roll = 0; flip = Math.sin(t * Math.PI) * 0.5; }
+        if (g.air > 0) { const t = 1 - g.air / AIR; lift = Math.sin(t * Math.PI) * 1.9; yaw = g.face + t * Math.PI * 2; roll = g.board ? Math.sin(t * Math.PI) * 0.6 : 0; flip = Math.sin(t * Math.PI) * 0.5; }
       } else if (g.st === 'eat') show = false;
-      if (y === undefined) y = ter.height(x, z);
+      if (y === undefined) y = ter.ground(x, z);
       y += lift;
 
       if (g.vx === undefined || Math.abs(g.vx - x) + Math.abs(g.vz - z) > 6) { g.vx = x; g.vy = y; g.vz = z; g.vyaw = yaw; g.vst = g.st; g.blend = 0; }
@@ -68,19 +77,22 @@ export function createGuestView(scene, cap = 440) {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       g.vyaw += d * (g.air > 0 ? 1 : turn);
       g.shown = show;
-      if (!show || n >= cap) continue;
+      const kd = kinds[g.board ? 1 : 0];
+      if (!show || kd.n >= cap) continue;
       E.set(-flip, g.vyaw, roll);
       Q.setFromEuler(E);
       M.compose(V.set(g.vx, g.vy, g.vz), Q, S.set(SCALE, SCALE, SCALE));
-      mesh.setMatrixAt(n, M);
+      kd.mesh.setMatrixAt(kd.n, M);
       const c = g.col % JACKETS.length;
-      if (slot[n] !== c) { slot[n] = c; mesh.setColorAt(n, JACKETS[c]); dirty = true; }
-      n++;
+      if (kd.slot[kd.n] !== c) { kd.slot[kd.n] = c; kd.mesh.setColorAt(kd.n, JACKETS[c]); kd.dirty = true; }
+      kd.n++;
     }
-    mesh.count = n;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (dirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true; // colours only when a slot changed hands
+    for (const k of kinds) {
+      k.mesh.count = k.n;
+      k.mesh.instanceMatrix.needsUpdate = true;
+      if (k.dirty && k.mesh.instanceColor) k.mesh.instanceColor.needsUpdate = true; // colours only when a slot changed hands
+    }
   }
 
-  return { update, clear() { mesh.count = 0; }, color: (i) => '#' + JACKETS[i % JACKETS.length].getHexString() };
+  return { update, clear() { for (const k of kinds) k.mesh.count = 0; }, color: (i) => '#' + JACKETS[i % JACKETS.length].getHexString() };
 }

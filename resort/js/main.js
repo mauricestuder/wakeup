@@ -6,6 +6,7 @@ import { createPisteView } from './view/pistes.js';
 import { createBuildingView } from './view/buildings.js';
 import { createGuestView } from './view/guests.js';
 import { createExtraView } from './view/extras.js';
+import { createCarView } from './view/cars.js';
 import { T, LIFTS } from './tuning.js';
 import { MAPS } from './maps.js';
 import * as idle from './idle.js';
@@ -23,7 +24,7 @@ if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'a
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
 const cam = createCamera(stage.camera, canvas, { onTap: () => initAudio() });
-const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene) };
+const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene) };
 
 let state = null, ter = null, playing = false, saveT = 0, popT = 0;
 
@@ -94,12 +95,7 @@ function frameAll(snap) {
   for (const l of state.lifts) pts.push(...liftPoints(l));
   cam.frame(pts, snap, ui.free);
 }
-function frameLift(l) {
-  const from = l.from === 0 ? [{ x: ter.base.x, z: ter.base.z + 2 }] : [];
-  cam.frame([...liftPoints(l), ...from], false, ui.free);
-}
-
-function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); }
+function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); views.cars.sync(state, ter); }
 
 // Puts the mountain of the current game on screen.
 function world() {
@@ -155,13 +151,13 @@ function drain() {
     if (e.type === 'world') sync = true;
     else if (e.type === 'trees') trees = true;
     else if (e.type === 'weather') stage.setWeather(state.weather);
-    else if (e.type === 'lift') { frameLift(e.lift); ui.toast(`<b>Lift ${e.lift.i + 1}</b> is open: ${idle.short(idle.fare(state, e.lift.i))} per ride.`, 'star'); }
-    else if (e.type === 'upgraded') { frameLift(e.lift); ui.toast(`Lift ${e.lift.i + 1} is now a <b>${LIFTS[e.lift.type].name.toLowerCase()}</b>.`, 'star'); }
-    else if (e.type === 'goal') { sfx.goal(); ui.toast(`<b>Quest done:</b> ${e.goal.text} · +${idle.short(e.reward)}`, 'star', 4200); ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.3, 8); }
+    else if (e.type === 'lift') ui.toast(`<b>Lift ${e.lift.i + 1}</b> is open: ${idle.money(idle.fare(state, e.lift.i))} per ride.`, 'star');
+    else if (e.type === 'upgraded') { ui.toast(`Lift ${e.lift.i + 1} is now a <b>${LIFTS[e.lift.type].name.toLowerCase()}</b>.`, 'star'); }
+    else if (e.type === 'goal') { sfx.goal(); ui.toast(`<b>Quest done:</b> ${e.goal.text} · +${idle.money(e.reward)}`, 'star', 4200); ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.3, 8); }
     else if (e.type === 'unlock') { sfx.goal(); ui.toast(`<b>New board unlocked:</b> ${e.name}`, 'star', 4600); }
     else if (e.type === 'trick') {
       const p = project(e.x, e.y + 2.2, e.z);
-      if (p.front && p.x > 0 && p.y > 40 && p.x < innerWidth * (1 - ui.free.right) && p.y < innerHeight * (1 - ui.free.bottom)) { ui.pop(p.x, p.y, 'Trick! +' + idle.short(e.pay), true); ui.flyCoins(p.x, p.y, 3); sfx.tick(); }
+      if (p.front && p.x > 0 && p.y > 40 && p.x < innerWidth * (1 - ui.free.right) && p.y < innerHeight * (1 - ui.free.bottom)) { ui.pop(p.x, p.y, 'Trick! +' + idle.money(e.pay), true); ui.flyCoins(p.x, p.y, 3); sfx.tick(); }
     }
     else if (e.type === 'rushEnd') ui.toast('Rush hour is over.');
   }
@@ -181,10 +177,11 @@ function project(x, y, z) {
 // The money each lift took since the last pop-up floats up from its station.
 function pops() {
   for (const l of state.lifts) {
-    if (l.pop <= 0) continue;
+    const whole = Math.floor(l.pop);
+    if (whole < 1) continue; // keep collecting until there is a whole dollar to show
     const s = project(l.a.x, l.pts[0].g + 3.4, l.a.z);
-    if (s.front && s.x > 0 && s.y > 60 && s.x < innerWidth * (1 - ui.free.right) && s.y < innerHeight * (1 - ui.free.bottom)) ui.pop(s.x, s.y, '+' + idle.short(l.pop));
-    l.pop = 0;
+    if (s.front && s.x > 0 && s.y > 60 && s.x < innerWidth * (1 - ui.free.right) && s.y < innerHeight * (1 - ui.free.bottom)) ui.pop(s.x, s.y, '+' + idle.money(whole));
+    l.pop -= whole;
   }
 }
 
@@ -232,12 +229,14 @@ function frame(t) {
     drain();
     views.lifts.update(state);
     views.guests.update(state, ter, dt, idle.speedOf(state));
+    views.cars.update(state, ter);
     ui.update(state, dt);
     popT += dt; if (popT >= 1) { popT = 0; pops(); }
     saveT += dt; if (saveT >= 10) { saveT = 0; save(); }
   } else {
     cam.rotate(dt * 0.04); // slow turn behind the start screen
     views.lifts.update(state || demo);
+    if (!state) { idle.tick(demo, dter, Math.min(0.05, dt)); demo.events.length = 0; views.guests.update(demo, dter, dt, 1); views.cars.update(demo, dter); }
   }
   cam.update(dt);
   stage.update(dt, playing ? idle.clockOf(state) : 640, cam.target);
@@ -247,15 +246,15 @@ function frame(t) {
 }
 
 // The start screen shows the first mountain turning slowly in the background.
-let demo = null;
+let demo = null, dter = null;
 {
   demo = idle.newGame(0);
   demo.open = T.LIFT_COUNT;
-  const dter = idle.attach(demo);
+  dter = idle.attach(demo);
   stage.setTerrain(dter, () => 45);
   cam.setTerrain(dter);
   views.buildings.buildVillage(dter);
-  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter); views.extras.sync(demo, dter);
+  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter); views.extras.sync(demo, dter); views.cars.sync(demo, dter);
   stage.updateTrees(); stage.repaint();
   cam.view(48, 52, 128, 0.5, 0.62, true);
 }

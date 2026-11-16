@@ -5,6 +5,7 @@ export const T = {
   STEP: 0.1,             // length of one simulation step in seconds
   LIFT_COUNT: 6,
   START_MONEY: 25,
+  MONEY: 10,             // every fare, price and reward is multiplied by this, so nothing needs cents
 
   // Piste colour: steepness (drop per tile) below these limits.
   GREEN: 0.17, BLUE: 0.28, RED: 0.42, PISTE_WIDTH: 2.4,
@@ -13,6 +14,8 @@ export const T = {
   WALK: 2.4, SKI: 3.6,
   GUESTS_START: 10, GUESTS_STEP: 6, GUESTS_MAX: 280,   // how many are on the mountain at once
   RUNS: [4, 9],                                         // rides before a guest goes home
+  BOARDERS: 0.35,                                       // share of guests on a snowboard
+  QUESTS_OPEN: 3,                                       // quests that can be worked on at once
 
   // What one ride costs on each lift, before upgrades.
   FARE: [1, 2.5, 7, 18, 50, 140],

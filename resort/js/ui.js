@@ -1,7 +1,7 @@
 // First Chair: everything on screen that is not the mountain. The money sign, the
 // upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
-import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short } from './idle.js';
+import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money } from './idle.js';
 import { MAPS } from './maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +27,14 @@ const ICON = {
 // Every board has the colour of a piste sign.
 const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)',
   jump: 'var(--purple)', cannon: '#3aa6c9', school: 'var(--green)', night: '#34406e', resto: 'var(--red)' };
+// The money logo: a gold coin with a mountain and a chairlift on it.
+const COIN = `<svg class="coinpic" viewBox="0 0 32 32" aria-hidden="true">
+  <circle cx="16" cy="16.6" r="14.6" fill="#8f5a06"/><circle cx="16" cy="15.4" r="14.6" fill="#f2ae12"/>
+  <circle cx="16" cy="15.4" r="11.2" fill="#ffe27a"/><circle cx="16" cy="15.4" r="11.2" fill="none" stroke="#c98a0a" stroke-width="1.1"/>
+  <path d="M5.400 19.400L12.600 8.400l4 6 2.400-3.300 7.600 8.300a11.200 11.200 0 0 1-21.200 0z" fill="#b06f06"/>
+  <path d="M12.600 8.400l2.800 4.200-1.700 1.100-1.300-1.200-1.800 1.600-.6-1zM19 11.100l2.600 2.900-1.600.5-1.300-1-1.100.4z" fill="#fffbe6"/>
+  <path d="M7.200 9.200a10.800 10.800 0 0 1 5-4" stroke="#fff" stroke-opacity=".8" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>`;
 const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.ceil(s % 60) % 60).padStart(2, '0');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -40,9 +48,9 @@ export function createUI(api) {
     const b = document.createElement('button');
     b.className = 'up board'; b.id = 'up-' + id;
     b.style.setProperty('--c', COLOR[id]);
-    b.innerHTML = `<span class="bd">${ICON[id]}</span><span class="nm"></span><i class="lv"></i><span class="nt"></span><span class="pr num"></span><span class="fill"><i></i></span>`;
+    b.innerHTML = `<span class="bd">${ICON[id]}</span><span class="nm"></span><i class="lv"></i><span class="nt"></span><span class="pr">${COIN}<b class="num"></b></span><span class="fill"><i></i></span>`;
     deck.appendChild(b);
-    ups[id] = { b, badge: b.querySelector('.bd'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr'), fill: b.querySelector('.fill i'), icon: id };
+    ups[id] = { b, badge: b.querySelector('.bd'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr b'), fill: b.querySelector('.fill i'), icon: id };
     // A tap buys once. Holding still for a moment keeps buying. Dragging scrolls the list instead.
     let hold = 0, rep = 0, held = false, sx = 0, sy = 0;
     const stop = () => { clearTimeout(hold); clearInterval(rep); b.classList.remove('hit'); };
@@ -63,6 +71,7 @@ export function createUI(api) {
   const rushText = rush.querySelector('b');
   rush.addEventListener('click', () => api.rush());
 
+  for (const el of document.querySelectorAll('.coin')) el.innerHTML = COIN;
   $('viewBtn').innerHTML = ICON.view;
   $('questBtn').innerHTML = ICON.quest;
   $('viewBtn').addEventListener('click', () => { api.click(); api.overview(); });
@@ -91,11 +100,11 @@ export function createUI(api) {
     if (state !== last) { last = state; shown = state.money; now = true; }
     if (!free.measured) measure();
     shown = state.money < shown || Math.abs(state.money - shown) < 0.5 ? state.money : shown + (state.money - shown) * (1 - Math.exp(-dt * 9));
-    txt($('money'), short(Math.floor(shown + 1e-6)));
+    txt($('money'), money(Math.floor(shown + 1e-6)));
     slow += dt;
     if (!now && slow < 0.125) return;
     slow = 0;
-    txt($('rate'), '+' + short(state.rate) + ' / s');
+    txt($('rate'), '+' + money(state.rate) + ' / s');
     txt($('guests'), String(state.guests.length));
     txt($('guestCap'), '/ ' + guestCap(state));
     const fame = fameOf(state);
@@ -115,7 +124,7 @@ export function createUI(api) {
       txt(u.name, o.name);
       txt(u.lvl, o.maxed ? 'MAX' : id === 'lift' ? `${state.open} / ${T.LIFT_COUNT}` : o.level !== undefined ? 'Lv ' + o.level : '');
       txt(u.note, o.note || '');
-      txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : short(o.cost));
+      txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : money(o.cost));
       const w = o.maxed || o.locked ? 0 : Math.round(Math.min(1, state.money / o.cost) * 100) / 100;
       if (u.fillW !== w) { u.fillW = w; u.fill.style.transform = `scaleX(${w})`; }
     }
@@ -124,7 +133,7 @@ export function createUI(api) {
     set(box, 'hidden', !g);
     if (g) {
       txt($('goalText'), g.text);
-      txt($('goalReward'), '+' + short(g.reward));
+      txt($('goalReward'), '+' + money(g.reward));
       const w = Math.round(g.have / g.want * 100) + '%';
       if ($('goalBar').style.width !== w) $('goalBar').style.width = w;
     }
@@ -161,7 +170,7 @@ export function createUI(api) {
   }
   // A few coins fly from a spot on screen to the money sign.
   function flyCoins(x, y, n = 5) {
-    if (!coins) coins = pool('fly', 12);
+    if (!coins) { coins = pool('fly', 12); for (const el of coins) el.innerHTML = COIN; }
     const r = document.querySelector('#sMoney .coin').getBoundingClientRect(), tx = r.left + r.width / 2, ty = r.top + r.height / 2;
     for (let i = 0; i < n; i++) {
       const el = coins[coins.next++ % coins.length], ox = (Math.random() - 0.5) * 60, oy = (Math.random() - 0.5) * 40;
@@ -195,23 +204,28 @@ export function createUI(api) {
   $('sheetX').addEventListener('click', () => { api.click(); closeSheet(); });
   sheet.addEventListener('pointerdown', (e) => { if (e.target === sheet) closeSheet(); });
 
+  // Open quests first, then the ones still locked, then the finished ones.
   function showQuests() {
-    const all = questList(last), todo = all.filter((q) => !q.done), done = all.filter((q) => q.done);
-    const line = (q, i, now) => `<div class="q ${q.done ? 'done' : now ? 'now' : ''}"><span class="dot">${q.done ? '✓' : now ? '!' : i + 1}</span>
-      <span class="tx">${esc(q.text)}<small>${q.done ? 'Done' : short(q.have) + ' / ' + short(q.want)}</small></span><span class="rw num">+${short(q.reward)}</span>
+    const all = questList(last), open = all.filter((q) => q.state === 'open'), locked = all.filter((q) => q.state === 'locked'), done = all.filter((q) => q.done);
+    const line = (q, i) => `<div class="q ${q.done ? 'done' : i === 0 ? 'now' : ''}"><span class="dot">${q.done ? '✓' : i === 0 ? '!' : i + 1}</span>
+      <span class="tx">${esc(q.text)}<small>${q.done ? 'Done' : short(q.have) + ' / ' + short(q.want)}</small></span><span class="rw num">+${money(q.reward)}</span>
       ${q.done ? '' : `<div class="meter"><i style="width:${Math.round(q.have / q.want * 100)}%"></i></div>`}</div>`;
+    const hidden = () => `<div class="q locked"><span class="dot">${ICON.lock}</span><span class="tx">???<small>Finish a quest to unlock</small></span><span class="rw num"></span></div>`;
     showSheet(`Quests  ${done.length} / ${all.length}`,
-      (todo.length ? '<div class="qhead">To do</div>' + todo.map((q, i) => line(q, i, i === 0)).join('') : '<p>Every quest on this mountain is done. Time for the next one!</p>')
-      + (done.length ? '<div class="qhead" style="margin-top:1em">Done</div>' + done.map((q, i) => line(q, i, false)).join('') : ''));
+      (open.length ? '<div class="qhead">Open now</div>' + open.map(line).join('') : '<p>Every quest on this mountain is done. Time for the next one!</p>')
+      + (locked.length ? `<div class="qhead" style="margin-top:1em">Locked · ${locked.length} more</div>` + locked.slice(0, 4).map(hidden).join('')
+        + (locked.length > 4 ? `<p class="more">… and ${locked.length - 4} more after that.</p>` : '') : '')
+      + (done.length ? '<div class="qhead" style="margin-top:1em">Done</div>' + done.map(line).join('') : ''));
   }
 
   const HOW = `<ul>
-      <li>Guests arrive on their own. Your income per second depends on your lifts, your guests and your prices, and stays the same until you buy something.</li>
+      <li>Guests arrive by car and coach on their own. Your income per second depends on your lifts, your guests and your prices, and stays the same until you buy something.</li>
       <li><b>New lift</b> opens the next lift and piste. Higher lifts pay more per ride.</li>
       <li><b>Upgrade lift</b> turns a lift into a chairlift, then a gondola, so more guests fit.</li>
       <li><b>Lift speed</b> and <b>More guests</b> sell more rides. <b>Ticket price</b> and <b>Ski hut</b> make each ride pay more.</li>
       <li><b>Jump park</b> builds kickers. Now and then a skier takes one and you get a trick bonus.</li>
       <li>More boards unlock as you play. The dark ones show what they need.</li>
+      <li>Three <b>quests</b> are open at a time. Finishing one pays a reward and unlocks the next.</li>
       <li>Hold a board to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
       <li>Camera: drag to move, pinch or scroll to zoom, two fingers or right-drag to turn.</li>
     </ul>`;
@@ -268,7 +282,7 @@ export function createUI(api) {
     showMenu(save) {
       $('menu').hidden = false; $('hud').hidden = true;
       $('playBtn').textContent = save ? 'Continue' : 'Play';
-      $('menuNote').textContent = save ? `${MAPS[save.level % MAPS.length].name} · ${save.open} of ${T.LIFT_COUNT} lifts · ${short(save.money)} in the bank` : 'Your progress saves in this browser.';
+      $('menuNote').textContent = save ? `${MAPS[save.level % MAPS.length].name} · ${save.open} of ${T.LIFT_COUNT} lifts · ${money(save.v === 2 ? save.money * T.MONEY : save.money)} in the bank` : 'Your progress saves in this browser.';
     },
     hideMenu() { $('menu').hidden = true; $('hud').hidden = false; },
   };

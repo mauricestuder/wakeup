@@ -85,24 +85,16 @@ export function createBuildingView(scene) {
     return m;
   }
 
-  // The car park, cars, a welcome arch and the valley lodge.
+  // The square at the bottom, a welcome arch and the valley lodge. The road and cars are in cars.js.
   function buildVillage(ter) {
     village.clear();
     const b = ter.base, y = ter.height(b.x, b.z);
     const rnd = (i) => ((Math.sin(i * 91.7) * 43758.5) % 1 + 1) % 1;
     const parts = [
       [box(9, 0.5, 3.2), 0x4b4f56, at(b.x, y - 0.17, b.z + 2.2)],
-      [box(2.4, 0.5, 5), 0x4b4f56, at(b.x + 5.5, y - 0.19, b.z + 3)],
       [box(0.16, 1.9, 0.16), 0x6b4a2f, at(b.x - 1.6, y + 0.95, b.z - 0.2)], [box(0.16, 1.9, 0.16), 0x6b4a2f, at(b.x + 1.6, y + 0.95, b.z - 0.2)],
       [box(3.7, 0.5, 0.14), 0xe5484d, at(b.x, y + 1.9, b.z - 0.2)], [box(3.76, 0.08, 0.2), SNOWY, at(b.x, y + 2.18, b.z - 0.2)],
     ];
-    const cols = [0xd9372f, 0x2f7fe6, 0xf2f2ee, 0x30343b, 0xf2c230, 0x34b05a, 0x8a9099];
-    for (let i = 0; i < 14; i++) {
-      const x = b.x - 3.9 + (i % 7) * 1.3, z = b.z + 1.5 + Math.floor(i / 7) * 1.5;
-      if (rnd(i) < 0.2) continue;
-      parts.push([box(0.6, 0.3, 1.05), cols[(rnd(i + 3) * cols.length) | 0], at(x, y + 0.24, z)]);
-      parts.push([box(0.52, 0.22, 0.55), GLASS, at(x, y + 0.48, z - 0.05)]);
-    }
     for (const [geo, c, m] of house(3.4, 2, 1.3, 0xd9c3a0, 0x6b4a2f, 0.9)) parts.push([geo, c, at(b.x - 7, y, b.z + 2.6).multiply(m)]);
     parts.push([box(0.5, 0.75, 0.05), 0x3b2616, at(b.x - 7, y + 0.38, b.z + 3.62)]);
     const m = new THREE.Mesh(merge(parts), mat);
