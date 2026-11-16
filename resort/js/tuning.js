@@ -21,12 +21,23 @@ export const T = {
   SPEED_GAIN: 0.06,      // each speed level adds this share of lift speed
 
   // Prices. A repeatable upgrade costs base * growth ^ level.
-  LIFT_COST: [0, 80, 2500, 30000, 600000, 12000000],
-  CHAIR_COST: [350, 800], GONDOLA_COST: [12000, 20000, 150000, 300000],
+  LIFT_COST: [0, 80, 5000, 250000, 12000000, 600000000],
+  CHAIR_COST: [350, 800], GONDOLA_COST: [50000, 120000, 3000000, 9000000],
   SPEED: { base: 50, growth: 1.45, max: 25 },
   GUESTS: { base: 20, growth: 1.25, max: 45 },
   TICKET: { base: 30, growth: 1.3, max: 9999 },
   HUT: { base: 400, growth: 1.8, max: 30 },
+
+  // Upgrades that unlock by playing.
+  JUMP: { base: 600, growth: 1.9, max: 20 },      // kickers on the pistes
+  CANNON: { base: 5000, growth: 1.7, max: 10 },   // snow cannons: faster skiing
+  SCHOOL: { base: 3000, growth: 1.6, max: 25 },   // ski school: lessons per guest
+  NIGHT: { base: 60000, growth: 2.2, max: 8 },    // night skiing: income multiplier
+  RESTO: { base: 900000, growth: 2.4, max: 10 },  // mountain restaurant: income multiplier
+  CANNON_GAIN: 0.08, SCHOOL_PAY: 0.012, NIGHT_GAIN: 0.15, RESTO_GAIN: 0.25,
+  TRICK_CHANCE: 0.08, TRICK_CHANCE_STEP: 0.005, TRICK_CHANCE_MAX: 0.18, TRICK_PAY: 2, TRICK_PAY_STEP: 0.3, AIR_TIME: 0.95,
+  UNLOCK_CANNON_RIDES: 2000, UNLOCK_SCHOOL_TIME: 480,
+  TURNAROUND: 9,         // seconds a guest spends walking and queueing per ride, for the income sum
 
   // Rush hour: more guests and faster lifts for a short while.
   RUSH_TIME: 30, RUSH_WAIT: 120, RUSH_GUESTS: 1.5, RUSH_SPEED: 1.5,

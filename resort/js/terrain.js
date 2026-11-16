@@ -100,12 +100,18 @@ export function makeTerrain(map) {
     const dens = fbm(cx * 0.085 + 50, cz * 0.085 + 50, 3);
     const r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd(), r6 = rnd();
     if (a > line || slope(cx, cz) > 0.85 || Math.hypot(cx - base.x, cz - base.z) < 7.5) continue;
-    const want = dens > 0.58 ? 2 : dens > 0.5 ? 1 : (r1 < 0.035 ? 1 : 0);
+    // The forest thins out gradually: dense cores, loose edges, and single trees and
+    // small groups across the open slopes, fewer towards the treeline.
+    const edge = smooth(0.34, 0.56, dens), high = 1 - smooth(line - 0.22, line, a);
+    const grove = fbm(cx * 0.31 + 7, cz * 0.31 + 3, 2) > 0.6 ? 0.22 : 0;
+    const chance = (0.045 + edge * 0.62 + grove) * (0.35 + 0.65 * high);
+    const want = dens > 0.63 && r6 < 0.55 ? 2 : r1 < chance ? 1 : 0;
     const ids = [];
     for (let n = 0; n < want; n++) {
       const x = i + 0.15 + (n ? r4 : r2) * 0.7, z = j + 0.15 + (n ? r5 : r3) * 0.7;
       ids.push(trees.length);
-      trees.push({ x, z, y: height(x, z), s: 0.75 + (n ? r6 : r1) * 0.6 });
+      // Young trees stand in the open, tall ones deep in the forest.
+      trees.push({ x, z, y: height(x, z), s: (0.5 + edge * 0.35) + (n ? r5 : r3) * (0.45 + edge * 0.35) });
     }
     if (ids.length) byTile.set(j * N + i, ids);
   }
@@ -125,5 +131,5 @@ export function makeTerrain(map) {
     return out;
   };
 
-  return { N, W, H, top, h, base, height, slope, alt, inside, trees, alive, treesNear, noise, fbm };
+  return { N, W, H, top, h, base, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm };
 }

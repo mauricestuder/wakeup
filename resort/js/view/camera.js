@@ -12,6 +12,9 @@ export function createCamera(camera, canvas, hooks) {
   const keys = new Set();
   const pointers = new Map();
   let drag = null, pinch = null;
+  // How fast the camera follows its goal: direct while the player steers, a soft glide when the game moves it.
+  const DIRECT = 14, GLIDE = 3.4;
+  let ease = DIRECT;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 
   const limit = () => {
@@ -61,6 +64,7 @@ export function createCamera(camera, canvas, hooks) {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    ease = DIRECT;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false,
@@ -112,6 +116,7 @@ export function createCamera(camera, canvas, hooks) {
   canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
+    ease = DIRECT;
     if (e.ctrlKey) goal.dist *= Math.exp(e.deltaY * 0.01); // trackpad pinch
     else goal.dist *= Math.exp(clamp(e.deltaY, -120, 120) * 0.0016);
     limit();
@@ -127,6 +132,7 @@ export function createCamera(camera, canvas, hooks) {
     if (keys.has('KeyS') || keys.has('ArrowDown')) mz += 1;
     if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
     if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
+    if (mx || mz || keys.has('KeyQ') || keys.has('KeyE')) ease = DIRECT;
     if (mx || mz) {
       const s = Math.sin(now.yaw), c = Math.cos(now.yaw);
       goal.x += (mx * c + mz * s) * sp; goal.z += (-mx * s + mz * c) * sp;
@@ -136,12 +142,12 @@ export function createCamera(camera, canvas, hooks) {
     if (keys.has('Equal') || keys.has('NumpadAdd') || keys.has('KeyR')) goal.dist *= Math.exp(-1.3 * dt);
     if (keys.has('Minus') || keys.has('NumpadSubtract') || keys.has('KeyF')) goal.dist *= Math.exp(1.3 * dt);
     limit();
-    const k = 1 - Math.exp(-dt * 14);
+    const k = 1 - Math.exp(-dt * ease);
     now.x += (goal.x - now.x) * k; now.z += (goal.z - now.z) * k;
     now.yaw += (goal.yaw - now.yaw) * k; now.pitch += (goal.pitch - now.pitch) * k;
     now.dist += (goal.dist - now.dist) * k;
     const gy = ter ? ter.height(clamp(now.x, 0, ter.N), clamp(now.z, 0, ter.N)) : 0;
-    now.y += (gy - now.y) * (1 - Math.exp(-dt * 5));
+    now.y += (gy - now.y) * (1 - Math.exp(-dt * Math.min(5, ease)));
     target.set(now.x, now.y, now.z);
     const cp = Math.cos(now.pitch), spt = Math.sin(now.pitch);
     camera.position.set(now.x + Math.sin(now.yaw) * cp * now.dist, now.y + spt * now.dist, now.z + Math.cos(now.yaw) * cp * now.dist);
@@ -158,16 +164,20 @@ export function createCamera(camera, canvas, hooks) {
     setTerrain(t) { ter = t; },
     view(x, z, dist, yaw = goal.yaw, pitch = goal.pitch, snap = false) {
       Object.assign(goal, { x, z, dist, yaw, pitch }); limit();
+      ease = GLIDE;
       if (snap) Object.assign(now, goal, { y: ter ? ter.height(clamp(x, 0, ter.N), clamp(z, 0, ter.N)) : 0 });
     },
-    // Fit a set of points on screen, leaving `low` of the height free for the buttons at the bottom.
-    frame(pts, snap = false, low = 0.2) {
+    // Fit a set of points into the part of the screen that is not covered by buttons.
+    // free = shares of the screen that are covered: { left, right, top, bottom }.
+    frame(pts, snap = false, free = {}) {
       let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
       for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+      const L = free.left || 0, R = free.right || 0, U = free.top || 0, D = free.bottom || 0;
       const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), pitch = 0.84;
-      const tan = Math.tan(camera.fov * Math.PI / 360) * 2, use = 1 - low;
-      const dist = clamp(Math.max((z1 - z0 + 5) * Math.sin(pitch) / (tan * use), (x1 - x0 + 6) / (tan * aspect)) * 1.12, 22, 170);
-      this.view((x0 + x1) / 2, (z0 + z1) / 2 + dist * tan * low * 0.55, dist, 0, pitch, snap);
+      const tan = Math.tan(camera.fov * Math.PI / 360) * 2;
+      const dist = clamp(Math.max((z1 - z0 + 5) * Math.sin(pitch) / (tan * (1 - U - D)), (x1 - x0 + 6) / (tan * aspect * (1 - L - R))) * 1.1, 22, 170);
+      // Shift the target so the points sit in the middle of the free part, not of the whole screen.
+      this.view((x0 + x1) / 2 + (R - L) / 2 * tan * dist * aspect, (z0 + z1) / 2 + (D - U) / 2 * tan * dist / Math.sin(pitch), dist, 0, pitch, snap);
     },
     zoom(f) { goal.dist *= f; limit(); },
     rotate(a) { goal.yaw += a; },

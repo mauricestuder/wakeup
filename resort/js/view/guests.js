@@ -1,6 +1,8 @@
 // First Chair: all guests as one instanced mesh, moved smoothly between simulation steps.
 import { THREE, merge, at } from './scene.js';
-import { LIFTS } from '../tuning.js';
+import { LIFTS, T } from '../tuning.js';
+
+const AIR = T.AIR_TIME;
 
 const JACKETS = [0xe5484d, 0x2f7fe6, 0xf2c230, 0x34b05a, 0xf2793a, 0xa25be0, 0x24b8b0, 0xe85aa0, 0xf4f4f0, 0x7ad13a, 0x3a50c8, 0xc23a5a].map((c) => new THREE.Color(c));
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -17,14 +19,17 @@ export function createGuestView(scene, cap = 440) {
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), cap);
   mesh.castShadow = true; mesh.frustumCulled = false; mesh.count = 0;
   mesh.setColorAt(0, JACKETS[0]);
+  const slot = new Int8Array(cap).fill(-1); slot[0] = 0;
   scene.add(mesh);
 
   function update(state, ter, dt, speed) {
     for (const l of state.lifts) for (let i = 0; i < l.queue.length; i++) l.queue[i].qi = i;
-    const k = 1 - Math.exp(-dt * 9 * Math.max(1, speed));
-    let n = 0;
+    // Positions come fresh from the rules every frame, so skiers are drawn where they are.
+    // Only the hop between two states (queue to chair, chair to piste) and the queue itself are blended.
+    const soft = 1 - Math.exp(-dt * 12 * Math.max(1, speed)), turn = 1 - Math.exp(-dt * 12);
+    let n = 0, dirty = false;
     for (const g of state.guests) {
-      let x = g.x, z = g.z, y, yaw = g.face, roll = 0, show = true;
+      let x = g.x, z = g.z, y, yaw = g.face, roll = 0, show = true, lift = 0, flip = 0;
       if (g.st === 'queue') {
         const l = state.liftById[g.lift];
         if (l) {
@@ -48,26 +53,33 @@ export function createGuestView(scene, cap = 440) {
         const ph = g.s * 0.8 + g.seed * 6.28, sw = Math.sin(ph) * 0.75;
         x += Math.cos(g.face) * sw; z -= Math.sin(g.face) * sw;
         yaw = g.face + Math.cos(ph) * 0.55; roll = -Math.cos(ph) * 0.3;
+        // Off a kicker: up in an arc, with a full spin.
+        if (g.air > 0) { const t = 1 - g.air / AIR; lift = Math.sin(t * Math.PI) * 1.9; yaw = g.face + t * Math.PI * 2; roll = 0; flip = Math.sin(t * Math.PI) * 0.5; }
       } else if (g.st === 'eat') show = false;
       if (y === undefined) y = ter.height(x, z);
+      y += lift;
 
-      if (g.vx === undefined || Math.abs(g.vx - x) + Math.abs(g.vz - z) > 6) { g.vx = x; g.vy = y; g.vz = z; g.vyaw = yaw; }
+      if (g.vx === undefined || Math.abs(g.vx - x) + Math.abs(g.vz - z) > 6) { g.vx = x; g.vy = y; g.vz = z; g.vyaw = yaw; g.vst = g.st; g.blend = 0; }
+      if (g.vst !== g.st) { g.vst = g.st; g.blend = 0.3; }
+      const k = g.air > 0 ? 1 : g.st === 'queue' || g.blend > 0 ? soft : 1;
+      if (g.blend > 0) g.blend -= dt;
       g.vx += (x - g.vx) * k; g.vy += (y - g.vy) * k; g.vz += (z - g.vz) * k;
       let d = yaw - g.vyaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
-      g.vyaw += d * k;
+      g.vyaw += d * (g.air > 0 ? 1 : turn);
       g.shown = show;
       if (!show || n >= cap) continue;
-      E.set(0, g.vyaw, roll);
+      E.set(-flip, g.vyaw, roll);
       Q.setFromEuler(E);
       M.compose(V.set(g.vx, g.vy, g.vz), Q, S.set(SCALE, SCALE, SCALE));
       mesh.setMatrixAt(n, M);
-      mesh.setColorAt(n, JACKETS[g.col % JACKETS.length]);
+      const c = g.col % JACKETS.length;
+      if (slot[n] !== c) { slot[n] = c; mesh.setColorAt(n, JACKETS[c]); dirty = true; }
       n++;
     }
     mesh.count = n;
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    if (dirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true; // colours only when a slot changed hands
   }
 
   return { update, clear() { mesh.count = 0; }, color: (i) => '#' + JACKETS[i % JACKETS.length].getHexString() };

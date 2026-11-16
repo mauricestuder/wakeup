@@ -1,7 +1,7 @@
-// First Chair: everything on screen that is not the mountain. The top bar, the big
-// buttons, the goal, pop-ups, the start screen and the windows.
+// First Chair: everything on screen that is not the mountain. The money sign, the
+// upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
-import { UPGRADES, offer, guestCap, currentGoal, canMoveOn, fameOf, mapOf, short } from './idle.js';
+import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short } from './idle.js';
 import { MAPS } from './maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -11,40 +11,50 @@ const ICON = {
   upgrade: svg('<path d="M12 20V8M6.500 13.500L12 8l5.500 5.500M6 4h12"/>'),
   speed: svg('<path d="M4.500 17a8.500 8.500 0 1 1 15 0M12 13l4-5"/><circle cx="12" cy="13.500" r="1.300"/>'),
   guests: svg('<circle cx="9" cy="8" r="3.200"/><path d="M3 19.500c0-3.300 2.700-5.500 6-5.500s6 2.200 6 5.500M18 8v6M15 11h6"/>'),
-  ticket: svg('<path d="M3 8.500a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V10a2 2 0 0 0 0 4v1.500a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V14a2 2 0 0 0 0-4zM14.500 7v10" stroke-dasharray="none"/>'),
+  ticket: svg('<path d="M3 8.500a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V10a2 2 0 0 0 0 4v1.500a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V14a2 2 0 0 0 0-4zM14.500 7v10"/>'),
   hut: svg('<path d="M3 11l9-7 9 7M5 9.500V20h14V9.500M10 20v-6h4v6"/>'),
+  jump: svg('<path d="M3 20h9l9-9M3 20c5 0 9-3 12-7"/><circle cx="8" cy="7" r="1.800"/><path d="M5 12l3-2 3 1.500"/>'),
+  cannon: svg('<path d="M12 3v18M4.200 7.500l15.600 9M19.800 7.500l-15.600 9M12 6l-2-1.500M12 6l2-1.500M12 18l-2 1.500M12 18l2 1.500"/>'),
+  school: svg('<path d="M2.500 9L12 4.500 21.500 9 12 13.500zM6.500 11.200V16c1.500 1.500 3.500 2.200 5.500 2.200s4-.7 5.500-2.200v-4.800M21.500 9v5"/>'),
+  night: svg('<path d="M20 14.500A8.500 8.500 0 0 1 9.500 4a8.500 8.500 0 1 0 10.500 10.500z"/><path d="M16 4.500v3M14.500 6h3"/>'),
+  resto: svg('<path d="M6 3v8M4 3v4a2 2 0 0 0 4 0V3M6 11v10M17 3c-2 2-2.500 4.500-2.500 7.500H17zM17 10.500V21"/>'),
   rush: svg('<path d="M13 2.500L5 13.500h6l-1 8 8-11h-6z"/>'),
-  coin: svg('<circle cx="12" cy="12" r="9"/><path d="M14.800 9.200c-.5-1-1.500-1.500-2.800-1.500-1.700 0-2.900.8-2.900 2.100 0 3 5.900 1.400 5.900 4.300 0 1.300-1.300 2.200-3 2.200-1.500 0-2.700-.6-3.200-1.700"/>'),
   view: svg('<path d="M2 12s3.600-6.500 10-6.500S22 12 22 12s-3.600 6.500-10 6.500S2 12 2 12z"/><circle cx="12" cy="12" r="2.800"/>'),
   peak: svg('<path d="M2.500 19.500l6.500-11 4 6 2.500-3.500 6 8.500zM7.300 11.500l1.700 1.300 1.500-1.500"/>'),
+  quest: svg('<path d="M12 21V3M12 5h7l2 2-2 2h-7zM12 11H5l-2 2 2 2h7z"/>'),
+  lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
 };
+// Every board has the colour of a piste sign.
+const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)',
+  jump: 'var(--purple)', cannon: '#3aa6c9', school: 'var(--green)', night: '#34406e', resto: 'var(--red)' };
 const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.ceil(s % 60) % 60).padStart(2, '0');
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export function createUI(api) {
   const set = (el, key, v) => { if (el[key] !== v) el[key] = v; };
   const txt = (el, v) => { if (el._t !== v) { el._t = v; el.textContent = v; } };
 
-  // ---------- the big buttons ----------
+  // ---------- the upgrade boards ----------
   const deck = $('deck'), ups = {};
   for (const id of UPGRADES) {
     const b = document.createElement('button');
-    b.className = 'up'; b.id = 'up-' + id;
-    b.innerHTML = `${ICON[id]}<div class="nm"><span></span><i></i></div><div class="nt"></div><div class="pr num">${ICON.coin}<span></span></div><div class="fill"></div>`;
+    b.className = 'up board'; b.id = 'up-' + id;
+    b.style.setProperty('--c', COLOR[id]);
+    b.innerHTML = `<span class="bd">${ICON[id]}</span><span class="nm"></span><i class="lv"></i><span class="nt"></span><span class="pr num"></span><span class="fill"><i></i></span>`;
     deck.appendChild(b);
-    ups[id] = { b, name: b.querySelector('.nm span'), lvl: b.querySelector('.nm i'), note: b.querySelector('.nt'), price: b.querySelector('.pr span'), coin: b.querySelector('.pr svg'), fill: b.querySelector('.fill') };
-    // One press buys once. Holding keeps buying.
-    let hold = 0, rep = 0;
+    ups[id] = { b, badge: b.querySelector('.bd'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr'), fill: b.querySelector('.fill i'), icon: id };
+    // A tap buys once. Holding still for a moment keeps buying. Dragging scrolls the list instead.
+    let hold = 0, rep = 0, held = false, sx = 0, sy = 0;
     const stop = () => { clearTimeout(hold); clearInterval(rep); b.classList.remove('hit'); };
     b.addEventListener('pointerdown', (e) => {
       if (e.button) return;
-      e.preventDefault();
-      stop();
+      stop(); held = false; sx = e.clientX; sy = e.clientY;
       b.classList.add('hit');
-      api.buy(id, true);
-      hold = setTimeout(() => { rep = setInterval(() => { if (!api.buy(id, false)) stop(); }, 110); }, 420);
+      hold = setTimeout(() => { held = true; api.buy(id, true); rep = setInterval(() => { if (!api.buy(id, false)) stop(); }, 110); }, 380);
     });
+    b.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) stop(); });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
-    b.addEventListener('keydown', (e) => { if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat) { e.preventDefault(); api.buy(id, true); } });
+    b.addEventListener('click', () => { if (!held) api.buy(id, true); held = false; });
     b.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -54,20 +64,38 @@ export function createUI(api) {
   rush.addEventListener('click', () => api.rush());
 
   $('viewBtn').innerHTML = ICON.view;
+  $('questBtn').innerHTML = ICON.quest;
   $('viewBtn').addEventListener('click', () => { api.click(); api.overview(); });
   $('menuBtn').addEventListener('click', () => { api.click(); showSettings(); });
+  $('questBtn').addEventListener('click', () => { api.click(); showQuests(); });
+  $('goal').addEventListener('click', () => { api.click(); showQuests(); });
   $('next').addEventListener('click', () => { api.click(); showNext(); });
 
   // ---------- every frame ----------
-  let last = null, deckH = 0;
-  // The round buttons sit just above the deck, however tall it is on this screen.
-  const measure = () => { const h = deck.offsetHeight; if (h && h !== deckH) { deckH = h; $('hud').style.setProperty('--deck', h + 'px'); } };
-  addEventListener('resize', () => setTimeout(measure, 50));
-  function update(state) {
-    last = state;
-    if (!deckH) measure();
-    txt($('money'), short(state.money));
-    txt($('rate'), '+' + short(state.rate * 60) + ' / min');
+  let last = null, shown = 0, slow = 1, deckH = 0;
+  // Where the boards are, as shares of the screen, so the camera can keep the action in the free part.
+  const free = { right: 0, bottom: 0, top: 0.14, left: 0 };
+  function measure() {
+    const r = deck.getBoundingClientRect();
+    if (!r.width) return;
+    const side = r.height > innerHeight * 0.55;
+    free.right = side ? (innerWidth - r.left) / innerWidth : 0;
+    free.bottom = side ? 0 : (innerHeight - r.top) / innerHeight;
+    $('hud').style.setProperty('--deck-h', side ? '0px' : Math.round(r.height) + 'px');
+    free.measured = true;
+  }
+  addEventListener('resize', () => setTimeout(measure, 60));
+
+  // The money number rolls every frame. Everything else is refreshed 8 times a second, or at once after a purchase.
+  function update(state, dt = 0, now = false) {
+    if (state !== last) { last = state; shown = state.money; now = true; }
+    if (!free.measured) measure();
+    shown = state.money < shown || Math.abs(state.money - shown) < 0.5 ? state.money : shown + (state.money - shown) * (1 - Math.exp(-dt * 9));
+    txt($('money'), short(Math.floor(shown + 1e-6)));
+    slow += dt;
+    if (!now && slow < 0.125) return;
+    slow = 0;
+    txt($('rate'), '+' + short(state.rate) + ' / s');
     txt($('guests'), String(state.guests.length));
     txt($('guestCap'), '/ ' + guestCap(state));
     const fame = fameOf(state);
@@ -77,46 +105,75 @@ export function createUI(api) {
     for (const id of UPGRADES) {
       const o = offer(state, id), u = ups[id];
       const can = !o.maxed && !o.locked && o.cost <= state.money;
-      const cls = 'up' + (o.maxed ? ' max' : o.locked ? ' locked' : can ? ' can' : '') + (u.b.classList.contains('hit') ? ' hit' : '');
-      set(u.b, 'className', cls);
+      const kind = o.maxed ? 'max' : o.locked ? 'locked' : can ? 'can' : 'no';
+      if (u.kind !== kind) {
+        u.kind = kind;
+        u.b.className = 'up board ' + kind + (u.b.classList.contains('hit') ? ' hit' : '');
+      }
+      const icon = o.secret ? 'lock' : id;
+      if (u.icon !== icon) { u.icon = icon; u.badge.innerHTML = ICON[icon]; }
       txt(u.name, o.name);
       txt(u.lvl, o.maxed ? 'MAX' : id === 'lift' ? `${state.open} / ${T.LIFT_COUNT}` : o.level !== undefined ? 'Lv ' + o.level : '');
       txt(u.note, o.note || '');
       txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : short(o.cost));
-      const show = o.maxed || o.locked ? 'none' : '';
-      if (u.coin.style.display !== show) u.coin.style.display = show;
-      const w = o.maxed || o.locked ? '0%' : Math.round(Math.min(1, state.money / o.cost) * 100) + '%';
-      if (u.fill.style.width !== w) u.fill.style.width = w;
+      const w = o.maxed || o.locked ? 0 : Math.round(Math.min(1, state.money / o.cost) * 100) / 100;
+      if (u.fillW !== w) { u.fillW = w; u.fill.style.transform = `scaleX(${w})`; }
     }
 
     const g = currentGoal(state), box = $('goal');
     set(box, 'hidden', !g);
     if (g) {
-      txt($('goalText'), g.goal.text);
+      txt($('goalText'), g.text);
       txt($('goalReward'), '+' + short(g.reward));
       const w = Math.round(g.have / g.want * 100) + '%';
       if ($('goalBar').style.width !== w) $('goalBar').style.width = w;
     }
 
-    const cls = 'rush' + (state.rush > 0 ? ' on' : state.rushWait > 0 ? ' wait' : '');
-    if (rush._c !== cls) { rush._c = cls; rush.className = cls.replace('rush', '').trim(); }
+    const cls = state.rush > 0 ? 'on' : state.rushWait > 0 ? 'wait' : '';
+    if (rush._c !== cls) { rush._c = cls; rush.className = cls; }
     txt(rushText, state.rush > 0 ? Math.ceil(state.rush) + 's' : state.rushWait > 0 ? mmss(state.rushWait) : 'Rush hour');
+
+    // The boards change height when their texts do, and the camera and round buttons follow.
+    const h = deck.offsetHeight;
+    if (h !== deckH) { deckH = h; measure(); }
 
     const move = canMoveOn(state);
     set($('next'), 'hidden', !move);
-    if (move && !$('next')._set) { $('next')._set = 1; $('next').innerHTML = `${ICON.peak} Next mountain`; }
+    if (move && !$('next')._set) { $('next')._set = 1; $('next').innerHTML = `${ICON.peak}<span>Next mountain</span>`; }
   }
 
-  // ---------- pop-ups and tags over the mountain ----------
+  // ---------- pop-ups over the mountain ----------
+  // The same few elements are used again and again, so nothing is created while playing.
   const labels = $('labels');
-  function pop(x, y, text) {
-    if (labels.childElementCount > 40) return;
-    const el = document.createElement('div');
-    el.className = 'pop'; el.textContent = text;
-    el.style.left = Math.round(x) + 'px'; el.style.top = Math.round(y) + 'px';
-    labels.appendChild(el);
-    el.addEventListener('animationend', () => el.remove());
-    setTimeout(() => el.remove(), 1600);
+  const pool = (cls, n) => { const a = []; for (let i = 0; i < n; i++) { const el = document.createElement('div'); el.className = cls; labels.appendChild(el); a.push(el); } a.next = 0; return a; };
+  let pops = null, coins = null;
+  function pop(x, y, text, trick = false) {
+    if (!pops) pops = pool('pop', 14);
+    const el = pops[pops.next++ % pops.length];
+    el.textContent = text;
+    el.classList.toggle('trick', trick);
+    const rise = trick ? 4.4 : 3;
+    el.animate([
+      { transform: `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${trick ? 0.6 : 1})`, opacity: 1 },
+      { transform: `translate(${x}px, ${y}px) translate(-50%, -100%) translateY(-${rise * 0.6}em) scale(${trick ? 1.15 : 1})`, opacity: 1, offset: 0.6 },
+      { transform: `translate(${x}px, ${y}px) translate(-50%, -100%) translateY(-${rise}em) scale(1)`, opacity: 0 },
+    ], { duration: trick ? 1400 : 1100, easing: 'ease-out' });
+  }
+  // A few coins fly from a spot on screen to the money sign.
+  function flyCoins(x, y, n = 5) {
+    if (!coins) coins = pool('fly', 12);
+    const r = document.querySelector('#sMoney .coin').getBoundingClientRect(), tx = r.left + r.width / 2, ty = r.top + r.height / 2;
+    for (let i = 0; i < n; i++) {
+      const el = coins[coins.next++ % coins.length], ox = (Math.random() - 0.5) * 60, oy = (Math.random() - 0.5) * 40;
+      el.animate([
+        { transform: `translate(${x}px, ${y}px) translate(-50%, -50%) scale(.6)`, opacity: 0 },
+        { transform: `translate(${x + ox}px, ${y + oy - 30}px) translate(-50%, -50%) scale(1.1)`, opacity: 1, offset: 0.25 },
+        { transform: `translate(${tx}px, ${ty}px) translate(-50%, -50%) scale(.7)`, opacity: 1, offset: 0.95 },
+        { transform: `translate(${tx}px, ${ty}px) translate(-50%, -50%) scale(.3)`, opacity: 0 },
+      ], { duration: 720 + i * 70, delay: i * 45, easing: 'cubic-bezier(.5, 0, .3, 1)' });
+    }
+    const m = $('sMoney');
+    setTimeout(() => { m.classList.remove('bump'); void m.offsetWidth; m.classList.add('bump'); }, 700);
   }
 
   function toast(html, kind = '', ms = 3200) {
@@ -127,46 +184,63 @@ export function createUI(api) {
     setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, ms);
   }
 
-  // ---------- windows ----------
+  // ---------- notices ----------
   const sheet = $('sheet');
   let open = false;
   function showSheet(title, html) {
-    $('sheetTitle').textContent = title; $('sheetBody').innerHTML = html;
+    $('sheetTitle').textContent = title; $('sheetBody').innerHTML = html; $('sheetBody').scrollTop = 0;
     sheet.hidden = false; open = true;
   }
   function closeSheet() { sheet.hidden = true; open = false; }
   $('sheetX').addEventListener('click', () => { api.click(); closeSheet(); });
   sheet.addEventListener('pointerdown', (e) => { if (e.target === sheet) closeSheet(); });
 
+  function showQuests() {
+    const all = questList(last), todo = all.filter((q) => !q.done), done = all.filter((q) => q.done);
+    const line = (q, i, now) => `<div class="q ${q.done ? 'done' : now ? 'now' : ''}"><span class="dot">${q.done ? '✓' : now ? '!' : i + 1}</span>
+      <span class="tx">${esc(q.text)}<small>${q.done ? 'Done' : short(q.have) + ' / ' + short(q.want)}</small></span><span class="rw num">+${short(q.reward)}</span>
+      ${q.done ? '' : `<div class="meter"><i style="width:${Math.round(q.have / q.want * 100)}%"></i></div>`}</div>`;
+    showSheet(`Quests  ${done.length} / ${all.length}`,
+      (todo.length ? '<div class="qhead">To do</div>' + todo.map((q, i) => line(q, i, i === 0)).join('') : '<p>Every quest on this mountain is done. Time for the next one!</p>')
+      + (done.length ? '<div class="qhead" style="margin-top:1em">Done</div>' + done.map((q, i) => line(q, i, false)).join('') : ''));
+  }
+
   const HOW = `<ul>
-      <li>Guests arrive on their own. Every ride on a lift pays you.</li>
+      <li>Guests arrive on their own. Your income per second depends on your lifts, your guests and your prices, and stays the same until you buy something.</li>
       <li><b>New lift</b> opens the next lift and piste. Higher lifts pay more per ride.</li>
       <li><b>Upgrade lift</b> turns a lift into a chairlift, then a gondola, so more guests fit.</li>
-      <li><b>Lift speed</b> shortens the queues. <b>More guests</b> fills the chairs.</li>
-      <li><b>Ticket price</b> and <b>Ski hut</b> raise what every ride earns.</li>
-      <li>Hold a button to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
+      <li><b>Lift speed</b> and <b>More guests</b> sell more rides. <b>Ticket price</b> and <b>Ski hut</b> make each ride pay more.</li>
+      <li><b>Jump park</b> builds kickers. Now and then a skier takes one and you get a trick bonus.</li>
+      <li>More boards unlock as you play. The dark ones show what they need.</li>
+      <li>Hold a board to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
       <li>Camera: drag to move, pinch or scroll to zoom, two fingers or right-drag to turn.</li>
     </ul>`;
 
-  function showHow() { showSheet('How to play', HOW + '<button class="btn gold" id="okBtn">Got it</button>'); $('okBtn').addEventListener('click', () => { api.click(); closeSheet(); }); }
+  function showHow() { showSheet('How to play', HOW + '<button class="btn board gold" id="okBtn">Got it</button>'); $('okBtn').addEventListener('click', () => { api.click(); closeSheet(); }); }
 
   function showSettings() {
     const s = api.settings();
     showSheet('Menu', `
       <div class="row"><span>Sound</span><input type="range" id="setVol" min="0" max="1" step="0.05" value="${s.volume}"></div>
-      <div class="row"><span>Shadows</span><button class="switch ${s.shadows ? 'on' : ''}" id="setShadow" aria-label="Shadows"></button></div>
+      <div class="row"><span>Graphics</span><div class="seg" id="setGfx">${['auto', 'high', 'low'].map((k) => `<button data-k="${k}" class="${s.graphics === k ? 'on' : ''}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div></div>
       <div class="row" style="display:block">
-        <button class="btn" id="setHow">How to play</button>
-        <button class="btn" id="setQuit">Back to the start screen</button>
-        <button class="btn bad" id="setReset">Reset all progress</button>
+        <button class="btn board" id="setHow">How to play</button>
+        <button class="btn board" id="setQuit">Back to the start screen</button>
+        <button class="btn board bad" id="setReset">Reset all progress</button>
       </div>`);
     $('setVol').addEventListener('input', (e) => { s.volume = +e.target.value; api.applySettings(); });
-    $('setShadow').addEventListener('click', (e) => { s.shadows = !s.shadows; e.currentTarget.classList.toggle('on', s.shadows); api.applySettings(); api.click(); });
+    $('setGfx').addEventListener('click', (e) => {
+      const k = e.target.dataset?.k;
+      if (!k) return;
+      s.graphics = k;
+      for (const b of $('setGfx').children) b.classList.toggle('on', b.dataset.k === k);
+      api.applySettings(); api.click();
+    });
     $('setHow').addEventListener('click', () => { api.click(); showHow(); });
     $('setQuit').addEventListener('click', () => { api.click(); closeSheet(); api.quit(); });
     $('setReset').addEventListener('click', () => {
       api.click();
-      showSheet('Reset all progress?', '<p>This deletes your resort, your money and your fame. It cannot be undone.</p><button class="btn bad" id="yesReset">Yes, start over</button><button class="btn" id="noReset">Keep playing</button>');
+      showSheet('Reset all progress?', '<p>This deletes your resort, your money, your unlocked upgrades and your fame. It cannot be undone.</p><button class="btn board bad" id="yesReset">Yes, start over</button><button class="btn board" id="noReset">Keep playing</button>');
       $('yesReset').addEventListener('click', () => { closeSheet(); api.reset(); });
       $('noReset').addEventListener('click', () => { api.click(); closeSheet(); });
     });
@@ -176,9 +250,9 @@ export function createUI(api) {
     const to = MAPS[(last.level + 1) % MAPS.length];
     showSheet('Move to ' + to.name + '?', `<p>${mapOf(last).name} is finished: every lift is a gondola.</p>
       <ul><li>You start again with one drag lift, on a new mountain: <b>${to.name}</b> (${to.tag.toLowerCase()}).</li>
-      <li>Your money and upgrades stay behind.</li>
+      <li>Your money and upgrade levels stay behind. Unlocked boards stay unlocked.</li>
       <li>Your fame doubles: all income <b>x${short(fameOf(last) * T.FAME)}</b> from now on.</li></ul>
-      <button class="btn gold" id="goNext">Move on</button><button class="btn" id="stayHere">Stay a little longer</button>`);
+      <button class="btn board gold" id="goNext">Move on</button><button class="btn board" id="stayHere">Stay a little longer</button>`);
     $('goNext').addEventListener('click', () => { closeSheet(); api.next(); });
     $('stayHere').addEventListener('click', () => { api.click(); closeSheet(); });
   }
@@ -188,9 +262,9 @@ export function createUI(api) {
   $('howBtn').addEventListener('click', () => { api.click(); showHow(); });
 
   return {
-    update, pop, toast, closeSheet, labels,
-    get deckHeight() { return deckH; },
+    update, pop, flyCoins, toast, closeSheet, showQuests, labels, free,
     get sheetOpen() { return open; },
+    clearLabels() { for (const el of [...labels.children]) if (!el.classList.contains('pop') && !el.classList.contains('fly')) el.remove(); },
     showMenu(save) {
       $('menu').hidden = false; $('hud').hidden = true;
       $('playBtn').textContent = save ? 'Continue' : 'Play';

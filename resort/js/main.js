@@ -5,6 +5,7 @@ import { createLiftView } from './view/lifts.js';
 import { createPisteView } from './view/pistes.js';
 import { createBuildingView } from './view/buildings.js';
 import { createGuestView } from './view/guests.js';
+import { createExtraView } from './view/extras.js';
 import { T, LIFTS } from './tuning.js';
 import { MAPS } from './maps.js';
 import * as idle from './idle.js';
@@ -16,14 +17,15 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('firstchair.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('firstchair.' + k, JSON.stringify(v)); } catch { /* private mode or full */ } },
 };
-const settings = Object.assign({ volume: 0.7, shadows: true }, store.get('settings', {}));
+const settings = Object.assign({ volume: 0.7, graphics: 'auto' }, store.get('settings', {}));
+if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'auto';
 
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
 const cam = createCamera(stage.camera, canvas, { onTap: () => initAudio() });
-const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene) };
+const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene) };
 
-let state = null, ter = null, playing = false, acc = 0, saveT = 0, popT = 0;
+let state = null, ter = null, playing = false, saveT = 0, popT = 0;
 
 const ui = createUI({
   click: () => { initAudio(); sfx.click(); },
@@ -35,21 +37,53 @@ const ui = createUI({
   start: () => start(false),
   quit,
   reset: () => { store.set('idle', null); start(true); },
+  quests: () => ui.showQuests(),
   next: () => { state = idle.nextGame(state); world(); save(); sfx.goal(); ui.toast(`Welcome to <b>${idle.mapOf(state).name}</b>. All income x${idle.short(idle.fameOf(state))}.`, 'star', 5000); },
 });
 
+// ---------- graphics quality ----------
+
+// Each level is lighter than the one before. Auto starts at the top and steps down when frames come slowly.
+const LEVELS = [
+  { scale: 1, trees: false, shadows: true },
+  { scale: 0.8, trees: false, shadows: true },
+  { scale: 0.8, trees: false, shadows: false },
+  { scale: 0.62, trees: false, shadows: false },
+];
+const quality = { level: 0, time: 0, frames: 0, warm: 0, lastFps: 0, stuck: 0, done: false };
+function setLevel(n) {
+  quality.level = n;
+  const q = LEVELS[n];
+  stage.setScale(q.scale); stage.setTreeShadows(q.trees); stage.setShadows(q.shadows);
+}
+// Called every frame with the real frame time. Looks at 3 seconds at a time.
+function watchQuality(dt) {
+  if (settings.graphics !== 'auto' || quality.done || dt > 0.5) return;
+  if (quality.warm < 2.5) { quality.warm += dt; return; } // loading and the first frames do not count
+  quality.time += dt; quality.frames++;
+  if (quality.time < 3) return;
+  const fps = quality.frames / quality.time;
+  quality.time = 0; quality.frames = 0;
+  if (fps >= 45) { quality.lastFps = 0; quality.stuck = 0; return; }
+  // If lighter graphics twice in a row changed nothing, something else limits the frame rate
+  // (a 30 fps power-saving mode, for example), so stop there.
+  if (quality.lastFps && fps < quality.lastFps * 1.08) quality.stuck++; else quality.stuck = 0;
+  quality.lastFps = fps;
+  if (quality.stuck >= 2 || quality.level >= LEVELS.length - 1) { quality.done = true; return; }
+  setLevel(quality.level + 1);
+  quality.warm = 1.5;
+}
+
 function applySettings() {
   setVolume(settings.volume);
-  stage.setShadows(settings.shadows);
+  Object.assign(quality, { time: 0, frames: 0, warm: 0, lastFps: 0, stuck: 0, done: false });
+  setLevel(settings.graphics === 'low' ? LEVELS.length - 1 : 0);
   store.set('settings', settings);
 }
 
 // ---------- starting, saving, leaving ----------
 
 function save() { if (playing && state) store.set('idle', idle.toSave(state)); }
-
-// How much of the screen height the buttons at the bottom cover.
-const lowPart = () => Math.min(0.42, ((ui.deckHeight || 100) + 14) / innerHeight);
 
 function liftPoints(l) {
   const p = state.pisteById[l.id];
@@ -58,14 +92,14 @@ function liftPoints(l) {
 function frameAll(snap) {
   const pts = [{ x: ter.base.x - 5, z: ter.base.z + 3 }, { x: ter.base.x + 5, z: ter.base.z + 3 }];
   for (const l of state.lifts) pts.push(...liftPoints(l));
-  cam.frame(pts, snap, lowPart());
+  cam.frame(pts, snap, ui.free);
 }
 function frameLift(l) {
   const from = l.from === 0 ? [{ x: ter.base.x, z: ter.base.z + 2 }] : [];
-  cam.frame([...liftPoints(l), ...from], false, lowPart());
+  cam.frame([...liftPoints(l), ...from], false, ui.free);
 }
 
-function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); }
+function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); }
 
 // Puts the mountain of the current game on screen.
 function world() {
@@ -75,10 +109,9 @@ function world() {
   for (const v of Object.values(views)) v.clear();
   views.buildings.buildVillage(ter);
   syncViews();
-  stage.updateTrees();
+  stage.updateTrees(); stage.repaint();
   stage.setWeather(state.weather);
-  ui.labels.innerHTML = ''; tags.clear();
-  acc = 0;
+  ui.clearLabels(); tags.clear();
   frameAll(true);
 }
 
@@ -89,7 +122,8 @@ function start(fresh) {
   playing = true;
   world();
   ui.hideMenu();
-  ui.update(state);
+  ui.update(state, 0, true);
+  frameAll(true); // again, now that the buttons are on screen and their size is known
   save();
   if (!old) ui.toast('Welcome! Your first lift is running. Spend the money with the <b>big buttons</b>.', 'star', 6000);
 }
@@ -97,7 +131,7 @@ function start(fresh) {
 function quit() {
   save();
   playing = false;
-  ui.labels.innerHTML = ''; tags.clear();
+  ui.clearLabels(); tags.clear();
   ui.showMenu(store.get('idle', null));
 }
 
@@ -110,6 +144,7 @@ function buy(id, first) {
   if (!idle.buy(state, ter, id)) { if (first) sfx.buzz(); return false; }
   if (id === 'lift' || id === 'upgrade') sfx.build(); else sfx.cash();
   drain();
+  ui.update(state, 0, true);
   return true;
 }
 
@@ -122,20 +157,25 @@ function drain() {
     else if (e.type === 'weather') stage.setWeather(state.weather);
     else if (e.type === 'lift') { frameLift(e.lift); ui.toast(`<b>Lift ${e.lift.i + 1}</b> is open: ${idle.short(idle.fare(state, e.lift.i))} per ride.`, 'star'); }
     else if (e.type === 'upgraded') { frameLift(e.lift); ui.toast(`Lift ${e.lift.i + 1} is now a <b>${LIFTS[e.lift.type].name.toLowerCase()}</b>.`, 'star'); }
-    else if (e.type === 'goal') { sfx.goal(); ui.toast(`<b>Goal reached:</b> ${e.goal.text} · +${idle.short(e.reward)}`, 'star', 4200); }
+    else if (e.type === 'goal') { sfx.goal(); ui.toast(`<b>Quest done:</b> ${e.goal.text} · +${idle.short(e.reward)}`, 'star', 4200); ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.3, 8); }
+    else if (e.type === 'unlock') { sfx.goal(); ui.toast(`<b>New board unlocked:</b> ${e.name}`, 'star', 4600); }
+    else if (e.type === 'trick') {
+      const p = project(e.x, e.y + 2.2, e.z);
+      if (p.front && p.x > 0 && p.y > 40 && p.x < innerWidth * (1 - ui.free.right) && p.y < innerHeight * (1 - ui.free.bottom)) { ui.pop(p.x, p.y, 'Trick! +' + idle.short(e.pay), true); ui.flyCoins(p.x, p.y, 3); sfx.tick(); }
+    }
     else if (e.type === 'rushEnd') ui.toast('Rush hour is over.');
   }
   if (sync) syncViews();
-  if (trees) stage.updateTrees();
+  if (trees) { stage.updateTrees(); stage.repaint(); }
 }
 
 // ---------- pop-ups and tags over the lifts ----------
 
 const v3 = new THREE.Vector3();
+let box = canvas.getBoundingClientRect(); // asked for once and on resize, not on every call
 function project(x, y, z) {
   v3.set(x, y, z).project(stage.camera);
-  const r = canvas.getBoundingClientRect();
-  return { x: r.left + (v3.x + 1) / 2 * r.width, y: r.top + (1 - v3.y) / 2 * r.height, front: v3.z < 1 };
+  return { x: box.left + (v3.x + 1) / 2 * box.width, y: box.top + (1 - v3.y) / 2 * box.height, front: v3.z < 1 };
 }
 
 // The money each lift took since the last pop-up floats up from its station.
@@ -143,7 +183,7 @@ function pops() {
   for (const l of state.lifts) {
     if (l.pop <= 0) continue;
     const s = project(l.a.x, l.pts[0].g + 3.4, l.a.z);
-    if (s.front && s.x > 0 && s.y > 60 && s.x < innerWidth && s.y < innerHeight) ui.pop(s.x, s.y, '+' + idle.short(l.pop));
+    if (s.front && s.x > 0 && s.y > 60 && s.x < innerWidth * (1 - ui.free.right) && s.y < innerHeight * (1 - ui.free.bottom)) ui.pop(s.x, s.y, '+' + idle.short(l.pop));
     l.pop = 0;
   }
 }
@@ -174,7 +214,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'Escape') ui.closeSheet();
 });
 
-addEventListener('resize', () => stage.resize());
+addEventListener('resize', () => { stage.resize(); box = canvas.getBoundingClientRect(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
 
@@ -183,18 +223,17 @@ addEventListener('pagehide', save);
 let lastT = performance.now();
 function frame(t) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (t - lastT) / 1000);
+  const real = (t - lastT) / 1000, dt = Math.min(0.1, real);
   lastT = t;
   if (playing) {
-    acc += dt;
-    let n = 0;
-    while (acc >= T.STEP && n++ < 10) { idle.tick(state, ter, T.STEP); acc -= T.STEP; }
-    if (acc > T.STEP * 4) acc = 0;
+    watchQuality(real);
+    // The rules run every frame, so everything on the mountain moves every frame.
+    for (let left = dt, n = 0; left > 1e-4 && n < 4; n++) { const step = Math.min(0.05, left); idle.tick(state, ter, step); left -= step; }
     drain();
     views.lifts.update(state);
     views.guests.update(state, ter, dt, idle.speedOf(state));
-    ui.update(state);
-    popT += dt; if (popT >= 0.7) { popT = 0; pops(); }
+    ui.update(state, dt);
+    popT += dt; if (popT >= 1) { popT = 0; pops(); }
     saveT += dt; if (saveT >= 10) { saveT = 0; save(); }
   } else {
     cam.rotate(dt * 0.04); // slow turn behind the start screen
@@ -216,11 +255,12 @@ let demo = null;
   stage.setTerrain(dter, () => 45);
   cam.setTerrain(dter);
   views.buildings.buildVillage(dter);
-  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter);
-  stage.updateTrees();
+  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter); views.extras.sync(demo, dter);
+  stage.updateTrees(); stage.repaint();
   cam.view(48, 52, 128, 0.5, 0.62, true);
 }
 stage.resize();
+box = canvas.getBoundingClientRect();
 applySettings();
 ui.showMenu(store.get('idle', null));
 addEventListener('pointerdown', initAudio, { once: true });
@@ -231,4 +271,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 }
 
 // For testing from the console.
-window.__fc = { get state() { return state; }, get ter() { return ter; }, idle, cam, ui, stage, views, project, start, save, T, MAPS };
+window.__fc = { get state() { return state; }, get ter() { return ter; }, idle, cam, ui, stage, views, project, start, save, T, MAPS, quality, watchQuality, settings, applySettings };

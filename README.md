@@ -124,17 +124,24 @@ at `https://mauricestuder.github.io/wakeup/<folder>/`.
 ### First Chair (`resort/`)
 
 An idle ski resort on a 3D mountain, for phone and PC. The resort runs itself:
-guests arrive, queue, ride the lifts, ski down and pay for every ride. You spend
-the money with six big buttons.
+guests arrive, queue, ride the lifts and ski down. Your income per second is
+worked out from your lifts, guests and prices, and stays the same until you buy
+something. You spend the money on wooden upgrade boards.
 
-- **New lift** opens the next of six lifts with its piste. Higher lifts pay more.
-- **Upgrade lift** turns a lift into a chairlift, then a gondola.
+- **New lift** opens the next of six lifts with its piste. **Upgrade lift**
+  turns a lift into a chairlift, then a gondola.
 - **Lift speed**, **More guests**, **Ticket price** and **Ski hut** raise the income.
+- **Jump park** builds kickers on the pistes. Now and then a skier takes one and
+  pays a trick bonus.
+- **Snow guns**, **Ski school**, **Night skiing** and **Restaurant** unlock as
+  you play (rides sold, minutes played, lifts opened).
 - **Rush hour** is a 30 second boost with a 2 minute recharge.
-- Milestones pay bonuses. When every lift is a gondola you move to the next of
-  three mountains and all income doubles.
-- Hold a button to keep buying. Keys 1 to 6 press the buttons, Space starts rush hour.
+- 26 quests pay bonuses; tap the quest marker to see them all. When every lift
+  is a gondola you move to the next of three mountains and all income doubles.
+- Hold a board to keep buying. Keys 1 to 6 press the first six boards, Space
+  starts rush hour.
 - Camera: drag moves, pinch or wheel zooms, two fingers or right-drag turn.
+- Graphics on Auto lowers the detail by itself when frames come slowly.
 - Progress saves in the browser (`localStorage`, key `firstchair.idle`). The
   resort only earns while the game is open.
 
@@ -147,8 +154,8 @@ resort/
   js/network.js         shapes of lifts and pistes           (no rendering)
   js/layout.js          where the six lifts go on a mountain (no rendering)
   js/idle.js            the rules: guests, income, buying, milestones, saving (no rendering)
-  js/view/              three.js scene, camera, lifts, pistes, buildings, guests
-  js/ui.js              top bar, big buttons, pop-ups, windows
+  js/view/              three.js scene, camera, lifts, pistes, buildings, guests, extras
+  js/ui.js              money sign, upgrade boards, quest list, pop-ups, notices
   js/audio.js           synthesised sound
   js/main.js            boot and game loop
 ```

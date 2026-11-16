@@ -35,11 +35,16 @@ const SKY = {
 
 export function createScene(canvas, opts) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, opts.touch ? 2 : 1.75));
+  const baseRatio = Math.min(devicePixelRatio || 1, 1.5);
+  let scale = 1, frameNo = 0;
+  renderer.setPixelRatio(baseRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // redrawn every second frame, see render()
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
+
+  let treeShadows = false; // tree shade is painted on the snow instead, see paintLand
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xcfe3f3, 120, 520);
@@ -49,7 +54,7 @@ export function createScene(canvas, opts) {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
   sun.castShadow = true;
-  const sm = opts.touch ? 2048 : 4096;
+  const sm = opts.touch ? 1024 : 2048;
   sun.shadow.mapSize.set(sm, sm);
   const sc = sun.shadow.camera;
   sc.left = -78; sc.right = 78; sc.top = 78; sc.bottom = -78; sc.near = 20; sc.far = 400;
@@ -97,7 +102,7 @@ export function createScene(canvas, opts) {
   const world = new THREE.Group();
   scene.add(world);
   const SNOW = new THREE.Color(0.95, 0.97, 1.0), SHADE = new THREE.Color(0.8, 0.87, 0.98), ROCK = new THREE.Color(0.45, 0.44, 0.47),
-    GRASS = new THREE.Color(0.47, 0.5, 0.33), DIRT = new THREE.Color(0.5, 0.43, 0.34);
+    GRASS = new THREE.Color(0.47, 0.5, 0.33), DIRT = new THREE.Color(0.5, 0.43, 0.34), UNDER = new THREE.Color(0.56, 0.66, 0.84);
   const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3();
 
   function buildLand() {
@@ -136,6 +141,17 @@ export function createScene(canvas, opts) {
   }
 
   // Colour every triangle: snow, bare ground where the snow is gone, rock on cliffs.
+  // How many living trees stand close to a point.
+  function near(x, z) {
+    let n = 0;
+    const i0 = Math.max(0, Math.floor(x - 1)), i1 = Math.min(ter.N - 1, Math.floor(x + 1)), j0 = Math.max(0, Math.floor(z - 1)), j1 = Math.min(ter.N - 1, Math.floor(z + 1));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const ids = ter.byTile.get(j * ter.N + i);
+      if (ids) for (const id of ids) if (ter.alive[id]) { const t = ter.trees[id], d = Math.hypot(t.x + 0.25 - x, t.z - 0.2 - z); if (d < 1.1) n += 1.1 - d; }
+    }
+    return n;
+  }
+
   function paintLand() {
     const pos = land.geometry.attributes.position.array, col = land.geometry.attributes.color.array;
     const nor = land.geometry.attributes.normal.array;
@@ -156,6 +172,9 @@ export function createScene(canvas, opts) {
         tmpC.copy(SNOW).lerp(SHADE, clamp(0.35 - nor[t] * 0.9 + nor[t + 2] * 0.5 + (n - 0.5) * 0.4, 0, 1) * 0.55);
         const bare = 1 - smooth(-2, 14, depth + (n - 0.5) * 12);
         if (bare > 0) tmpC.lerp(n > 0.55 ? DIRT : GRASS, bare * 0.92);
+        // Shade under the trees, painted on once. Much cheaper than real tree shadows every frame.
+        const under = near(x, z);
+        if (under) tmpC.lerp(UNDER, Math.min(0.42, under * 0.14));
         const rock = smooth(0.72, 1.0, steep + (n - 0.5) * 0.25);
         if (rock > 0) tmpC.lerp(ROCK, rock * 0.9).multiplyScalar(1 - rock * 0.25 * n);
       }
@@ -172,7 +191,7 @@ export function createScene(canvas, opts) {
       cone(0.3, 0.26, 1.12 + 0.24, 0xf4f8ff), cone(0.2, 0.3, 1.66, 0xf4f8ff),
     ]);
     trees = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ter.trees.length);
-    trees.castShadow = opts.treeShadows !== false;
+    trees.castShadow = treeShadows;
     trees.receiveShadow = false;
     world.add(trees);
     updateTrees();
@@ -198,6 +217,7 @@ export function createScene(canvas, opts) {
 
   // ---------- weather and time of day ----------
   const cur = { top: new THREE.Color(0x3f86d8), mid: new THREE.Color(0xbfdcf2), fog: new THREE.Color(0xcfe3f3), sun: 2.3, amb: 0.95, far: 520, snow: 0 };
+  const DUSK_TOP = new THREE.Color(0x35508a), DUSK_MID = new THREE.Color(0xffd9b8), DUSK_FOG = new THREE.Color(0xf6e2d2);
   let weather = 'sun';
   function setWeather(w) { weather = w; }
 
@@ -207,9 +227,9 @@ export function createScene(canvas, opts) {
     const day = clamp((clock - 450) / (1050 - 450), 0, 1);
     const ang = (day - 0.5) * 2.2, low = Math.abs(day - 0.5) * 2;
     const warm = smooth(0.55, 1, low);
-    cur.top.lerp(tmpC.set(s.top).lerp(new THREE.Color(0x35508a), warm * 0.5), k);
-    cur.mid.lerp(tmpC.set(s.mid).lerp(new THREE.Color(0xffd9b8), warm * 0.4), k);
-    cur.fog.lerp(tmpC.set(s.fog).lerp(new THREE.Color(0xf6e2d2), warm * 0.18), k);
+    cur.top.lerp(tmpC.set(s.top).lerp(DUSK_TOP, warm * 0.5), k);
+    cur.mid.lerp(tmpC.set(s.mid).lerp(DUSK_MID, warm * 0.4), k);
+    cur.fog.lerp(tmpC.set(s.fog).lerp(DUSK_FOG, warm * 0.18), k);
     cur.sun += (s.sun * (1 - warm * 0.35) - cur.sun) * k;
     cur.amb += (s.amb - cur.amb) * k;
     cur.far += (s.far - cur.far) * k;
@@ -245,6 +265,10 @@ export function createScene(canvas, opts) {
     repaint: () => land && paintLand(),
     setOverlay: (o) => { overlay = o; if (land) paintLand(); },
     setShadows: (on) => { renderer.shadowMap.enabled = on; sun.castShadow = on; renderer.shadowMap.needsUpdate = true; if (land) land.material.needsUpdate = true; },
-    render: () => renderer.render(scene, camera),
+    // Tree shadows are the most expensive part of the shadow map.
+    setTreeShadows: () => {},
+    // Render at a share of the screen's resolution.
+    setScale: (f) => { if (f !== scale) { scale = f; renderer.setPixelRatio(baseRatio * f); resize(); } },
+    render: () => { if ((frameNo++ & 1) === 0) renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); },
   };
 }
