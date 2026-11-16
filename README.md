@@ -119,37 +119,36 @@ at `https://mauricestuder.github.io/wakeup/<folder>/`.
 | `game/` | First-person escape shooter with a PS1 look |
 | `ski/` | **Fresh Line**: snowboard and ski tricks down ten mountains |
 | `build/` | **High Ground**: build, edit and aim trainer |
-| `resort/` | **First Chair**: build and run a ski resort (see below) |
+| `resort/` | **First Chair**: idle ski resort tycoon (see below) |
 
 ### First Chair (`resort/`)
 
-A 3D ski resort tycoon for phone and PC. Build lifts and pistes on a mountain,
-guests arrive at the car park every morning, ski, queue, eat and judge you.
-Happy guests raise the star rating, stars bring more guests, goals unlock
-chairlifts, gondolas, hotels and two harder mountains.
+An idle ski resort on a 3D mountain, for phone and PC. The resort runs itself:
+guests arrive, queue, ride the lifts, ski down and pay for every ride. You spend
+the money with six big buttons.
 
-- **Touch:** one finger moves the camera, two fingers zoom, twist and tilt.
-- **Mouse:** drag moves, right-drag turns, wheel zooms. Keys: W A S D, Q E,
-  Space pauses, 1 2 3 set the speed, Esc cancels.
-- Everything you build shows a preview first and needs a Build tap.
-- Progress saves in the browser (`localStorage`, keys `firstchair.*`), one
-  save per mountain.
+- **New lift** opens the next of six lifts with its piste. Higher lifts pay more.
+- **Upgrade lift** turns a lift into a chairlift, then a gondola.
+- **Lift speed**, **More guests**, **Ticket price** and **Ski hut** raise the income.
+- **Rush hour** is a 30 second boost with a 2 minute recharge.
+- Milestones pay bonuses. When every lift is a gondola you move to the next of
+  three mountains and all income doubles.
+- Hold a button to keep buying. Keys 1 to 6 press the buttons, Space starts rush hour.
+- Camera: drag moves, pinch or wheel zooms, two fingers or right-drag turn.
+- Progress saves in the browser (`localStorage`, key `firstchair.idle`). The
+  resort only earns while the game is open.
 
 ```
 resort/
   index.html            markup and styling
-  js/tuning.js          every balance number: prices, speeds, needs
+  js/tuning.js          every balance number: fares, prices, growth, caps
   js/maps.js            the three mountains
-  js/terrain.js         heights, slopes, forest          (no rendering)
-  js/network.js         lift and piste shapes, routing   (no rendering)
-  js/guests.js          guest behaviour                  (no rendering)
-  js/economy.js         money, demand, snow, rating      (no rendering)
-  js/goals.js           goals and unlocks
-  js/sim.js             game state, day cycle, build actions
-  js/save.js            save and load
+  js/terrain.js         heights, slopes, forest              (no rendering)
+  js/network.js         shapes of lifts and pistes           (no rendering)
+  js/layout.js          where the six lifts go on a mountain (no rendering)
+  js/idle.js            the rules: guests, income, buying, milestones, saving (no rendering)
   js/view/              three.js scene, camera, lifts, pistes, buildings, guests
-  js/build.js           build tools and previews
-  js/ui.js              top bar, toolbar, panels
+  js/ui.js              top bar, big buttons, pop-ups, windows
   js/audio.js           synthesised sound
   js/main.js            boot and game loop
 ```

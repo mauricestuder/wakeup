@@ -5,7 +5,7 @@ import { LIFTS } from '../tuning.js';
 const JACKETS = [0xe5484d, 0x2f7fe6, 0xf2c230, 0x34b05a, 0xf2793a, 0xa25be0, 0x24b8b0, 0xe85aa0, 0xf4f4f0, 0x7ad13a, 0x3a50c8, 0xc23a5a].map((c) => new THREE.Color(c));
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(0, 0, 0, 'YXZ'), V = new THREE.Vector3(), S = new THREE.Vector3();
-const SCALE = 1.3, SIDE = 0.36;
+const SCALE = 1.55, SIDE = 0.36;
 
 export function createGuestView(scene, cap = 440) {
   const geo = merge([

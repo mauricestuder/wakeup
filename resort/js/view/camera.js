@@ -160,6 +160,15 @@ export function createCamera(camera, canvas, hooks) {
       Object.assign(goal, { x, z, dist, yaw, pitch }); limit();
       if (snap) Object.assign(now, goal, { y: ter ? ter.height(clamp(x, 0, ter.N), clamp(z, 0, ter.N)) : 0 });
     },
+    // Fit a set of points on screen, leaving `low` of the height free for the buttons at the bottom.
+    frame(pts, snap = false, low = 0.2) {
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+      const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), pitch = 0.84;
+      const tan = Math.tan(camera.fov * Math.PI / 360) * 2, use = 1 - low;
+      const dist = clamp(Math.max((z1 - z0 + 5) * Math.sin(pitch) / (tan * use), (x1 - x0 + 6) / (tan * aspect)) * 1.12, 22, 170);
+      this.view((x0 + x1) / 2, (z0 + z1) / 2 + dist * tan * low * 0.55, dist, 0, pitch, snap);
+    },
     zoom(f) { goal.dist *= f; limit(); },
     rotate(a) { goal.yaw += a; },
   };

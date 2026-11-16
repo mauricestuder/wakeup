@@ -72,7 +72,7 @@ export function createLiftView(scene) {
     const car = new THREE.InstancedMesh(geo('car' + l.type, () => carrierGeo(l.type)), mat, count);
     car.castShadow = true; car.frustumCulled = false;
     g.add(car);
-    g.userData = { car, spacing, px, pz, cap: count };
+    g.userData = { car, spacing, px, pz, cap: count, type: l.type };
     return g;
   }
 
@@ -100,7 +100,8 @@ export function createLiftView(scene) {
   return {
     SIDE, update,
     sync(state, ter) {
-      for (const [id, v] of views) if (!state.liftById[id]) { group.remove(v); views.delete(id); }
+      // Gone, or rebuilt as another kind of lift.
+      for (const [id, v] of views) if (!state.liftById[id] || state.liftById[id].type !== v.userData.type) { group.remove(v); views.delete(id); }
       for (const l of state.lifts) if (!views.has(l.id)) { const v = make(ter, l); views.set(l.id, v); group.add(v); }
     },
     clear() { for (const v of views.values()) group.remove(v); views.clear(); },
