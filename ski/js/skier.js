@@ -38,83 +38,161 @@ function box(w, h, d, color, y = 0) {
   return m;
 }
 
+// Rounded parts: capsules for limbs and body, shaped boots, gloves, and
+// skis and a board cut from real outlines. UVs are kept 0..1 so outfit
+// patterns wrap each part.
+const capsule = (r, len, mat, y = 0, seg = 14) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, seg).translate(0, y, 0), mat);
+function fitUV(g) { // planar UVs from the shape, squeezed into 0..1
+  g.computeBoundingBox();
+  const b = g.boundingBox, uv = g.attributes.uv, P = g.attributes.position;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (P.getX(i) - b.min.x) / (b.max.x - b.min.x), (P.getZ(i) - b.min.z) / (b.max.z - b.min.z));
+  return g;
+}
+// A flat outline (x across, z along) extruded upwards by t.
+function slab(shape, t, bevel = 0.006) {
+  const g = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 10 });
+  g.rotateX(Math.PI / 2); g.translate(0, t, 0); // the outline's y runs along +z (forward)
+  return fitUV(g);
+}
+// Bend a ski or board up at its ends: past `start` from the middle the
+// surface rises along a curve.
+function kick(g, start, len, rise) {
+  const P = g.attributes.position;
+  for (let i = 0; i < P.count; i++) {
+    const z = P.getZ(i), d = Math.abs(z) - start;
+    if (d > 0) { const k = Math.min(1, d / len); P.setY(i, P.getY(i) + rise * k * k); P.setZ(i, z - Math.sign(z) * d * k * 0.25); }
+  }
+  g.computeVertexNormals();
+  return g;
+}
+function skiShape(w, len) {
+  const s = new THREE.Shape(), h = len / 2, r = w / 2;
+  s.moveTo(-r, -h + r); s.lineTo(-r * 0.88, 0); s.lineTo(-r, h - r);
+  s.quadraticCurveTo(-r, h, 0, h + r * 0.4); s.quadraticCurveTo(r, h, r, h - r);
+  s.lineTo(r * 0.88, 0); s.lineTo(r, -h + r); s.quadraticCurveTo(r, -h, 0, -h - r * 0.2); s.quadraticCurveTo(-r, -h, -r, -h + r);
+  return s;
+}
+function boardShape(w, len) {
+  const s = new THREE.Shape(), h = len / 2, r = w / 2, waist = r * 0.9;
+  s.moveTo(-r, -h + r * 1.2);
+  s.quadraticCurveTo(-waist, 0, -r, h - r * 1.2);
+  s.bezierCurveTo(-r, h + r * 0.35, r, h + r * 0.35, r, h - r * 1.2);
+  s.quadraticCurveTo(waist, 0, r, -h + r * 1.2);
+  s.bezierCurveTo(r, -h - r * 0.35, -r, -h - r * 0.35, -r, -h + r * 1.2);
+  return s;
+}
+
 function buildModel() {
   const root = new THREE.Group();
   const body = new THREE.Group(); // everything except skis; turned for slides and stops
   root.add(body);
   // Shared materials by role, so a skin can recolour the whole rider at once.
   const L = (color) => new THREE.MeshLambertMaterial({ color });
-  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da), trim: L(0x15181c) };
+  const mats = { jacket: L(0xff4f1f), pants: L(0x22303f), dark: L(0x15181c), gear: L(0x1e88e5), accent: L(0xffcf33), pole: L(0xcfd4da), trim: L(0x15181c),
+    metal: L(0xb8c0c8), sole: L(0x0c0d10) };
   const mb = (w, h, d, mat, y = 0) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y, 0), mat);
+  const cyl = (rt, rb, h, mat, y = 0, seg = 14) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg).translate(0, y, 0), mat);
+  const ball = (r, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; };
+
+  // Ski boot: a rounded shell, a sole, two buckles and a power strap.
+  const boot = () => {
+    const g = new THREE.Group();
+    const shell = capsule(0.068, 0.11, mats.dark, 0.14, 12); shell.scale.set(1, 1, 1.15);
+    const foot = capsule(0.062, 0.17, mats.dark, 0, 12); foot.rotation.x = Math.PI / 2; foot.position.set(0, 0.06, 0.03); foot.scale.set(1.05, 1, 0.8);
+    const sole = mb(0.12, 0.025, 0.32, mats.sole, 0.012); sole.position.z = 0.02;
+    g.add(shell, foot, sole);
+    for (const y of [0.1, 0.17]) { const bk = mb(0.03, 0.018, 0.02, mats.metal, y); bk.position.set(0.062, 0, 0.04); g.add(bk); }
+    const strap = cyl(0.074, 0.074, 0.03, mats.accent, 0.235, 12); strap.scale.z = 1.12; g.add(strap);
+    return g;
+  };
 
   const skis = [];
   for (const side of [1, -1]) {
     const ski = new THREE.Group();
-    const plank = mb(0.1, 0.035, 1.72, mats.gear);
-    const tip = mb(0.1, 0.035, 0.22, mats.gear);
-    tip.position.set(0, 0.05, 0.92); tip.rotation.x = -0.5;
-    const tail = mb(0.1, 0.035, 0.2, mats.gear);
-    tail.position.set(0, 0.04, -0.92); tail.rotation.x = 0.45;
-    const boot = mb(0.13, 0.22, 0.3, mats.dark, 0.11);
-    ski.add(plank, tip, tail, boot);
+    const plank = new THREE.Mesh(kick(slab(skiShape(0.095, 1.78), 0.022), 0.7, 0.24, 0.1), mats.gear);
+    const binding = mb(0.07, 0.03, 0.34, mats.metal, 0.035);
+    const brake = mb(0.11, 0.012, 0.03, mats.dark, 0.03); brake.position.z = -0.16;
+    const b = boot(); b.position.y = 0.04;
+    ski.add(plank, binding, brake, b);
     ski.position.set(side * 0.13, 0.02, 0);
     root.add(ski);
     skis.push(ski);
   }
 
-  // Snowboard (shown instead of the skis on a board): deck, kicked nose and
-  // tail, a stripe and two bindings.
+  // Snowboard (shown instead of the skis on a board): a shaped deck with a
+  // kicked nose and tail, a stripe, and two bindings with highbacks.
   const board = new THREE.Group();
-  board.add(mb(0.28, 0.03, 1.2, mats.gear));
+  const deck = new THREE.Mesh(kick(slab(boardShape(0.28, 1.5), 0.024, 0.008), 0.48, 0.3, 0.1), mats.gear);
+  board.add(deck);
+  const stripe = new THREE.Mesh(kick(slab(skiShape(0.06, 1.2), 0.002, 0.001), 0.42, 0.25, 0.06), mats.accent);
+  stripe.position.y = 0.026;
+  board.add(stripe);
   for (const sgn of [1, -1]) {
-    const end = mb(0.28, 0.03, 0.2, mats.gear);
-    end.position.set(0, 0.035, sgn * 0.68); end.rotation.x = -sgn * 0.35;
-    board.add(end);
-    const bind = mb(0.24, 0.1, 0.16, mats.dark, 0.065);
-    bind.position.z = sgn * 0.26;
-    board.add(bind);
+    const base = mb(0.21, 0.025, 0.14, mats.dark, 0.04); base.position.z = sgn * 0.26;
+    const high = mb(0.19, 0.16, 0.025, mats.dark, 0.12); high.position.set(0, 0, sgn * 0.26 - 0.075); high.rotation.x = -0.15;
+    const st1 = mb(0.2, 0.03, 0.05, mats.accent, 0.1); st1.position.z = sgn * 0.26 + 0.04;
+    const st2 = mb(0.2, 0.03, 0.05, mats.accent, 0.07); st2.position.z = sgn * 0.26 + 0.09;
+    board.add(base, high, st1, st2);
   }
-  board.add(mb(0.08, 0.005, 1.16, mats.accent, 0.017));
   board.position.y = 0.02;
   board.visible = false;
   root.add(board);
 
   const hips = new THREE.Group();
   body.add(hips);
+  hips.add(ball(0.17, mats.pants, 0, -0.02, 0, 1.25, 0.75, 0.85)); // seat
   const legs = [];
   for (const side of [1, -1]) {
     const thigh = new THREE.Group();
     thigh.position.set(side * 0.12, 0, 0);
-    thigh.add(mb(0.15, 0.46, 0.17, mats.pants, -0.23));
+    const tm = capsule(0.094, 0.28, mats.pants, -0.23); tm.scale.set(1, 1, 1.05);
+    const pocket = mb(0.03, 0.12, 0.09, mats.trim, -0.2); pocket.position.x = side * 0.08; // cargo pocket
+    thigh.add(tm, pocket);
     const shin = new THREE.Group();
     shin.position.y = -0.46;
-    shin.add(mb(0.14, 0.46, 0.16, mats.pants, -0.23), mb(0.155, 0.07, 0.175, mats.trim, -0.42));
+    shin.add(capsule(0.084, 0.3, mats.pants, -0.2), cyl(0.09, 0.095, 0.08, mats.trim, -0.4));
     thigh.add(shin);
     hips.add(thigh);
     legs.push({ thigh, shin, side });
   }
   const torso = new THREE.Group();
   hips.add(torso);
-  torso.add(mb(0.4, 0.56, 0.25, mats.jacket, 0.28));
-  const zip = mb(0.03, 0.5, 0.01, mats.accent, 0.28); zip.position.z = 0.13;
+  // Chest wider than the waist: a capsule pressed flat front to back.
+  const chest = capsule(0.19, 0.22, mats.jacket, 0.31, 18); chest.scale.set(1.08, 1, 0.68);
+  const waist = cyl(0.19, 0.2, 0.16, mats.jacket, 0.1, 18); waist.scale.z = 0.7;
+  torso.add(chest, waist);
+  const zip = mb(0.022, 0.48, 0.012, mats.accent, 0.3); zip.position.z = 0.135;
+  const pull = mb(0.03, 0.05, 0.012, mats.metal, 0.5); pull.position.z = 0.142;
   const pack = new THREE.Group(); // extras some characters wear on the back
-  const collar = mb(0.3, 0.07, 0.2, mats.trim, 0.585);
-  const belt = mb(0.42, 0.06, 0.27, mats.trim, 0.03);
-  const hood = mb(0.26, 0.12, 0.08, mats.jacket, 0.54); hood.position.z = -0.15;
-  torso.add(zip, pack, collar, belt, hood);
+  const collar = cyl(0.12, 0.15, 0.09, mats.trim, 0.6, 16); collar.scale.z = 0.85;
+  const belt = cyl(0.205, 0.205, 0.05, mats.trim, 0.035, 18); belt.scale.z = 0.72;
+  const buckle = mb(0.06, 0.04, 0.015, mats.metal, 0.035); buckle.position.z = 0.15;
+  const hood = ball(0.13, mats.jacket, 0, 0.55, -0.12, 1.1, 0.7, 0.6);
+  const neck = cyl(0.055, 0.06, 0.1, mats.dark, 0.66);
+  torso.add(zip, pull, pack, collar, belt, buckle, hood, neck);
+  for (const sx of [1, -1]) { // chest pockets with flaps
+    const flap = mb(0.09, 0.025, 0.012, mats.trim, 0.42); flap.position.set(sx * 0.1, 0, 0.13); flap.rotation.y = -sx * 0.25;
+    torso.add(flap);
+  }
   const head = new THREE.Group();
-  head.position.y = 0.66;
+  head.position.y = 0.74;
   torso.add(head);
   const arms = [];
   for (const side of [1, -1]) {
     const upper = new THREE.Group();
     upper.position.set(side * 0.25, 0.52, 0);
-    upper.add(mb(0.12, 0.34, 0.13, mats.jacket, -0.17));
+    upper.add(ball(0.088, mats.jacket, 0, -0.01, 0, 1, 1, 0.95), capsule(0.074, 0.2, mats.jacket, -0.17));
     const fore = new THREE.Group();
     fore.position.y = -0.34;
-    fore.add(mb(0.11, 0.32, 0.12, mats.jacket, -0.16), mb(0.125, 0.06, 0.135, mats.trim, -0.29));
-    fore.add(mb(0.11, 0.1, 0.12, mats.dark, -0.36));
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 5).translate(0, -0.5, 0), mats.pole);
+    fore.add(capsule(0.066, 0.19, mats.jacket, -0.14), cyl(0.075, 0.072, 0.055, mats.trim, -0.29));
+    // Glove: a padded mitt with a thumb.
+    const mitt = ball(0.055, mats.dark, 0, -0.37, 0.005, 0.95, 1.2, 1);
+    const thumb = capsule(0.02, 0.04, mats.dark, 0, 8); thumb.position.set(-side * 0.03, -0.35, 0.04); thumb.rotation.z = side * 0.6;
+    fore.add(mitt, thumb);
+    const pole = new THREE.Group();
+    pole.add(new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.009, 1.15, 8).translate(0, -0.5, 0), mats.pole),
+      cyl(0.018, 0.016, 0.12, mats.dark, -0.02, 10), // grip
+      new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 6, 16).rotateX(Math.PI / 2).translate(0, -0.98, 0), mats.dark)); // basket
     pole.position.y = -0.36;
     pole.rotation.x = 0.9;
     fore.add(pole);
@@ -133,12 +211,23 @@ function buildModel() {
 // colours the jacket, pants and gear.
 const HEADS = {
   rider: (h, m) => { // helmet and goggles
-    h.add(sphere(0.135, m.helmet), at(box3(0.24, 0.07, 0.05, m.dark), 0, 0, 0.12), at(box3(0.2, 0.05, 0.02, m.lens), 0, 0, 0.145));
+    // Helmet shell with a ridge and vents, curved goggles on a strap, a chin guard of buff.
+    const shell = sphere(0.14, m.helmet); shell.scale.set(1, 0.95, 1.08);
+    const ridge = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.012, 6, 24, Math.PI), m.helmet); ridge.rotation.y = Math.PI / 2;
+    h.add(shell, at(ridge, 0, 0.0, 0));
+    for (const x of [-0.05, 0.05]) h.add(at(box3(0.018, 0.012, 0.08, m.dark), x, 0.13, -0.01));
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.147, 0.147, 0.055, 24, 1, true), m.dark); band.scale.z = 1.1;
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.152, 0.152, 0.06, 20, 1, true, -1.0, 2.0), m.lens); lens.scale.z = 1.1;
+    lens.material.side = THREE.DoubleSide;
+    h.add(at(band, 0, -0.005, 0), at(lens, 0, -0.005, 0));
+    h.add(at(squash(sphere(0.085, m.dark), 1.15, 0.8, 0.95), 0, -0.095, 0.035)); // buff over the chin
   },
   beanie: (h, m) => {
     face(h, m);
-    h.add(at(cap(0.14, m.accent), 0, 0.03, 0), at(box3(0.29, 0.06, 0.29, m.jacket), 0, 0.03, 0), at(sphere(0.05, m.white), 0, 0.2, 0));
-    h.add(at(box3(0.24, 0.06, 0.04, m.dark), 0, 0.07, 0.13), at(box3(0.2, 0.04, 0.02, m.lens), 0, 0.07, 0.15));
+    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.028, 8, 24).rotateX(Math.PI / 2), m.jacket);
+    h.add(at(cap(0.135, m.accent), 0, 0.025, 0), at(cuff, 0, 0.035, 0), at(sphere(0.05, m.white), 0, 0.18, 0));
+    const gog = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.045, 20, 1, true, -0.9, 1.8), m.lens);
+    h.add(at(gog, 0, 0.08, 0.005));
   },
   cap: (h, m) => {
     face(h, m);
@@ -170,9 +259,14 @@ const cap = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 8, 0, Mat
 const cone = (r, h, mat) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat); c.rotation.x = Math.PI / 2; return c; };
 const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
 const squash = (o, x, y, z) => { o.scale.set(x, y, z); return o; };
-function face(h, m) {
-  h.add(at(box3(0.21, 0.22, 0.2, m.skinTone), 0, -0.02, 0));
-  for (const s of [1, -1]) h.add(at(box3(0.035, 0.035, 0.01, m.black), s * 0.05, 0.0, 0.102));
+function face(h, m) { // a rounded head with eyes, brows, a nose and ears
+  h.add(at(squash(sphere(0.118, m.skinTone), 0.95, 1.08, 1), 0, -0.02, 0));
+  h.add(at(squash(sphere(0.022, m.skinTone), 1, 0.9, 1.1), 0, -0.03, 0.115));
+  for (const s of [1, -1]) {
+    h.add(at(squash(sphere(0.018, m.black), 1, 1.2, 0.6), s * 0.045, 0.005, 0.105));
+    h.add(at(box3(0.04, 0.008, 0.01, m.black), s * 0.045, 0.04, 0.106));
+    h.add(at(squash(sphere(0.025, m.skinTone), 0.6, 1, 1), s * 0.112, -0.02, 0));
+  }
 }
 const HEAD_MATS = (() => {
   const L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0 });

@@ -71,7 +71,7 @@ export const ITEMS = [
   { id: 'gold', type: 'skin', name: 'Golden Legend', rarity: 'legendary', price: 30000, desc: 'Polished gold. Everyone will look.',
     skin: { jacket: 0xffc933, pants: 0x3a2c0c, gear: 0xffc933, accent: 0xfff3b0, trim: 0xffe082, helmet: 0xffd54f, lens: 0x3a2c0c,
       pat: { jacket: 'sparkle', gear: 'sparkle' }, glow: ['jacket', 'gear'], glowK: 0.5 } },
-  { id: 'void', type: 'skin', name: 'Void', rarity: 'mythic', price: 1000000000, grants: ['trail:void'],
+  { id: 'void', type: 'skin', name: 'Void', rarity: 'mythic', price: 10000000, grants: ['trail:void'],
     desc: 'Pure darkness. No colour, no shine, no light. Comes with the Void Trail.',
     skin: { jacket: 0x000000, pants: 0x000000, gear: 0x000000, accent: 0x000000, trim: 0x000000, helmet: 0x000000, lens: 0x000000,
       pat: { jacket: 'void', pants: 'void', gear: 'void' }, flat: true } },
@@ -83,7 +83,7 @@ export const ITEMS = [
   { id: 'shadow', type: 'trail', name: 'Shadow', rarity: 'epic', price: 12000, bar: ['#2a1640', '#0a0412'] },
   { id: 'rainbow', type: 'trail', name: 'Rainbow', rarity: 'epic', price: 12000, bar: ['#ff4d4d', '#ffd84d', '#4dff88', '#4dc3ff', '#b84dff'] },
   { id: 'goldtrail', type: 'trail', name: 'Gold Dust', rarity: 'legendary', price: 25000, bar: ['#fff3b0', '#ffb300'], tid: 'gold' },
-  { id: 'void', type: 'trail', name: 'Void Trail', rarity: 'mythic', price: 1000000000, bar: ['#000', '#000'], grants: ['skin:void'],
+  { id: 'void', type: 'trail', name: 'Void Trail', rarity: 'mythic', price: 10000000, bar: ['#000', '#000'], grants: ['skin:void'],
     desc: 'A line of pure darkness. Comes with the Void outfit.' },
 ];
 
