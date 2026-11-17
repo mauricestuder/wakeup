@@ -41,11 +41,11 @@
     .board::before { left: .42em; } .board::after { right: .42em; }
 
     /* One size unit for everything: 1em of the HUD follows the size of the window. */
-    #hud, #menu, #sheet { font-size: clamp(12px, min(1.04vw, 2.1vh), 24px); }
+    #hud, #menu, #sheet { font-size: clamp(10px, min(1.04vw, 2.1vh), 24px); }
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; --side: 20.4em; }
     #hud > * { pointer-events: auto; }
     @media (orientation: portrait) {
-      #hud, #menu, #sheet { font-size: clamp(13px, 3.9vw, 23px); }
+      #hud, #menu, #sheet { font-size: clamp(9px, min(2.9vw, 1.55vh), 18px); }
       #hud { --side: 0em; }
     }
 
@@ -166,6 +166,7 @@
 
     /* Wide but low (a phone held sideways): slimmer boards, no second line. */
     @media (orientation: landscape) and (max-height: 540px) {
+      #hud, #menu, #sheet { font-size: clamp(9px, min(1.04vw, 2.4vh), 14px); }
       .up { height: 4em; grid-template-columns: 2.5em minmax(0, 1fr) auto; grid-template-areas: "bd nm pr" "bd mg pr"; row-gap: .1em; padding: .35em .7em .5em .6em; } .up .mg { justify-self: start; font-size: .68em; }
       .up .nt { display: none; } .up .bd { width: 2.5em; height: 2.5em; } .up .lv { font-size: .55em; } .up .nm { font-size: 1.12em; } .up .pr { font-size: 1.05em; }
       #deck { gap: .5em; } #rush { width: 5.2em; height: 5.2em; }
@@ -174,7 +175,7 @@
     /* Upright: two rows of tiles along the bottom, swipe sideways for more. */
     @media (orientation: portrait) {
       #deck { left: 0; right: 0; top: auto; bottom: calc(.2em + var(--sb)); width: auto; padding: .3em calc(.5em + var(--sr)) .6em calc(.5em + var(--sl));
-        display: grid; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: calc((100% - 1.1em) / 3.25); gap: .55em .5em; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
+        display: grid; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: calc((100% - 1.1em) / 3.6); gap: .55em .5em; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
       .up { height: auto; touch-action: pan-x; grid-template-columns: 2.1em minmax(0, 1fr); grid-template-areas: "bd mg" "nm nm" "nt nt" "pr pr"; row-gap: .08em; padding: .42em .55em .62em; justify-items: start; }
       .up .bd { width: 2.1em; height: 2.1em; } .up .bd .ic { width: 1.3em; height: 1.3em; } .up .lv { font-size: .52em; bottom: -.7em; } .up .mg { font-size: .64em; padding: .1em .45em; } .up .mg .ic { display: none; } .up .pr { justify-self: start; }
       .up .nm { font-size: 1.08em; margin-top: .15em; max-width: 100%; } .up .nt { font-size: .76em; max-width: 100%; } .up .pr { font-size: 1.08em; margin-top: .1em; }
@@ -224,7 +225,35 @@
     .q .rw { font-family: var(--display); color: var(--good); font-size: 1.1em; } .q .meter { grid-column: 2 / 4; margin-top: .3em; }
     .qhead { font-family: var(--display); font-size: .85em; letter-spacing: .08em; text-transform: uppercase; color: #8a5a2b; margin: .2em 0 .1em; }
 
-    @media (prefers-reduced-motion: reduce) { .toast, #rush.on, .up.can, #sMoney.bump b { animation-duration: .01s; } }
+    /* Parking: a blue P sign with the price under it. */
+    #parkBtn { width: auto; padding: 0 .7em 0 .55em; gap: .45em; }
+    #parkBtn .p { width: 1.9em; height: 1.9em; border-radius: .4em; display: grid; place-items: center; background: #2f6fd6; color: #fff; border: .12em solid #fff; box-shadow: 0 0 0 .07em var(--edge); font: 700 1.15em/1 var(--font); text-shadow: none; }
+    #parkBtn b { font-weight: 400; font-size: 1.05em; min-width: 1.6em; text-align: left; }
+    .pk { display: grid; gap: .5em; margin: .2em 0 .4em; }
+    .pkopt { display: grid; grid-template-columns: 3.6em minmax(0, 1fr) auto; grid-template-areas: "t n r" "t g i"; column-gap: .7em; row-gap: .1em; align-items: center; text-align: left; padding: .55em .75em; border-radius: .7em;
+      background: rgba(255, 255, 255, .5); border: .12em solid rgba(90, 55, 20, .3); color: var(--brown); transition: transform .09s ease-out; }
+    .pkopt:active { transform: translateY(.12em); }
+    .pkopt.on { background: #fff6dc; border-color: #b3541a; box-shadow: 0 0 0 .14em rgba(179, 84, 26, .35); }
+    .pkopt .pkt { grid-area: t; height: 2.4em; border-radius: .5em; display: grid; place-items: center; font-family: var(--display); font-size: 1.05em; background: linear-gradient(180deg, #ffe793, #efba45); border: .1em solid #946a13; }
+    .pkopt.free .pkt { background: linear-gradient(180deg, #7fd89a, #2fa35a); color: #fff; border-color: #1d6a38; }
+    .pkopt .pkn { grid-area: n; font-family: var(--display); font-size: 1.15em; } .pkopt .pkg { grid-area: g; font-size: .88em; color: #7a5a35; }
+    .pkopt .pkr { grid-area: r; font-family: var(--display); color: var(--good); white-space: nowrap; } .pkopt .pki { grid-area: i; font-size: .82em; color: #7a5a35; white-space: nowrap; }
+    .pkopt .best { display: inline-block; margin-left: .4em; padding: .05em .45em; border-radius: .6em; background: var(--good); color: #fff; font: 700 .62em/1.4 var(--font); vertical-align: .25em; }
+
+    /* Boards you can afford: a gold rim and a shine across the price. */
+    .up.can { box-shadow: inset 0 .12em 0 rgba(255, 236, 200, .5), inset 0 -.16em 0 rgba(60, 30, 5, .28), 0 0 0 .13em rgba(255, 214, 90, .95), 0 .26em 0 #3f2710, 0 .5em .9em rgba(0, 0, 0, .32); }
+    .up.can .pr { position: relative; overflow: hidden; }
+    .up.can .pr::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .75) 50%, transparent 70%); transform: translateX(-130%); animation: shine 3s ease-in-out infinite; pointer-events: none; }
+    @keyframes shine { 55%, 100% { transform: translateX(130%); } }
+    @media (hover: hover) { .sq:hover, #goal:hover { filter: brightness(1.08); } }
+    #sMoney small { font-family: var(--font); font-weight: 700; font-size: .8em; padding: .05em .45em; border-radius: .6em; background: rgba(30, 70, 20, .45); display: inline-block; }
+    @media (orientation: portrait) {
+      /* A frosted shelf behind the boards, so they read well over the snow. */
+      #deck { background: linear-gradient(180deg, rgba(40, 26, 12, .18), rgba(40, 26, 12, .42)); border-radius: 1em 1em 0 0; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); bottom: 0; padding-bottom: calc(.6em + var(--sb)); }
+      #parkBtn b { display: none; } #parkBtn { padding: 0 .5em; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { .toast, #rush.on, .up.can, #sMoney.bump b { animation-duration: .01s; } .up.can .pr::after { animation: none; } }
   </style>
 </head>
 <body>
@@ -238,6 +267,7 @@
         <b class="num" id="guests">0</b><small class="num" id="guestCap">/ 10</small></div>
       <div class="stat board" id="sFame" hidden title="Fame multiplies all income"></div>
       <span class="grow"></span>
+      <button class="stat board sq" id="parkBtn" aria-label="Parking prices" title="Parking prices"><span class="p">P</span><b id="parkTag">$</b></button>
       <button class="stat board sq" id="questBtn" aria-label="Quests"></button>
       <button class="stat board sq" id="viewBtn" aria-label="Show the whole resort"></button>
       <button class="stat board sq" id="menuBtn" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>

@@ -1,7 +1,7 @@
 // Idle Lift: everything on screen that is not the mountain. The money sign, the
 // upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
-import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, mgrState, mgrCost, NAMES, EVENTS, awayOf } from './idle.js';
+import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, mgrState, mgrCost, NAMES, EVENTS, awayOf, parkOf } from './idle.js';
 import { MAPS } from './maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -93,6 +93,7 @@ export function createUI(api) {
   $('viewBtn').addEventListener('click', () => { api.click(); api.overview(); });
   $('menuBtn').addEventListener('click', () => { api.click(); showSettings(); });
   $('questBtn').addEventListener('click', () => { api.click(); showQuests(); });
+  $('parkBtn').addEventListener('click', () => { api.click(); showPark(); });
   $('goal').addEventListener('click', () => { api.click(); showQuests(); });
   $('next').addEventListener('click', () => { api.click(); showNext(); });
   $('evBtn').addEventListener('click', () => { api.click(); api.eventAction(); });
@@ -124,6 +125,7 @@ export function createUI(api) {
     txt($('rate'), '+' + money(state.rate) + ' / s');
     txt($('guests'), String(state.guests.length));
     txt($('guestCap'), '/ ' + guestCap(state));
+    txt($('parkTag'), parkOf(state).tag);
     const fame = fameOf(state);
     set($('sFame'), 'hidden', fame <= 1);
     if (fame > 1) txt($('sFame'), '★ x' + short(fame));
@@ -253,6 +255,20 @@ export function createUI(api) {
       + (done.length ? '<div class="qhead" style="margin-top:1em">Done</div>' + done.map(line).join('') : ''));
   }
 
+  // Parking prices: what each one would do to the guests and the income, the current one marked.
+  function showPark() {
+    const all = T.PARK.map((p, k) => ({ p, k, o: api.parkPreview(k) }));
+    const best = all.reduce((a, b) => (b.o.rate > a.o.rate ? b : a));
+    const body = $('sheetBody'), keep = open && $('sheetTitle').textContent === 'Parking' ? body.scrollTop : 0;
+    showSheet('Parking', `<p>Every guest pays for parking. <b>Cheap</b> parking brings more people to the mountain, <b>dear</b> parking brings fewer, but each one pays more.</p>
+      <div class="pk">${all.map(({ p, k, o }) => `<button class="pkopt ${k === last.park ? 'on' : ''} ${k === 0 ? 'free' : ''}" data-k="${k}">
+        <span class="pkt">${k === 0 ? 'Free' : p.tag}</span><span class="pkn">${p.name}${k === best.k ? '<span class="best">Most income</span>' : ''}</span>
+        <span class="pkr num">${money(o.rate)} / s</span><span class="pkg">${o.guests} guests</span><span class="pki num">${o.parking ? 'Parking +' + money(o.parking) + ' / s' : 'No parking money'}</span></button>`).join('')}</div>
+      <p><small>The total counts lifts, lessons and parking, without rush hour or events.</small></p>`);
+    body.scrollTop = keep;
+    for (const b of body.querySelectorAll('.pkopt')) b.addEventListener('click', () => { api.setPark(+b.dataset.k); showPark(); });
+  }
+
   function showHire(id) {
     const cost = mgrCost(last, id), big = id === 'lift' || id === 'upgrade';
     showSheet('Hire a manager', `<p>The <b>${esc(NAMES[id])}</b> manager buys this board for you whenever there is money for it${big ? '' : ', but always leaves enough for your next lift'}.</p>
@@ -284,6 +300,7 @@ export function createUI(api) {
       <li>After lift 3 you can hire <b>managers</b>: tap the <b>Hire</b> button on a board. They buy that board by themselves.</li>
       <li><b>Events</b> happen every few minutes: powder days pay double, storms stop a lift until you secure it, and a celebrity pays a bonus if you tap them.</li>
       <li>When you close the game the resort keeps earning half its income for up to 8 hours. The <b>Lodge</b> raises both.</li>
+      <li>The <b>P</b> button sets the parking price: cheap parking brings more guests, dear parking pays more per guest.</li>
       <li>Hold a board to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
       <li>Camera: drag to move, pinch or scroll to zoom.</li>
     </ul>`;

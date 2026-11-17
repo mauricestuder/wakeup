@@ -115,6 +115,7 @@ export function createGuestView(scene, cap = 440) {
 
       if (g.vx === undefined || Math.abs(g.vx - x) + Math.abs(g.vz - z) > 6) { g.vx = x; g.vy = y; g.vz = z; g.vyaw = yaw; g.vst = g.st; g.blend = 0; }
       if (g.vst !== g.st) { g.vst = g.st; g.blend = 0.3; }
+      if (g.st === 'alight' || g.st === 'board') g.blend = 0; // follow the door exactly
       const k = g.air > 0 ? 1 : g.st === 'queue' || g.blend > 0 ? soft : 1;
       if (g.blend > 0) g.blend -= dt;
       g.vx += (x - g.vx) * k; g.vy += (y - g.vy) * k; g.vz += (z - g.vz) * k;
@@ -126,7 +127,8 @@ export function createGuestView(scene, cap = 440) {
       if (!show || kd.n >= cap) continue;
       E.set(-flip, g.vyaw, roll);
       Q.setFromEuler(E);
-      M.compose(V.set(g.vx, g.vy, g.vz), Q, S.set(SCALE, SCALE, SCALE));
+      const sc = SCALE * (g.st === 'alight' || g.st === 'board' ? g.k : 1); // smaller while climbing in or out of a car
+      M.compose(V.set(g.vx, g.vy, g.vz), Q, S.set(sc, sc, sc));
       kd.body.mesh.setMatrixAt(kd.n, M); kd.gear.mesh.setMatrixAt(kd.n, M);
       if (paint(kd.body, kd.n, g.col % JACKETS.length)) kd.dirty = true;
       if (paint(kd.gear, kd.n, ((g.seed * 97) | 0) % GEAR.length)) kd.dirty = true;

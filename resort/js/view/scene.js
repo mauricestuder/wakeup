@@ -101,7 +101,7 @@ export function createScene(canvas, opts) {
   let ter = null, land = null, trees = null, overlay = 'none', snowFn = null;
   const world = new THREE.Group();
   scene.add(world);
-  const SNOW = new THREE.Color(0.95, 0.97, 1.0), SHADE = new THREE.Color(0.8, 0.87, 0.98), ROCK = new THREE.Color(0.45, 0.44, 0.47),
+  const SNOW = new THREE.Color(0.95, 0.97, 1.0), SHADE = new THREE.Color(0.74, 0.83, 0.99), ROCK = new THREE.Color(0.45, 0.44, 0.47),
     GRASS = new THREE.Color(0.47, 0.5, 0.33), DARKROCK = new THREE.Color(0.3, 0.29, 0.32), WIND = new THREE.Color(0.86, 0.91, 0.99), ICE = new THREE.Color(0.55, 0.78, 0.92), DIRT = new THREE.Color(0.5, 0.43, 0.34), UNDER = new THREE.Color(0.56, 0.66, 0.84);
   const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3();
 
@@ -150,7 +150,7 @@ export function createScene(canvas, opts) {
       tmpC.copy(SNOW).lerp(SHADE, clamp(0.35 - nn.x * 0.9 + nn.z * 0.5 + (ns - 0.5) * 0.4, 0, 1) * 0.55);
       // Far away the forest is only a colour on the slope. Close by, real trees stand there.
       const w = ter.woods(x, z, y) * smooth(18, 46, out);
-      if (w > 0 && !(z > N - 2.5 && z < N + 13)) tmpC.lerp(FOREST, Math.min(0.75, w * 0.9));
+      if (w > 0 && !(z > N - 2.5 && z < N + 22)) tmpC.lerp(FOREST, Math.min(0.75, w * 0.9));
       const rock = smooth(0.72, 1.0, steep + (ns - 0.5) * 0.25);
       if (rock > 0) tmpC.lerp(ROCK, rock * 0.9);
       col[k] = tmpC.r; col[k + 1] = tmpC.g; col[k + 2] = tmpC.b;

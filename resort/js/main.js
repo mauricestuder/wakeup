@@ -7,6 +7,7 @@ import { createBuildingView } from './view/buildings.js';
 import { createGuestView } from './view/guests.js';
 import { createExtraView } from './view/extras.js';
 import { createCarView } from './view/cars.js';
+import { createDecoView } from './view/deco.js';
 import { T, LIFTS } from './tuning.js';
 import { MAPS } from './maps.js';
 import * as idle from './idle.js';
@@ -24,7 +25,7 @@ if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'a
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
 const cam = createCamera(stage.camera, canvas, { onTap: (x, y) => { initAudio(); tapCeleb(x, y); } });
-const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene) };
+const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene), deco: createDecoView(stage.scene) };
 
 let state = null, ter = null, playing = false, saveT = 0, popT = 0, follow = 0;
 
@@ -39,6 +40,8 @@ const ui = createUI({
   quit,
   reset: () => { store.set('idle', null); start(true); },
   quests: () => ui.showQuests(),
+  parkPreview: (k) => idle.parkPreview(state, k),
+  setPark: (k) => { initAudio(); if (idle.setPark(state, k)) { sfx.cash(); drain(); ui.update(state, 0, true); save(); } },
   hire: (id) => { initAudio(); if (!idle.hire(state, id)) { sfx.buzz(); return false; } sfx.build(); drain(); ui.update(state, 0, true); save(); return true; },
   toggleMgr: (id) => { if (idle.toggleMgr(state, id)) { ui.update(state, 0, true); save(); } },
   eventAction: () => {
@@ -104,7 +107,7 @@ function frameAll(snap) {
   for (const l of state.lifts) pts.push(...liftPoints(l));
   cam.frame(pts, snap, ui.free);
 }
-function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); views.cars.sync(state, ter); }
+function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); views.cars.sync(state, ter); views.deco.sync(state, ter); }
 
 // Puts the mountain of the current game on screen.
 function world() {
@@ -304,6 +307,7 @@ function frame(t) {
     if (!state) { idle.tick(demo, dter, Math.min(0.05, dt)); demo.events.length = 0; views.guests.update(demo, dter, dt, 1); views.cars.update(demo, dter); }
   }
   fitT += dt; if (fitT > 0.5) { fitT = 0; fit(); }
+  views.deco.update(dt);
   cam.update(dt);
   stage.update(dt, playing ? idle.clockOf(state) : 640, cam.target);
   if (playing) { updateTags(); updateStar(); }
@@ -320,7 +324,7 @@ let demo = null, dter = null;
   stage.setTerrain(dter, () => 45);
   cam.setTerrain(dter);
   views.buildings.buildVillage(dter);
-  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter); views.extras.sync(demo, dter); views.cars.sync(demo, dter);
+  views.lifts.sync(demo, dter); views.pistes.sync(demo, dter); views.extras.sync(demo, dter); views.cars.sync(demo, dter); views.deco.sync(demo, dter);
   stage.updateTrees(); stage.repaint();
   cam.view(48, 52, 128, 0.5, 0.62, true);
 }

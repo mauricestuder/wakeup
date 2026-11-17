@@ -148,8 +148,15 @@ something. You spend the money on wooden upgrade boards.
 - Pistes wind down the mountain in snake curves, with tunnels, wooden bridges,
   mogul fields, a race section with gates and a fun park with rails, a box and a
   halfpipe.
-- Guests arrive by car and coach on the valley road. Skiers and snowboarders
+- Guests arrive by car and coach on the valley road, park in a big car park
+  (110 bays) and climb out; when they are done they walk back, climb in and
+  drive off. Guests without a car take the coach home. Skiers and snowboarders
   share the pistes. All prices are whole dollars.
+- The **P** button sets the parking price, from Free to Rip-off: cheap parking
+  brings more guests, dear parking pays more per guest. The sheet shows what
+  each price earns.
+- The valley has a village of painted chalets and a church; hot-air balloons,
+  paragliders and skaters on the frozen lakes keep it lively.
 - Hold a board to keep buying. Keys 1 to 6 press the first six boards, Space
   starts rush hour.
 - Camera: drag moves, pinch or wheel zooms. It does not turn.
@@ -165,7 +172,7 @@ resort/
   js/network.js         shapes of lifts and pistes           (no rendering)
   js/layout.js          where the six lifts go on a mountain (no rendering)
   js/idle.js            the rules: guests, income, buying, milestones, saving (no rendering)
-  js/view/              three.js scene, camera, lifts, pistes, buildings, guests, extras
+  js/view/              three.js scene, camera, lifts, pistes, buildings, guests, extras, cars, deco (village and balloons)
   js/ui.js              money sign, upgrade boards, quest list, pop-ups, notices
   js/audio.js           synthesised sound
   js/main.js            boot and game loop

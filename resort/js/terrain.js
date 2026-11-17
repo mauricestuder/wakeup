@@ -153,7 +153,7 @@ export function makeTerrain(map) {
   // ---------- the land around the mountain ----------
   // Outside the N x N square the ground carries on: a flat valley floor in front, where
   // the road runs, and other ridges to the sides, behind the summit and across the valley.
-  const FRONT = 12;
+  const FRONT = 16;
   const far = (x, z) => {
     const cx = clamp(x, 0, N), cz = clamp(z, 0, N), e = height(cx, cz);
     const dx = Math.abs(x - cx), db = Math.max(0, -z), df = Math.max(0, z - N), side = Math.hypot(dx, db);
@@ -165,7 +165,30 @@ export function makeTerrain(map) {
     v += (fbm(x * 0.06 + 5, z * 0.06 + 5, 2) - 0.5) * 4 * smooth(2, 30, side * up + Math.max(0, df - FRONT));
     return Math.max(0.05, v);
   };
-  const ground = (x, z) => (x >= 0 && z >= 0 && x <= N && z <= N ? height(x, z) : far(x, z));
+  // ---------- the road and the car park ----------
+  // The road runs along the valley. One row of bays sits on the mountain side of it; the big
+  // car park is across the road, three rows long, with two aisles, a way in on the left and a
+  // way out on the right. nose = which way a parked car faces along z, aisle = the aisle it is
+  // reached from (-1 = straight from the road), row = 0 for the bays next to the village.
+  const rz = N + 2.6;
+  const road = { z: rz, y: 0.4, x0: -115, x1: N + 130, bays: [], bayZ: N + 0.3, stop: base.x + 16, half: 1.3,
+    lot: { x0: base.x - 18.7, x1: base.x + 18.7, z0: rz + 1.3, z1: rz + 11.6, aisles: [rz + 4.4, rz + 10.45], inX: base.x - 17.6, outX: base.x + 17.6 } };
+  for (let i = 0; i < 20; i++) road.bays.push({ x: base.x - 9.975 + i * 1.05, z: N + 0.3, nose: -1, aisle: -1, row: 0 });
+  [[rz + 2.35, -1, 0], [rz + 6.45, 1, 0], [rz + 8.4, -1, 1]].forEach(([z, nose, aisle], k) => {
+    for (let i = 0; i < 30; i++) road.bays.push({ x: base.x - 15.225 + i * 1.05, z, nose, aisle, row: k + 1 });
+  });
+  // Tarmac: [x0, x1, z0, z1]. People walking over it stand on top of it.
+  road.paved = [
+    [road.x0, road.x1, rz - road.half, rz + road.half],
+    [base.x - 10.6, base.x + 10.6, road.bayZ - 1.3, rz],
+    [road.stop - 7.5, road.stop + 7.5, rz - 2.85, rz],
+    [road.lot.x0, road.lot.x1, road.lot.z0 - 0.1, road.lot.z1],
+  ];
+  const paved = (x, z) => road.paved.some((r) => x >= r[0] && x <= r[1] && z >= r[2] && z <= r[3]);
+  const ground = (x, z) => {
+    const g = x >= 0 && z >= 0 && x <= N && z <= N ? height(x, z) : far(x, z);
+    return z > N - 2 && paved(x, z) ? Math.max(g, road.y) : g;
+  };
   // How thick the forest is at a spot (0 to 1), given the ground height there.
   const woods = (x, z, y) => {
     const a = clamp(y / top, 0, 1), line = map.treeline + (noise(x * 0.13, z * 0.13 + 9) - 0.5) * 0.22;
@@ -178,16 +201,12 @@ export function makeTerrain(map) {
     const a = r2(), b2 = r2(), c2 = r2();
     if (i >= 0 && j >= 0 && i < N && j < N) continue;
     const x = i + 0.15 + b2 * 0.7, z = j + 0.15 + c2 * 0.7;
-    if (z > N - 2.5 && z < N + FRONT + 1) continue; // the valley floor stays open
+    if (z > N - 2.5 && z < N + FRONT + 6) continue; // the valley floor stays open for the village
     const out = Math.hypot(Math.max(0, -x, x - N), Math.max(0, -z, z - N)), y = far(x, z);
     const w = woods(x, z, y);
     if (a > (0.02 + w * 0.26) * (1 - smooth(RING * 0.5, RING, out))) continue;
     if (Math.hypot(far(x + 0.5, z) - far(x - 0.5, z), far(x, z + 0.5) - far(x, z - 0.5)) > 0.85) continue;
     outer.push({ x, z, y, s: 0.55 + w * 0.35 + c2 * 0.6 });
   }
-  // The road along the valley, the parking bays beside it and the coach stop.
-  const road = { z: N + 2.6, y: 0.4, x0: -115, x1: N + 130, bays: [], bayZ: N + 0.3, stop: base.x + 16 };
-  for (let i = 0; i < 20; i++) road.bays.push(base.x - 9.975 + i * 1.05);
-
   return { N, W, H, top, h, base, lakes, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm, far, ground, woods, outer, road };
 }

@@ -45,6 +45,16 @@ export const T = {
   // Managers buy their board by themselves. Price = factor x the board's first price;
   // lift managers cost a multiple of the next lift.
   MGR_FACTOR: 40, MGR_LIFT: 3, MGR_EVERY: 0.5, MGR_SAVE: 0.3,
+  // Parking prices. g = how many guests still come (1 = all), fee = what parking pays per guest
+  // and second, in PARK_PAY fares of the average open lift. Free brings more people, dear parking fewer.
+  PARK: [
+    { name: 'Free', tag: 'Free', g: 1.12, fee: 0 },
+    { name: 'Cheap', tag: '$', g: 1, fee: 1 },
+    { name: 'Normal', tag: '$$', g: 0.9, fee: 2.1 },
+    { name: 'Pricey', tag: '$$$', g: 0.78, fee: 3.3 },
+    { name: 'Rip-off', tag: '$$$$', g: 0.6, fee: 4.6 },
+  ],
+  PARK_START: 1, PARK_PAY: 0.0066, GUESTS_SHOWN: 430,
 
   // Events: the first after EVENT_FIRST seconds on a mountain, then every EVENT_GAP seconds.
   EVENT_FIRST: 240, EVENT_GAP: [180, 300],

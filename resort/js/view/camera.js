@@ -22,7 +22,7 @@ export function createCamera(camera, canvas, hooks) {
     const N = ter ? ter.N : 96;
     // The invisible wall: the camera stays over the resort, never too far out and never
     // too flat, so the far end of the land is always lost in the haze.
-    goal.x = clamp(goal.x, 8, N - 8); goal.z = clamp(goal.z, 10, N + 1);
+    goal.x = clamp(goal.x, 8, N - 8); goal.z = clamp(goal.z, 10, N + 7);
     goal.pitch = clamp(goal.pitch, 0.42, 1.45);
     goal.dist = clamp(goal.dist, 9, 150);
   };

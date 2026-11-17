@@ -24,7 +24,7 @@ export function newGame(level = 0, life = null, unl = null) {
   for (const k of LEVELS) up[k] = 0;
   return {
     v: 3, level, money: Math.round(T.START_MONEY * T.MONEY * Math.pow(T.NEXT_COST, level)), earned: 0, rides: 0, tricks: 0, time: 0,
-    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0, mgr: {}, mgrT: 0, event: null, evT: T.EVENT_FIRST,
+    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0, mgr: {}, mgrT: 0, event: null, evT: T.EVENT_FIRST, park: T.PARK_START,
     life: { rides: 0, time: 0, tricks: 0, ...(life || {}) }, unl: { ...(unl || {}) },
   };
 }
@@ -32,7 +32,7 @@ export function newGame(level = 0, life = null, unl = null) {
 export const toSave = (s) => ({
   v: 3, level: s.level, money: s.money, earned: s.earned, rides: s.rides, tricks: s.tricks, time: s.time,
   open: s.open, types: s.types.slice(), up: { ...s.up }, done: { ...s.done }, rushWait: Math.max(0, s.rushWait + s.rush),
-  mgr: { ...s.mgr }, evT: Math.max(30, s.evT), savedAt: Date.now(),
+  mgr: { ...s.mgr }, evT: Math.max(30, s.evT), park: s.park, savedAt: Date.now(),
   life: { ...s.life }, unl: { ...s.unl },
 });
 
@@ -48,6 +48,7 @@ export function fromSave(d) {
   s.rushWait = Math.max(0, +d.rushWait || 0);
   for (const id of UPGRADES) if (d.mgr && (d.mgr[id] === 1 || d.mgr[id] === 2)) s.mgr[id] = d.mgr[id];
   if (+d.evT > 0) s.evT = +d.evT;
+  if (d.park !== undefined) s.park = clamp(d.park | 0, 0, T.PARK.length - 1);
   s.savedAt = +d.savedAt || 0;
   // Saves from before the totals existed: start them from this mountain's numbers.
   if (!d.life) { s.life.rides = s.rides; s.life.time = s.time; }
@@ -137,7 +138,8 @@ function syncJumps(state, ter) {
 export const rushing = (state) => state.rush > 0;
 export const speedOf = (state) => (1 + T.SPEED_GAIN * state.up.speed) * (rushing(state) ? T.RUSH_SPEED : 1);
 const capAt = (lvl) => Math.min(T.GUESTS_MAX, T.GUESTS_START + T.GUESTS_STEP * lvl);
-export const guestCap = (state) => Math.round(capAt(state.up.guests) * (rushing(state) ? T.RUSH_GUESTS : 1));
+export const parkOf = (state) => T.PARK[state.park ?? T.PARK_START];
+export const guestCap = (state) => Math.min(T.GUESTS_SHOWN, Math.round(capAt(state.up.guests) * (rushing(state) ? T.RUSH_GUESTS : 1) * parkOf(state).g));
 const ticketAt = (lvl) => Math.pow(T.TICKET_GAIN, lvl);
 const eventIs = (state, id) => !!state.event && state.event.id === id;
 const skiOf = (state) => (1 + T.CANNON_GAIN * state.up.cannon) * (eventIs(state, 'powder') ? T.POWDER_SKI : 1);
@@ -176,9 +178,33 @@ function sumRate(state) {
     total += l.rate; rides += l.rides;
   }
   state.lessons = guests * T.SCHOOL_PAY * T.MONEY * state.up.school * ticketAt(state.up.ticket) * bonusOf(state);
+  // Parking: every guest pays a little per second, in fares of the average open lift.
+  let avg = 0;
+  for (const l of state.lifts) avg += fare(state, l.i);
+  avg /= Math.max(1, state.lifts.length);
+  state.parking = guests * parkOf(state).fee * T.PARK_PAY * avg;
   // A whole number of dollars, so the sign shows exactly what is paid.
-  state.rate = Math.max(1, Math.round((total + state.lessons) * (eventIs(state, 'powder') ? T.POWDER_PAY : 1)));
+  state.rate = Math.max(1, Math.round((total + state.lessons + state.parking) * (eventIs(state, 'powder') ? T.POWDER_PAY : 1)));
   state.rideRate = rides;
+}
+
+// What a parking price would give, without rush hour or an event: { rate, parking, guests }.
+export function parkPreview(state, k) {
+  const keep = { park: state.park, rush: state.rush, event: state.event };
+  Object.assign(state, { park: k, rush: 0, event: null });
+  sumRate(state);
+  const o = { rate: state.rate, parking: Math.round(state.parking), guests: guestCap(state) };
+  Object.assign(state, keep);
+  refreshRate(state);
+  return o;
+}
+export function setPark(state, k) {
+  k = clamp(k | 0, 0, T.PARK.length - 1);
+  if (k === state.park) return false;
+  state.park = k;
+  refreshRate(state);
+  state.events.push({ type: 'park' });
+  return true;
 }
 
 const TABLE = { speed: T.SPEED, guests: T.GUESTS, ticket: T.TICKET, hut: T.HUT, jump: T.JUMP, cannon: T.CANNON, school: T.SCHOOL, night: T.NIGHT, resto: T.RESTO, lodge: T.LODGE };
@@ -483,21 +509,73 @@ export const nextGame = (state) => newGame(state.level + 1, state.life, state.un
 
 function walkTo(g, x, z, then) { g.st = 'walk'; g.tx = x; g.tz = z; g.then = then; }
 
-function spawnGuest(state, ter, x, z) {
+// from = the middle of the car or coach the guest climbs out of: they step out to (x, z) first.
+function spawnGuest(state, ter, x, z, from = null) {
   const r = state.rnd, b = ter.base;
   const g = { id: state.nextGuest++, col: (r() * 12) | 0, seed: r(), x, z, y: ter.ground(x, z), face: Math.PI, board: r() < T.BOARDERS ? 1 : 0,
-    st: 'walk', node: 0, runs: T.RUNS[0] + ((r() * (T.RUNS[1] - T.RUNS[0] + 1)) | 0), lift: 0, piste: 0, s: 0, seat: 0, air: 0 };
+    st: 'walk', node: 0, runs: T.RUNS[0] + ((r() * (T.RUNS[1] - T.RUNS[0] + 1)) | 0), lift: 0, piste: 0, s: 0, seat: 0, air: 0, k: 1 };
   walkTo(g, b.x + (r() - 0.5) * 4, b.z - 2.2 - r() * 1.5, 'decide');
+  if (from) Object.assign(g, { st: 'alight', t: 0, fx: from.x, fz: from.z, dx: x, dz: z, x: from.x, z: from.z, k: STEP_K });
   state.guests.push(g);
   return g;
 }
 
 // ---------- cars and coaches (looks only) ----------
-// Guests come by road. A car drives in, turns into a free parking bay and lets its people
-// out. When many are wanted at once, or the bays are full, a coach brings them instead.
-// path: a car's way is the road up to its bay, a quarter turn, then straight in. s = metres along it.
-const TURN = Math.PI / 2, IN = 1.3;
-const bayLen = (ter, c) => c.bx - 1 - ter.road.x0;
+// Guests come by road. A car drives in, finds a free bay (close to the village if it can) and
+// its people climb out one by one. When they have had enough they walk back, climb in, and the
+// car backs out and drives off. When many are wanted at once, or the car park is full, a coach
+// brings them instead, and guests without a car wait at the stop for a coach home.
+// Each bay has a path: a rounded line of points from the start of the road into the bay.
+// s = metres along it. Leaving cars back out to the aisle and follow a second path out.
+const STEP_K = 0.35, STEP_T = 0.45; // how small a guest is when inside, how long climbing in or out takes
+
+// A line through the corners, with each corner rounded off. backS = where the last turn starts.
+function roundPath(corners, r = 1) {
+  const pts = [corners[0]];
+  let back = 0;
+  for (let i = 1; i < corners.length - 1; i++) {
+    const a = corners[i - 1], p = corners[i], b = corners[i + 1];
+    const la = Math.hypot(p.x - a.x, p.z - a.z), lb = Math.hypot(b.x - p.x, b.z - p.z), rr = Math.min(r, la / 2, lb / 2);
+    const s = { x: p.x + (a.x - p.x) / la * rr, z: p.z + (a.z - p.z) / la * rr }, e = { x: p.x + (b.x - p.x) / lb * rr, z: p.z + (b.z - p.z) / lb * rr };
+    back = pts.length;
+    for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; pts.push({ x: u * u * s.x + 2 * u * t * p.x + t * t * e.x, z: u * u * s.z + 2 * u * t * p.z + t * t * e.z }); }
+  }
+  pts.push(corners[corners.length - 1]);
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+  return { pts, cum, len: cum[cum.length - 1], backS: cum[back], roadS: cum[Math.min(1, pts.length - 1)] };
+}
+// Fills c.x, c.z and c.yaw at s metres along a path. The car always faces the way the path goes.
+function onPath(p, s, c) {
+  s = clamp(s, 0, p.len);
+  let i = 0;
+  while (i < p.pts.length - 2 && p.cum[i + 1] < s) i++;
+  const a = p.pts[i], b = p.pts[i + 1], t = (s - p.cum[i]) / Math.max(1e-6, p.cum[i + 1] - p.cum[i]);
+  c.x = a.x + (b.x - a.x) * t; c.z = a.z + (b.z - a.z) * t;
+  if (Math.abs(b.x - a.x) + Math.abs(b.z - a.z) > 1e-6) c.yaw = Math.atan2(b.x - a.x, b.z - a.z);
+}
+const pathIn = (ter, n) => {
+  const R = ter.road, b = R.bays[n];
+  R.paths ||= [];
+  if (!R.paths[n]) {
+    const pts = b.aisle < 0 ? [{ x: R.x0, z: R.z }, { x: b.x, z: R.z }, { x: b.x, z: b.z }]
+      : [{ x: R.x0, z: R.z }, { x: R.lot.inX, z: R.z }, { x: R.lot.inX, z: R.lot.aisles[b.aisle] }, { x: b.x, z: R.lot.aisles[b.aisle] }, { x: b.x, z: b.z }];
+    R.paths[n] = roundPath(pts);
+    R.paths[n].roadS = b.aisle < 0 ? R.paths[n].backS : R.lot.inX - R.x0 - 1;
+  }
+  return R.paths[n];
+};
+const pathOut = (ter, n) => {
+  const R = ter.road, b = R.bays[n];
+  R.exits ||= [];
+  if (!R.exits[n]) {
+    const from = { x: b.x - 1, z: b.aisle < 0 ? R.z : R.lot.aisles[b.aisle] };
+    const pts = b.aisle < 0 ? [from, { x: R.x1, z: R.z }] : [from, { x: R.lot.outX, z: from.z }, { x: R.lot.outX, z: R.z }, { x: R.x1, z: R.z }];
+    R.exits[n] = roundPath(pts);
+    R.exits[n].roadS = b.aisle < 0 ? 0 : R.exits[n].len - (R.x1 - R.lot.outX) + 1;
+  }
+  return R.exits[n];
+};
 
 // Where a vehicle is right now: fills c.x, c.z, c.yaw.
 export function placeCar(ter, c) {
@@ -510,25 +588,38 @@ export function placeCar(ter, c) {
     c.yaw = Math.atan2(1, -(off(c.x + e) - off(c.x - e)) / (2 * e));
     return;
   }
-  const la = bayLen(ter, c);
-  if (c.bay < 0 || c.st === 'out' || c.s <= la) { c.x = c.st === 'out' || c.bay < 0 ? c.x : R.x0 + c.s; c.z = R.z; c.yaw = TURN; return; }
-  const t = c.s - la;
-  if (t < TURN) { c.x = c.bx - 1 + Math.sin(t); c.z = R.z - (1 - Math.cos(t)); c.yaw = TURN + t; return; }
-  c.x = c.bx; c.z = R.z - 1 - (t - TURN); c.yaw = Math.PI;
+  if (c.bay < 0) { c.z = R.z; c.yaw = Math.PI / 2; return; }
+  onPath(c.st === 'leave' ? pathOut(ter, c.bay) : pathIn(ter, c.bay), c.s, c);
 }
 const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
+// load = people still inside to climb out, pax = how many it came with (and takes home).
 function addCar(state, ter, kind, load, bay) {
   const r = state.rnd, R = ter.road;
-  const c = { id: state.nextCar++, kind, col: (r() * 8) | 0, load, bay, bx: bay >= 0 ? R.bays[bay] : 0, st: 'in', s: 0, x: R.x0, z: R.z, yaw: TURN, wait: 0 };
+  const c = { id: state.nextCar++, kind, col: (r() * 8) | 0, load, pax: load, bay, st: 'in', s: 0, x: R.x0, z: R.z, yaw: Math.PI / 2,
+    wait: 0, t: 0, taken: 0, inside: 0, busy: 0, door: 0, v: 0 };
   state.cars.push(c);
   return c;
 }
 
+// The door a guest uses: cars on both sides in turn, the coach at its front door.
+function doorOf(c, n) {
+  if (c.kind === 'bus') return { x: c.x + 1.25, z: c.z - 0.78 };
+  const lx = n % 2 ? -0.6 : 0.6, lz = 0.12, cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+  return { x: c.x + lx * cs + lz * sn, z: c.z - lx * sn + lz * cs };
+}
+const seatOf = (c) => (c.kind === 'bus' ? { x: c.x + 1.25, z: c.z - 0.15 } : { x: c.x, z: c.z });
+
+// Free bays near the village and the road fill first, with a little chance in it.
 const freeBay = (state, ter) => {
-  const used = new Set(state.cars.map((c) => c.bay)), free = [];
-  for (let i = 0; i < ter.road.bays.length; i++) if (!used.has(i)) free.push(i);
-  return free.length ? free[(state.rnd() * free.length) | 0] : -1;
+  const used = new Set(state.cars.map((c) => c.bay)), B = ter.road.bays, bx = ter.base.x;
+  let best = -1, score = Infinity;
+  for (let i = 0; i < B.length; i++) {
+    if (used.has(i)) continue;
+    const s = Math.abs(B[i].x - bx) + B[i].row * 5 + state.rnd() * 10;
+    if (s < score) { score = s; best = i; }
+  }
+  return best;
 };
 
 // A game that is opened or loaded starts with people already on the mountain and cars in the bays.
@@ -538,68 +629,101 @@ function prefill(state, ter) {
     const g = spawnGuest(state, ter, b.x - 4 + r() * 8, b.z + 0.4 + r() * 2.6);
     g.x = g.tx; g.z = g.tz; g.y = ter.ground(g.x, g.z); g.st = 'decide';
   }
-  for (let i = 0, cars = Math.min(ter.road.bays.length - 4, Math.ceil(n / 3)); i < cars; i++) {
+  for (let i = 0, cars = Math.min(ter.road.bays.length - 4, Math.ceil(n / 2.5)); i < cars; i++) {
     const c = addCar(state, ter, 'car', 0, freeBay(state, ter));
-    c.st = 'park'; c.s = bayLen(ter, c) + TURN + IN; c.wait = r() * 40;
+    c.pax = 1 + ((r() * 4) | 0);
+    c.st = 'park'; c.s = pathIn(ter, c.bay).len;
     placeCar(ter, c);
   }
+}
+
+// A guest who is done for the day: a car that still has a free seat (one already filling up
+// first), or else the coach stop.
+function rideHome(state, ter, g) {
+  let best = null;
+  for (const c of state.cars) {
+    if (c.kind !== 'car' || c.st !== 'park' || c.load > 0 || c.taken >= c.pax) continue;
+    if (!best || (c.taken > 0) > (best.taken > 0) || ((c.taken > 0) === (best.taken > 0) && c.id < best.id)) best = c;
+  }
+  if (best) {
+    const d = doorOf(best, best.taken);
+    best.taken++; g.car = best.id;
+    walkTo(g, d.x, d.z, 'board');
+    return;
+  }
+  const R = ter.road, r = state.rnd;
+  g.car = 0;
+  walkTo(g, R.stop - 1.6 + r() * 3.2, R.z - 2.75 - r() * 0.55, 'wait');
 }
 
 function updateCars(state, ter, dt) {
   const R = ter.road, r = state.rnd, cars = state.cars;
   // Who is still wanted on the mountain, minus those already on their way.
   let coming = 0, bus = false;
-  for (const c of cars) { if (c.st === 'in' || c.st === 'stop') coming += c.load; if (c.kind === 'bus' && c.st === 'in') bus = true; }
+  for (const c of cars) { coming += c.load; if (c.kind === 'bus' && (c.st === 'in' || c.st === 'stop')) bus = true; }
   const need = guestCap(state) - state.guests.length - coming;
   state.spawn += dt;
   if (state.spawn >= 1.1) {
     state.spawn = 0;
+    // People at the stop: a coach comes for them when enough are waiting, or one waited long.
+    let waiting = 0, long = 0;
+    for (const g of state.guests) if (g.st === 'wait') { waiting++; long = Math.max(long, state.time - g.since); }
     if (need > 0) {
       const bay = freeBay(state, ter);
       if ((need >= 12 || bay < 0) && !bus) addCar(state, ter, 'bus', Math.min(30, need), -1);
       else if (bay >= 0) addCar(state, ter, 'car', Math.min(need, 1 + ((r() * 4) | 0)), bay);
-    } else if ((state.through -= 1.1) <= 0) {
+    } else if (!bus && (waiting >= 8 || (waiting && long > 18))) addCar(state, ter, 'bus', 0, -1);
+    else if ((state.through -= 1.1) <= 0) {
       // Now and then somebody just drives past.
       state.through = 5 + r() * 9;
       addCar(state, ter, 'car', 0, -1);
     }
   }
-  // Guests who went home take a parked car with them.
-  if (state.left >= 3) {
-    let old = null;
-    for (const c of cars) if (c.st === 'park' && c.wait <= 0 && (!old || c.id < old.id)) old = c;
-    if (old) { old.st = 'back'; state.left -= 3; } else state.left = Math.min(state.left, 12);
-  }
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
+    c.busy = Math.max(0, c.busy - dt);
+    c.door += ((c.busy > 0 ? 1 : 0) - c.door) * (1 - Math.exp(-dt * 9));
+    let gone = false;
     if (c.kind === 'bus') {
       if (c.st === 'in') {
         c.x += Math.min(12, 1.2 + (R.stop - c.x) * 0.9) * dt;
-        if (c.x >= R.stop - 0.05) { c.st = 'stop'; c.wait = 3.2; }
+        if (c.x >= R.stop - 0.05) { c.st = 'stop'; c.wait = 2.5; c.t = 0.4; }
       } else if (c.st === 'stop') {
-        c.wait -= dt;
-        // People climb out one after the other.
-        while (c.load > 0 && c.wait < 2.9 - (30 - c.load) * 0.09) { spawnGuest(state, ter, c.x - 1.2 + r() * 2.4, c.z - 0.9 - r() * 0.5); c.load--; }
-        if (c.wait <= 0 && c.load <= 0) c.st = 'out';
-      } else c.x += Math.min(12, 1.2 + (c.x - R.stop) * 0.9) * dt;
-    } else if (c.st === 'in') {
-      if (c.bay < 0) c.x += 11 * dt;
-      else {
-        const end = bayLen(ter, c) + TURN + IN;
-        c.s = Math.min(end, c.s + Math.min(12, 1.4 + (end - c.s) * 0.8) * dt);
-        if (c.s >= end - 0.02) {
-          c.s = end; c.st = 'park'; c.wait = 6;
-          for (; c.load > 0; c.load--) spawnGuest(state, ter, c.bx + (r() - 0.5) * 0.9, R.bayZ - 0.9 - r() * 0.6);
+        c.wait -= dt; c.t -= dt;
+        // People climb out one after the other, then those at the stop climb in.
+        if (c.load > 0 && c.t <= 0) { const d = doorOf(c, 0); spawnGuest(state, ter, d.x + (r() - 0.5) * 0.3, d.z - r() * 0.3, seatOf(c)); c.load--; c.t = 0.16; c.busy = 0.5; }
+        if (c.load <= 0) {
+          for (const g of state.guests) if (g.st === 'wait' && c.taken < 30) { const d = doorOf(c, 0); g.car = c.id; c.taken++; walkTo(g, d.x, d.z, 'board'); }
         }
+        if (c.wait <= 0 && c.load <= 0 && c.inside >= c.taken) c.st = 'out';
+      } else { c.x += Math.min(12, 1.2 + (c.x - R.stop) * 0.9) * dt; gone = c.x > R.x1; }
+    } else if (c.bay < 0) { c.x += 11 * dt; gone = c.x > R.x1; } // just driving past
+    else if (c.st === 'in') {
+      // Fast along the road, slow in the car park, braking into the bay.
+      const p = pathIn(ter, c.bay), v = c.s < p.roadS ? Math.min(12, 3.2 + (p.roadS - c.s) * 0.9) : Math.min(3.2, 1 + (p.len - c.s) * 0.9);
+      c.s = Math.min(p.len, c.s + v * dt);
+      if (c.s >= p.len - 0.01) { c.s = p.len; c.st = 'park'; c.t = 0.25; }
+    } else if (c.st === 'park') {
+      c.t -= dt;
+      if (c.load > 0 && c.t <= 0) {
+        const d = doorOf(c, c.pax - c.load);
+        spawnGuest(state, ter, d.x, d.z, seatOf(c));
+        c.load--; c.t = 0.4; c.busy = STEP_T + 0.25;
       }
-    } else if (c.st === 'park') c.wait -= dt;
-    else if (c.st === 'back') {
-      const la = bayLen(ter, c);
-      c.s -= 2.6 * dt;
-      if (c.s <= la) { c.s = la; c.st = 'out'; c.x = c.bx - 1; c.v = 0; c.bay = -2; }
-    } else { c.v = Math.min(11, (c.v || 0) + 6 * dt); c.x += c.v * dt; }
+      // Everybody it brought is back in: off it goes.
+      if (c.pax > 0 && c.inside >= c.pax) { c.wait += dt; if (c.wait > 0.7) c.st = 'back'; }
+    } else if (c.st === 'back') {
+      const p = pathIn(ter, c.bay);
+      c.s -= 1.8 * dt;
+      if (c.s <= p.backS) { c.st = 'leave'; c.s = 0; c.v = 0.5; }
+    } else if (c.st === 'leave') {
+      const p = pathOut(ter, c.bay);
+      c.v = Math.min(c.s < p.roadS ? 3.2 : 11, c.v + 5 * dt);
+      c.s += c.v * dt;
+      gone = c.s >= p.len;
+    }
+    if (gone) { cars[i] = cars[cars.length - 1]; cars.pop(); continue; }
     placeCar(ter, c);
-    if (c.x > R.x1) { cars[i] = cars[cars.length - 1]; cars.pop(); }
   }
 }
 
@@ -621,9 +745,7 @@ function decide(state, ter, g) {
     const p = state.pisteById[g.node];
     g.piste = p.id; g.s = 0;
     walkTo(g, p.pts[0].x, p.pts[0].z, 'ski');
-  } else {
-    walkTo(g, ter.base.x - 9 + g.seed * 18, ter.road.bayZ - 1.1, 'gone');
-  }
+  } else rideHome(state, ter, g);
 }
 
 // The lifts carry guests for the picture. What they earn is paid by the clock, see tick().
@@ -660,7 +782,7 @@ function updateGuests(state, ter, dt) {
         if (d <= step) {
           g.x = g.tx; g.z = g.tz;
           if (g.then === 'queue') { const l = state.liftById[g.lift]; l.queue.push(g); g.st = 'queue'; }
-          else g.st = g.then;
+          else { g.st = g.then; g.t = 0; g.since = state.time; }
         } else { g.x += dx / d * step; g.z += dz / d * step; }
         g.y = ter.ground(g.x, g.z);
         break;
@@ -702,8 +824,29 @@ function updateGuests(state, ter, dt) {
         if (g.s >= p.len) { g.node = p.to; g.air = 0; g.st = 'decide'; }
         break;
       }
+      case 'alight': {
+        // Out of the car: from the seat to the door, growing to full size, then off to the lifts.
+        g.t += dt;
+        const u = Math.min(1, g.t / STEP_T);
+        g.x = g.fx + (g.dx - g.fx) * u; g.z = g.fz + (g.dz - g.fz) * u; g.k = STEP_K + (1 - STEP_K) * u;
+        g.face = Math.atan2(g.dx - g.fx, g.dz - g.fz); g.y = ter.ground(g.x, g.z);
+        if (u >= 1) { g.k = 1; g.st = 'walk'; }
+        break;
+      }
+      case 'board': {
+        // Into the car: from the door to the seat, shrinking away.
+        const c = state.cars.find((v) => v.id === g.car);
+        if (!c) { g.st = 'gone'; break; }
+        if (g.t === 0) { g.fx = g.x; g.fz = g.z; }
+        g.t += dt; c.busy = Math.max(c.busy, 0.3);
+        const u = Math.min(1, g.t / STEP_T), to = seatOf(c);
+        g.x = g.fx + (to.x - g.fx) * u; g.z = g.fz + (to.z - g.fz) * u; g.k = 1 - (1 - STEP_K) * u;
+        g.face = Math.atan2(to.x - g.fx, to.z - g.fz); g.y = ter.ground(g.x, g.z);
+        if (u >= 1) { c.inside++; g.st = 'gone'; }
+        break;
+      }
     }
-    if (g.st === 'gone') { guests[i] = guests[guests.length - 1]; guests.pop(); state.left++; }
+    if (g.st === 'gone') { guests[i] = guests[guests.length - 1]; guests.pop(); }
   }
 }
 
