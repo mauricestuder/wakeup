@@ -1,6 +1,7 @@
 // Idle Lift: the camera. It orbits a point on the ground.
-// Mouse: drag pans, right-drag (or Shift-drag) rotates, wheel zooms. Keys: WASD / arrows, Q E, + -.
-// Touch: one finger pans, two fingers pinch to zoom, twist to rotate, slide both up or down to tilt.
+// The player only moves it and zooms: it never turns or tilts by hand.
+// Mouse: drag (any button) moves, wheel zooms. Keys: WASD / arrows move, + - zoom.
+// Touch: one finger moves, two fingers pinch to zoom (and move together to move).
 import * as THREE from '../../../game/vendor/three.module.min.js';
 import { clamp } from '../terrain.js';
 
@@ -70,7 +71,7 @@ export function createCamera(camera, canvas, hooks) {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false,
-        rotate: e.pointerType === 'mouse' && (e.button === 2 || e.button === 1 || e.shiftKey), button: e.button, id: e.pointerId };
+        button: e.button, id: e.pointerId };
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x), cy: (a.y + b.y) / 2, cx: (a.x + b.x) / 2 };
@@ -85,18 +86,14 @@ export function createCamera(camera, canvas, hooks) {
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x), cy = (a.y + b.y) / 2, cx = (a.x + b.x) / 2;
       goal.dist *= pinch.d / Math.max(1, d);
-      let da = ang - pinch.ang;
-      if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
-      goal.yaw -= da;
-      goal.pitch += (cy - pinch.cy) * 0.004;
-      pan(cx - pinch.cx, 0);
+      pan(cx - pinch.cx, cy - pinch.cy);
       Object.assign(pinch, { d, ang, cy, cx });
       limit();
     } else if (drag && e.pointerId === drag.id) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 9) drag.moved = true;
       if (drag.moved) {
-        if (drag.rotate) { goal.yaw -= dx * 0.006; goal.pitch += dy * 0.005; limit(); } else pan(dx, dy);
+        pan(dx, dy);
       }
       drag.x = e.clientX; drag.y = e.clientY;
     }
@@ -111,7 +108,7 @@ export function createCamera(camera, canvas, hooks) {
     if (pointers.size < 2) pinch = null;
     if (pointers.size === 1) {
       const [id, p] = [...pointers.entries()][0];
-      drag = { x: p.x, y: p.y, sx: p.x, sy: p.y, t: 0, moved: true, rotate: false, button: 0, id };
+      drag = { x: p.x, y: p.y, sx: p.x, sy: p.y, t: 0, moved: true, button: 0, id };
     }
   };
   canvas.addEventListener('pointerup', up);
@@ -134,13 +131,11 @@ export function createCamera(camera, canvas, hooks) {
     if (keys.has('KeyS') || keys.has('ArrowDown')) mz += 1;
     if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
     if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
-    if (mx || mz || keys.has('KeyQ') || keys.has('KeyE')) ease = DIRECT;
+    if (mx || mz) ease = DIRECT;
     if (mx || mz) {
       const s = Math.sin(now.yaw), c = Math.cos(now.yaw);
       goal.x += (mx * c + mz * s) * sp; goal.z += (-mx * s + mz * c) * sp;
     }
-    if (keys.has('KeyQ')) goal.yaw += 1.4 * dt;
-    if (keys.has('KeyE')) goal.yaw -= 1.4 * dt;
     if (keys.has('Equal') || keys.has('NumpadAdd') || keys.has('KeyR')) goal.dist *= Math.exp(-1.3 * dt);
     if (keys.has('Minus') || keys.has('NumpadSubtract') || keys.has('KeyF')) goal.dist *= Math.exp(1.3 * dt);
     limit();

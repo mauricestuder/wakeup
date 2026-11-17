@@ -152,7 +152,7 @@ something. You spend the money on wooden upgrade boards.
   share the pistes. All prices are whole dollars.
 - Hold a board to keep buying. Keys 1 to 6 press the first six boards, Space
   starts rush hour.
-- Camera: drag moves, pinch or wheel zooms, two fingers or right-drag turn.
+- Camera: drag moves, pinch or wheel zooms. It does not turn.
 - Graphics on Auto lowers the detail by itself when frames come slowly.
 - Progress saves in the browser (`localStorage`, key `firstchair.idle`).
 

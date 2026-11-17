@@ -279,7 +279,7 @@ export function createUI(api) {
       <li><b>Events</b> happen every few minutes: powder days pay double, storms stop a lift until you secure it, and a celebrity pays a bonus if you tap them.</li>
       <li>When you close the game the resort keeps earning half its income for up to 8 hours. The <b>Lodge</b> raises both.</li>
       <li>Hold a board to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
-      <li>Camera: drag to move, pinch or scroll to zoom, two fingers or right-drag to turn.</li>
+      <li>Camera: drag to move, pinch or scroll to zoom.</li>
     </ul>`;
 
   function showHow() { showSheet('How to play', HOW + '<button class="btn board gold" id="okBtn">Got it</button>'); $('okBtn').addEventListener('click', () => { api.click(); closeSheet(); }); }
