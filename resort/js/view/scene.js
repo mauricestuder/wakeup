@@ -230,19 +230,19 @@ export function createScene(canvas, opts) {
   let pines = null, slots = null;
   const isPine = (i) => ((i * 2654435761) >>> 0) % 100 < 28;
   function buildTrees() {
-    // Soft, plump trees: round tiers with a pillow of snow on each, and fluffy round pines.
-    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 12, 1, true), c, at(0, y, 0)];
-    const cap = (r, y, sy) => [new THREE.SphereGeometry(r, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xfffaf4, at(0, y, 0, 0, 1, sy, 1)];
+    // Soft, plump trees: round tiers with snow on each, and fluffy round pines. Kept low on
+    // triangles: there are thousands of them.
+    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 8, 1, true), c, at(0, y, 0)];
     const spruce = merge([
-      [new THREE.CylinderGeometry(0.07, 0.09, 0.4, 6, 1, true), 0x7a5640, at(0, 0.2, 0)],
+      [new THREE.CylinderGeometry(0.07, 0.09, 0.4, 5, 1, true), 0x7a5640, at(0, 0.2, 0)],
       cone(0.54, 0.72, 0.62, 0x3f7a5e), cone(0.45, 0.66, 0.95, 0x46866a), cone(0.35, 0.6, 1.26, 0x4f9273), cone(0.23, 0.5, 1.6, 0x58a07d),
-      cap(0.3, 1.0, 0.35), cap(0.22, 1.31, 0.4), cap(0.14, 1.72, 0.9),
+      cone(0.38, 0.2, 1.07, 0xfffaf4), cone(0.28, 0.2, 1.38, 0xfffaf4), cone(0.15, 0.24, 1.78, 0xfffaf4),
     ]);
     const pine = merge([
-      [new THREE.CylinderGeometry(0.06, 0.09, 1.0, 6, 1, true), 0x86603f, at(0, 0.5, 0)],
-      [new THREE.IcosahedronGeometry(0.44, 1), 0x4b8a5c, at(0, 1.15, 0, 0, 1, 0.8, 1)],
-      [new THREE.IcosahedronGeometry(0.34, 1), 0x58996a, at(0.1, 1.5, 0.05, 0, 1, 0.8, 1)],
-      [new THREE.IcosahedronGeometry(0.29, 1), 0xfffaf4, at(0.05, 1.64, 0, 0, 1, 0.38, 1)],
+      [new THREE.CylinderGeometry(0.06, 0.09, 1.0, 5, 1, true), 0x86603f, at(0, 0.5, 0)],
+      [new THREE.IcosahedronGeometry(0.44, 0), 0x4b8a5c, at(0, 1.15, 0, 0, 1, 0.8, 1)],
+      [new THREE.IcosahedronGeometry(0.34, 0), 0x58996a, at(0.1, 1.5, 0.05, 0, 1, 0.8, 1)],
+      [new THREE.IcosahedronGeometry(0.29, 0), 0xfffaf4, at(0.05, 1.64, 0, 0, 1, 0.38, 1)],
     ]);
     const all = ter.trees.length + ter.outer.length;
     slots = new Int32Array(all);

@@ -668,8 +668,8 @@ function updateCars(state, ter, dt) {
         spawnGuest(state, ter, d.x, d.z, seatOf(c));
         c.load--; c.t = 0.4; c.busy = STEP_T + 0.25;
       }
-      // Everybody it brought is back in: off it goes.
-      if (c.pax > 0 && c.inside >= c.pax) { c.wait += dt; if (c.wait > 0.7) c.st = 'back'; }
+      // Somebody got in and nobody else is on the way to it: off it goes.
+      if (c.load <= 0 && c.taken > 0 && c.inside >= c.taken) { c.wait += dt; if (c.wait > 0.6) c.st = 'back'; } else c.wait = 0;
     } else if (c.st === 'back') {
       const p = pathIn(ter, c.bay);
       c.s -= 1.8 * dt;

@@ -11,7 +11,8 @@ const GEAR = [0xff4d1a, 0x1ec8ff, 0xb6f23a, 0xff2d78, 0xffd400, 0x8a5cff, 0x18e0
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const tilt = (x, y, z, rx, rz = 0) => new THREE.Matrix4().makeRotationX(rx).multiply(new THREE.Matrix4().makeRotationZ(rz)).setPosition(x, y, z);
 const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(0, 0, 0, 'YXZ'), V = new THREE.Vector3(), S = new THREE.Vector3();
-const SCALE = 1.85, SIDE = 0.36;
+// Guests are drawn true to the size of the cars, huts and chairs around them.
+const SCALE = 1.0, SIDE = 0.36;
 
 // The person: white parts take the jacket colour, the rest keeps its own.
 function bodyParts(board) {
@@ -22,11 +23,11 @@ function bodyParts(board) {
     [box(0.07, 0.24, 0.08), 0xffffff, tilt(0.155, 0.47, 0.02, 0.35, -arm)],
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(-0.155 - Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)], // gloves
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(0.155 + Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)],
-    [new THREE.SphereGeometry(0.1, 10, 8), 0xf0c8a0, at(0, 0.67, 0)],      // a round face
-    [new THREE.SphereGeometry(0.108, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0x8c8c8c, at(0, 0.69, -0.005)], // knitted beanie, a darker shade of the jacket
-    [new THREE.CylinderGeometry(0.11, 0.11, 0.04, 10), 0xb0b0b0, at(0, 0.69, -0.005)], // its folded rim
-    [new THREE.SphereGeometry(0.045, 8, 6), 0xe0e0e0, at(0, 0.81, -0.01)],  // pompom
-    [new THREE.CylinderGeometry(0.085, 0.1, 0.05, 10), 0x6a6a6a, at(0, 0.6, 0)], // scarf
+    [new THREE.SphereGeometry(0.1, 7, 5), 0xf0c8a0, at(0, 0.67, 0)],      // a round face
+    [new THREE.SphereGeometry(0.108, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0x8c8c8c, at(0, 0.69, -0.005)], // knitted beanie, a darker shade of the jacket
+    [new THREE.CylinderGeometry(0.11, 0.11, 0.04, 7, 1, true), 0xb0b0b0, at(0, 0.69, -0.005)], // its folded rim
+    [new THREE.IcosahedronGeometry(0.045, 0), 0xe0e0e0, at(0, 0.81, -0.01)],  // pompom
+    [new THREE.CylinderGeometry(0.085, 0.1, 0.05, 7, 1, true), 0x6a6a6a, at(0, 0.6, 0)], // scarf
     [box(0.21, 0.29, 0.15), 0x3a3a3a, at(0, 0.17, 0)],                    // trousers
     [box(0.1, 0.06, 0.16), 0x202020, at(-0.055, 0.04, 0.01)], [box(0.1, 0.06, 0.16), 0x202020, at(0.055, 0.04, 0.01)], // boots
   ];
@@ -35,16 +36,16 @@ function bodyParts(board) {
 function gearParts(board) {
   const parts = [[box(0.16, 0.05, 0.03), 0xffffff, at(0, 0.67, 0.095)]]; // goggles
   if (board) {
-    parts.push([box(1.0, 0.04, 0.28), 0xffffff, at(0, 0.01, 0)]);          // the board, across the rider
-    parts.push([box(0.12, 0.045, 0.3), 0x202020, at(-0.3, 0.015, 0)], [box(0.12, 0.045, 0.3), 0x202020, at(0.3, 0.015, 0)]); // tips
-    parts.push([box(0.6, 0.012, 0.06), 0x303030, at(0, 0.035, 0)]);        // stripe
+    parts.push([box(0.72, 0.04, 0.24), 0xffffff, at(0, 0.01, 0)]);          // the board, across the rider
+    parts.push([box(0.1, 0.045, 0.26), 0x202020, at(-0.31, 0.015, 0)], [box(0.1, 0.045, 0.26), 0x202020, at(0.31, 0.015, 0)]); // tips
+    parts.push([box(0.42, 0.012, 0.05), 0x303030, at(0, 0.035, 0)]);        // stripe
   } else {
     for (const sx of [-0.075, 0.075]) {
-      parts.push([box(0.085, 0.035, 0.98), 0xffffff, at(sx, 0.0, 0.08)]);  // ski
-      parts.push([box(0.085, 0.035, 0.12), 0xffffff, tilt(sx, 0.03, 0.6, -0.5)]); // tip turned up
+      parts.push([box(0.075, 0.035, 0.74), 0xffffff, at(sx, 0.0, 0.05)]);  // ski
+      parts.push([box(0.075, 0.035, 0.1), 0xffffff, tilt(sx, 0.03, 0.45, -0.5)]); // tip turned up
       // Pole: from the glove down and back to the snow.
       parts.push([new THREE.CylinderGeometry(0.012, 0.012, 0.62, 4), 0x9a9a9a, tilt(sx * 2.6, 0.2, -0.02, -0.45)]);
-      parts.push([new THREE.CylinderGeometry(0.035, 0.035, 0.01, 6), 0x9a9a9a, at(sx * 2.6, 0.015, -0.14)]);
+      parts.push([new THREE.CylinderGeometry(0.035, 0.035, 0.01, 5), 0x9a9a9a, at(sx * 2.6, 0.015, -0.14)]);
     }
   }
   return parts;
@@ -71,24 +72,24 @@ export function createGuestView(scene, cap = 440) {
     const soft = 1 - Math.exp(-dt * 12 * Math.max(1, speed)), turn = 1 - Math.exp(-dt * 12);
     for (const k of kinds) { k.n = 0; k.dirty = false; }
     for (const g of state.guests) {
-      let x = g.x, z = g.z, y, yaw = g.face, roll = 0, show = true, lift = 0, flip = 0;
+      let x = g.x, z = g.z, y, yaw = g.face, roll = 0, show = true, lift = 0, flip = 0, seated = false;
       if (g.st === 'queue') {
         const l = state.liftById[g.lift];
         if (l) {
-          // Three abreast, snaking back from the station.
-          const row = Math.floor(g.qi / 3), col = g.qi % 3, dx = Math.sin(l.dir), dz = Math.cos(l.dir);
-          const back = 1.4 + row * 0.44, across = (col - 1) * 0.4;
-          x = l.a.x - dx * back + dz * across; z = l.a.z - dz * back - dx * across; yaw = l.dir;
+          // Four abreast, with room for everybody's skis, back from the station.
+          const row = Math.floor(g.qi / 4), col = g.qi % 4, dx = Math.sin(l.dir), dz = Math.cos(l.dir);
+          const back = 1.4 + row * 0.82, across = (col - 1.5) * 0.46;
+          x = l.a.x - dx * back + dz * across; z = l.a.z - dz * back - dx * across; yaw = l.dir + (g.board ? Math.PI / 2 : 0);
         }
       } else if (g.st === 'ride') {
         const l = state.liftById[g.lift];
         if (l) {
           const L = LIFTS[l.type], dx = Math.sin(l.dir), dz = Math.cos(l.dir);
-          const across = SIDE + (L.seats > 1 ? ((g.seat || 0) - (L.seats - 1) / 2) * 0.22 : 0);
+          const across = SIDE + (L.seats > 1 ? ((g.seat || 0) - (L.seats - 1) / 2) * 0.25 : 0);
           x += dz * across; z -= dx * across;
           y = L.ground ? ter.ground(x, z) : g.y - 1.12 * 1; // sitting just under the cable
           if (l.type === 'gondola') show = false;
-          if (l.type === 'chair') y = g.y - 1.0;
+          if (l.type === 'chair') { y = g.y - 1.2; seated = true; } // sitting on the seat, feet on the rest
         }
       } else if (g.st === 'ski') {
         // Carving: swing left and right across the piste.
@@ -130,7 +131,7 @@ export function createGuestView(scene, cap = 440) {
       if (!show || kd.n >= cap) continue;
       E.set(-flip, g.vyaw, roll);
       Q.setFromEuler(E);
-      const sc = SCALE * (g.st === 'alight' || g.st === 'board' ? g.k : 1); // smaller while climbing in or out of a car
+      const sc = SCALE * (g.st === 'alight' || g.st === 'board' ? g.k : seated ? 0.85 : 1); // smaller while climbing in or out of a car
       M.compose(V.set(g.vx, g.vy, g.vz), Q, S.set(sc, sc, sc));
       kd.body.mesh.setMatrixAt(kd.n, M); kd.gear.mesh.setMatrixAt(kd.n, M);
       if (paint(kd.body, kd.n, g.col % JACKETS.length)) kd.dirty = true;

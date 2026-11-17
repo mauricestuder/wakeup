@@ -170,7 +170,7 @@ export function createDecoView(scene) {
     group.add(m);
 
     // Soft smoke curling up from every chimney.
-    smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.22, 1), new THREE.MeshLambertMaterial({ color: 0xf6eee8, transparent: true, opacity: 0.55, depthWrite: false }), CHIMNEYS.length * PUFFS);
+    smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.22, 0), new THREE.MeshLambertMaterial({ color: 0xf6eee8, transparent: true, opacity: 0.55, depthWrite: false }), CHIMNEYS.length * PUFFS);
     smoke.frustumCulled = false; smoke.chim = CHIMNEYS.map((p) => ({ p: p.clone(), ph: r() }));
     group.add(smoke);
 
