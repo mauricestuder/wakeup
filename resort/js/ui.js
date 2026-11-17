@@ -1,7 +1,7 @@
 // Idle Lift: everything on screen that is not the mountain. The money sign, the
 // upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
-import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, mgrState, mgrCost, NAMES, EVENTS, awayOf, parkOf } from './idle.js';
+import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, NAMES, EVENTS, awayOf, parkOf } from './idle.js';
 import { MAPS } from './maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,8 +23,6 @@ const ICON = {
   peak: svg('<path d="M2.500 19.500l6.500-11 4 6 2.500-3.500 6 8.500zM7.300 11.500l1.700 1.300 1.500-1.500"/>'),
   quest: svg('<path d="M12 21V3M12 5h7l2 2-2 2h-7zM12 11H5l-2 2 2 2h7z"/>'),
   lodge: svg('<path d="M3 20V10l9-6 9 6v10M3 20h18M7 20v-5h10v5M7 17.500h10M9.500 11h5"/>'),
-  safe: svg('<rect x="3.500" y="5" width="17" height="14" rx="2"/><circle cx="12" cy="12" r="3.200"/><path d="M12 8.800V7M15.200 12H17M7 19v2M17 19v2"/>'),
-  smgr: svg('<circle cx="12" cy="7" r="3.500"/><path d="M5 21c0-4 3-6.500 7-6.500s7 2.500 7 6.500M11 14.600h2l-.5 2.400.5 3.500-1 1-1-1 .5-3.500z"/>'),
   tie: svg('<path d="M10 3h4l-1 3 2.500 10L12 20l-3.500-4L11 6z"/>'),
   powder: svg('<path d="M12 3v18M4.200 7.500l15.600 9M19.800 7.500l-15.600 9"/>'),
   storm: svg('<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>'),
@@ -32,7 +30,7 @@ const ICON = {
   lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
 };
 // Every board has the colour of a piste sign.
-const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)', safe: '#2f9e8f', smgr: '#b3541a',
+const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)',
   jump: 'var(--purple)', cannon: '#3aa6c9', school: 'var(--green)', night: '#34406e', resto: 'var(--red)', lodge: '#8a5a2b' };
 // The money logo: a gold coin with a mountain and a chairlift on it.
 const COIN = `<svg class="coinpic" viewBox="0 0 32 32" aria-hidden="true">
@@ -55,16 +53,14 @@ export function createUI(api) {
     const b = document.createElement('button');
     b.className = 'up board'; b.id = 'up-' + id;
     b.style.setProperty('--c', COLOR[id]);
-    b.innerHTML = `<span class="bd"><span class="bi">${ICON[id]}</span><i class="lv"></i></span><span class="nm"></span><span class="nt"></span><span class="pr">${COIN}<b class="num"></b></span><span class="fill"><i></i></span><i class="mg">${ICON.tie}<span></span></i>`;
+    b.innerHTML = `<span class="bd"><span class="bi">${ICON[id]}</span><i class="lv"></i></span><span class="nm"></span><span class="nt"></span><span class="pr">${COIN}<b class="num"></b></span><span class="fill"><i></i></span>`;
     deck.appendChild(b);
-    ups[id] = { b, badge: b.querySelector('.bi'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr b'), fill: b.querySelector('.fill i'), mg: b.querySelector('.mg'), mgText: b.querySelector('.mg span'), icon: id };
-    // The small round button in the corner: hire a manager, or pause and resume one.
-    const onMg = (e) => e.target.closest && e.target.closest('.mg');
+    ups[id] = { b, badge: b.querySelector('.bi'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr b'), fill: b.querySelector('.fill i'), icon: id };
     // A tap buys once. Holding still for a moment keeps buying. Dragging scrolls the list instead.
     let hold = 0, rep = 0, held = false, sx = 0, sy = 0;
     const stop = () => { clearTimeout(hold); clearInterval(rep); b.classList.remove('hit'); };
     b.addEventListener('pointerdown', (e) => {
-      if (e.button || onMg(e)) return;
+      if (e.button) return;
       stop(); held = false; sx = e.clientX; sy = e.clientY;
       b.classList.add('hit');
       hold = setTimeout(() => { held = true; api.buy(id, true); rep = setInterval(() => { if (!api.buy(id, false)) stop(); }, 110); }, 380);
@@ -72,13 +68,6 @@ export function createUI(api) {
     b.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) stop(); });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
     b.addEventListener('click', (e) => {
-      if (onMg(e)) {
-        api.click(); held = false;
-        const ms = mgrState(last, id);
-        if (ms === 'soon') showSheet('Managers', `<p>A manager buys a board for you, again and again, whenever there is money for it.</p><p>Managers unlock when you open <b>lift 3</b> (${last.open} of 3 open now).</p><button class="btn board gold" id="okBtn">OK</button>`), $('okBtn').addEventListener('click', () => { api.click(); closeSheet(); });
-        else if (ms === 'hire') showHire(id); else api.toggleMgr(id);
-        return;
-      }
       if (!held) api.buy(id, true); held = false;
     });
     b.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -146,8 +135,6 @@ export function createUI(api) {
       txt(u.lvl, o.maxed ? 'MAX' : id === 'lift' ? `${state.open} / ${T.LIFT_COUNT}` : o.level !== undefined ? 'Lv ' + o.level : '');
       txt(u.note, o.note || '');
       txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : money(o.cost));
-      const ms = mgrState(state, id);
-      if (u.ms !== ms) { u.ms = ms; u.mg.className = 'mg ' + ms; u.mgText.textContent = ms === 'soon' ? '🔒 Manager' : ms === 'hire' ? 'Hire' : ms === 'on' ? 'Manager' : 'Paused'; u.mg.title = ms === 'soon' ? 'Managers unlock at lift 3' : ms === 'hire' ? 'Hire a manager for this board' : ms === 'on' ? 'Manager working: tap to pause' : 'Manager paused: tap to resume'; }
       const w = o.maxed || o.locked ? 0 : Math.round(Math.min(1, state.money / o.cost) * 100) / 100;
       if (u.fillW !== w) { u.fillW = w; u.fill.style.transform = `scaleX(${w})`; }
     }
@@ -271,30 +258,16 @@ export function createUI(api) {
     for (const b of body.querySelectorAll('.pkopt')) b.addEventListener('click', () => { api.setPark(+b.dataset.k); showPark(); });
   }
 
-  function showHire(id) {
-    const cost = mgrCost(last, id), big = id === 'lift' || id === 'upgrade';
-    showSheet('Hire a manager', `<p>The <b>${esc(NAMES[id])}</b> manager buys this board for you whenever there is money for it${big ? '' : ', but always leaves enough for your next lift'}.</p>
-      <ul><li>Tap the <b>Manager</b> button on the board to pause or resume them.</li><li>Managers stay on this mountain when you move on.</li></ul>
-      <button class="btn board gold" id="hireBtn">${COIN}<span>Hire for ${money(cost)}</span></button><button class="btn board" id="hireNo">Not now</button>`);
-    const ok = $('hireBtn');
-    if (cost > last.money) { ok.classList.add('off'); ok.querySelector('span').textContent = `Hire for ${money(cost)} (not enough yet)`; }
-    ok.addEventListener('click', () => { if (api.hire(id)) closeSheet(); });
-    $('hireNo').addEventListener('click', () => { api.click(); closeSheet(); });
-  }
-
   const hm = (s) => s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min' : Math.max(1, Math.floor(s / 60)) + ' min';
   function welcomeBack(o) {
     showSheet('Welcome back!', `<p>You were away for <b>${hm(o.away)}</b>. While you were gone the resort kept running at ${Math.round(o.share * 100)}% and earned</p>
       <p class="big">${COIN}<b class="num">${money(o.pay)}</b></p>
-      ${o.boxed > 0 ? `<p><b>${money(o.boxed)}</b> of it is waiting in your cash boxes: tap the bubbles at the stations to collect it.</p>` : ''}
       ${o.away > o.paid ? `<p><small>Only the first ${o.hours} hours count. The <b>Lodge</b> board raises the share and the hours.</small></p>` : `<p><small>The <b>Lodge</b> board raises the share and the hours.</small></p>`}
-      <button class="btn board gold" id="wbOk">${o.boxed > 0 ? 'Go collect' : 'Collect'}</button>`);
-    $('wbOk').addEventListener('click', () => { api.click(); closeSheet(); if (o.boxed < o.pay) flyCoins(innerWidth * (1 - free.right) / 2, innerHeight * 0.45, 8); });
+      <button class="btn board gold" id="wbOk">Collect</button>`);
+    $('wbOk').addEventListener('click', () => { api.click(); closeSheet(); flyCoins(innerWidth * (1 - free.right) / 2, innerHeight * 0.45, 8); });
   }
 
   const HOW = `<ul>
-      <li><b>Collect your money!</b> What the lifts earn waits in a pile of coins at each station, and parking and lessons wait at the car park till. Tap the bubble to collect. A full box (red) stops filling.</li>
-      <li><b>Cash box</b> makes the boxes bigger; its last level has no limit. A <b>Station manager</b> collects a station's cash by itself and sells 10% more.</li>
       <li>Guests arrive by car and coach on their own. Your income per second depends on your lifts, your guests and your prices, and stays the same until you buy something.</li>
       <li><b>New lift</b> opens the next lift and piste. Higher lifts pay more per ride.</li>
       <li><b>Upgrade lift</b> turns a lift into a chairlift, then a gondola, so more guests fit.</li>
@@ -302,7 +275,6 @@ export function createUI(api) {
       <li><b>Jump park</b> builds kickers. Now and then a skier takes one and you get a trick bonus.</li>
       <li>More boards unlock as you play. The dark ones show what they need.</li>
       <li>Three <b>quests</b> are open at a time. Finishing one pays a reward and unlocks the next.</li>
-      <li>After lift 3 you can hire <b>managers</b>: tap the <b>Hire</b> button on a board. They buy that board by themselves.</li>
       <li><b>Events</b> happen every few minutes: powder days pay double, storms stop a lift until you secure it, and a celebrity pays a bonus if you tap them.</li>
       <li>When you close the game the resort keeps earning half its income for up to 8 hours. The <b>Lodge</b> raises both.</li>
       <li>The <b>P</b> button sets the parking price: cheap parking brings more guests, dear parking pays more per guest.</li>
@@ -344,7 +316,7 @@ export function createUI(api) {
     const to = MAPS[(last.level + 1) % MAPS.length];
     showSheet('Move to ' + to.name + '?', `<p>${mapOf(last).name} is finished: every lift is a gondola.</p>
       <ul><li>You start again with one drag lift, on a new mountain: <b>${to.name}</b> (${to.tag.toLowerCase()}).</li>
-      <li>Your money, upgrade levels and managers stay behind. Unlocked boards stay unlocked.</li>
+      <li>Your money and upgrade levels stay behind. Unlocked boards stay unlocked.</li>
       <li>Your fame doubles: all income <b>x${short(fameOf(last) * T.FAME)}</b> from now on.</li></ul>
       <button class="btn board gold" id="goNext">Move on</button><button class="btn board" id="stayHere">Stay a little longer</button>`);
     $('goNext').addEventListener('click', () => { closeSheet(); api.next(); });
@@ -356,8 +328,6 @@ export function createUI(api) {
   $('howBtn').addEventListener('click', () => { api.click(); showHow(); });
 
   return {
-    // Makes the manager buttons pulse for a while, so they are noticed when they first appear.
-    pulseManagers() { deck.classList.add('pulse'); setTimeout(() => deck.classList.remove('pulse'), 10000); },
     update, pop, flyCoins, toast, closeSheet, showQuests, welcomeBack, labels, free,
     get sheetOpen() { return open; },
     clearLabels() { for (const el of [...labels.children]) if (!el.classList.contains('pop') && !el.classList.contains('fly')) el.remove(); },

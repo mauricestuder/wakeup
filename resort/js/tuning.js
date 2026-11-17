@@ -38,19 +38,10 @@ export const T = {
   NIGHT: { base: 60000, growth: 2.2, max: 8 },    // night skiing: income multiplier
   RESTO: { base: 900000, growth: 2.4, max: 10 },  // mountain restaurant: income multiplier
   LODGE: { base: 20000, growth: 4, max: 5 },       // lodge: better offline earnings
-  // Cash boxes: money waits at the stations until it is collected. A box holds BOX_TIME seconds
-  // of its station's income, BOX_GROW times more per Cash box level; the last level has no limit.
-  SAFE: { base: 300, growth: 2.6, max: 8 }, BOX_TIME: 120, BOX_GROW: 1.8,
-  // Station managers collect their station's cash at once and sell a bit more (SMGR_GAIN).
-  // One price per station, in the order they are hired: lift 1, the till, lifts 2 to 6.
-  SMGR_COST: [300, 900, 3000, 70000, 2000000, 80000000, 4000000000], SMGR_GAIN: 0.1,
 
   // Offline: a share of the steady income for the time the game was closed, up to a limit.
   OFFLINE_SHARE: 0.5, OFFLINE_SHARE_STEP: 0.1, OFFLINE_HOURS: 8, OFFLINE_HOURS_STEP: 2,
 
-  // Managers buy their board by themselves. Price = factor x the board's first price;
-  // lift managers cost a multiple of the next lift.
-  MGR_FACTOR: 40, MGR_LIFT: 3, MGR_EVERY: 0.5, MGR_SAVE: 0.3,
   // Parking prices. g = how many guests still come (1 = all), fee = what parking pays per guest
   // and second, in PARK_PAY fares of the average open lift. Free brings more people, dear parking fewer.
   PARK: [

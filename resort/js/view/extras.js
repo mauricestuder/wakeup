@@ -1,7 +1,7 @@
 // Idle Lift: the small things that make the mountain feel lived in. Benches, marker
 // poles, boulders, snowmen, kickers and floodlights. Everything is baked into one mesh,
 // rebuilt only when the resort changes, so it costs almost nothing to draw.
-import { THREE, merge, at, toon } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { rngFrom } from '../terrain.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -123,7 +123,7 @@ function feature(parts, ter, p, f, rnd) {
 }
 
 export function createExtraView(scene) {
-  const mat = toon({ vertexColors: true });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glow = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
   let mesh = null, lamps = null, key = '';
 

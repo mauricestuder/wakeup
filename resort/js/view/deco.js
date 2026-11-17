@@ -1,7 +1,7 @@
 // Idle Lift: things that make the valley lively and colourful. A village of painted chalets and
 // a church along the road, flags at the base, hot-air balloons drifting over the slopes,
 // paragliders spiralling down from the top, and skaters on the frozen lakes. Looks only.
-import { THREE, merge, at, toon } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const SNOWY = 0xf4f7fb, STONE = 0x6a6f78, GLASS = 0x26384d, WOOD = 0x6b4a2f;
@@ -116,7 +116,7 @@ function skaterGeo() {
 }
 
 export function createDecoView(scene) {
-  const mat = toon({ vertexColors: true, side: THREE.DoubleSide });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const group = new THREE.Group();
   scene.add(group);
   let key = null, t = 0;
@@ -178,7 +178,7 @@ export function createDecoView(scene) {
       gliders.push({ mesh, life: 70 + 20 * r(), age: r() * 70, x0: N * (0.3 + 0.2 * i), z0: N * 0.18, ph: r() * 6.28, y: 0 });
     }
     // Skaters going round on each frozen lake.
-    skateMesh = new THREE.InstancedMesh(skaterGeo(), toon({ vertexColors: true }), ter.lakes.length * 5);
+    skateMesh = new THREE.InstancedMesh(skaterGeo(), new THREE.MeshLambertMaterial({ vertexColors: true }), ter.lakes.length * 5);
     skateMesh.castShadow = true; skateMesh.frustumCulled = false;
     const c = new THREE.Color();
     let n = 0;
