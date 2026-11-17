@@ -9,7 +9,9 @@ export function ribbon(ter, pts, width, lift, edge, inner = WHITE, edgeW = 0.28)
   const fine = [];
   for (let i = 0; i < pts.length - 1; i++) {
     fine.push(pts[i]);
-    fine.push({ x: (pts[i].x + pts[i + 1].x) / 2, z: (pts[i].z + pts[i + 1].z) / 2 });
+    // Over a bridge or through a tunnel the strip stays level, at the piste's own height.
+    const deck = pts[i].deck && pts[i + 1].deck;
+    fine.push({ x: (pts[i].x + pts[i + 1].x) / 2, z: (pts[i].z + pts[i + 1].z) / 2, deck, y: (pts[i].y + pts[i + 1].y) / 2 });
   }
   fine.push(pts[pts.length - 1]);
   const h = width / 2, offs = [-h, -h + edgeW, 0, h - edgeW, h], cols = [edge, inner, inner, inner, edge];
@@ -22,7 +24,7 @@ export function ribbon(ter, pts, width, lift, edge, inner = WHITE, edgeW = 0.28)
     const end = Math.min(i, fine.length - 1 - i), taper = end === 0 ? 0.55 : end === 1 ? 0.85 : 1;
     for (let k = 0; k < 5; k++) {
       const x = fine[i].x - tz * offs[k] * taper, z = fine[i].z + tx * offs[k] * taper;
-      pos.push(x, ter.height(x, z) + lift, z);
+      pos.push(x, (fine[i].deck ? fine[i].y : ter.height(x, z)) + lift, z);
       const c = cols[k], shade = k > 0 && k < 4 ? 1 - 0.035 * ((i + k) % 2) : 1; // faint corduroy
       col.push(c.r * shade, c.g * shade, c.b * shade);
     }

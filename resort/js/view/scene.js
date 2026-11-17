@@ -102,7 +102,7 @@ export function createScene(canvas, opts) {
   const world = new THREE.Group();
   scene.add(world);
   const SNOW = new THREE.Color(0.95, 0.97, 1.0), SHADE = new THREE.Color(0.8, 0.87, 0.98), ROCK = new THREE.Color(0.45, 0.44, 0.47),
-    GRASS = new THREE.Color(0.47, 0.5, 0.33), DIRT = new THREE.Color(0.5, 0.43, 0.34), UNDER = new THREE.Color(0.56, 0.66, 0.84);
+    GRASS = new THREE.Color(0.47, 0.5, 0.33), DARKROCK = new THREE.Color(0.3, 0.29, 0.32), WIND = new THREE.Color(0.86, 0.91, 0.99), ICE = new THREE.Color(0.55, 0.78, 0.92), DIRT = new THREE.Color(0.5, 0.43, 0.34), UNDER = new THREE.Color(0.56, 0.66, 0.84);
   const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3();
 
   function buildLand() {
@@ -198,52 +198,68 @@ export function createScene(canvas, opts) {
         if (depth <= 0) tmpC.copy(DIRT);
       } else {
         // West and north faces sit in blue shade, like a real snowfield.
-        tmpC.copy(SNOW).lerp(SHADE, clamp(0.35 - nor[t] * 0.9 + nor[t + 2] * 0.5 + (n - 0.5) * 0.4, 0, 1) * 0.55);
+        tmpC.copy(SNOW).lerp(SHADE, clamp(0.3 - nor[t] * 1.3 + nor[t + 2] * 0.6 + (n - 0.5) * 0.4, 0, 1) * 0.7);
         const bare = 1 - smooth(-2, 14, depth + (n - 0.5) * 12);
         if (bare > 0) tmpC.lerp(n > 0.55 ? DIRT : GRASS, bare * 0.92);
         // Shade under the trees, painted on once. Much cheaper than real tree shadows every frame.
         const under = near(x, z);
         if (under) tmpC.lerp(UNDER, Math.min(0.42, under * 0.14));
-        const rock = smooth(0.72, 1.0, steep + (n - 0.5) * 0.25);
-        if (rock > 0) tmpC.lerp(ROCK, rock * 0.9).multiplyScalar(1 - rock * 0.25 * n);
+        const rock = smooth(0.62, 0.95, steep + (n - 0.5) * 0.3);
+        if (rock > 0) tmpC.lerp(rock > 0.5 && n > 0.6 ? DARKROCK : ROCK, rock * 0.92).multiplyScalar(1 - rock * 0.25 * n);
+        // Wind-blown streaks across the open snow.
+        const streak = ter.noise(x * 0.12 + z * 0.05, z * 0.9);
+        if (!rock && streak > 0.72) tmpC.lerp(WIND, (streak - 0.72) * 1.4);
+        // Frozen lakes: blue ice with a white rim.
+        for (const l of ter.lakes) {
+          const d = Math.hypot(x - l.x, z - l.z);
+          if (d < l.r) tmpC.copy(ICE).lerp(SNOW, smooth(l.r - 0.7, l.r, d) * 0.7 + (n - 0.5) * 0.15);
+        }
       }
       for (let v = 0; v < 9; v += 3) { col[t + v] = tmpC.r; col[t + v + 1] = tmpC.g; col[t + v + 2] = tmpC.b; }
     }
     land.geometry.attributes.color.needsUpdate = true;
   }
 
+  // Two kinds of tree: bushy spruces and slim pines with a bare trunk. Each kind is one
+  // instanced mesh; which tree is which kind is fixed by its number.
+  let pines = null, slots = null;
+  const isPine = (i) => ((i * 2654435761) >>> 0) % 100 < 28;
   function buildTrees() {
-    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 6, 1, true), c, at(0, y, 0)];
-    const geo = merge([
+    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 7, 1, true), c, at(0, y, 0)];
+    const spruce = merge([
       [new THREE.CylinderGeometry(0.06, 0.08, 0.4, 5, 1, true), 0x5b4332, at(0, 0.2, 0)],
-      cone(0.46, 0.8, 0.72, 0x2f5d43), cone(0.36, 0.7, 1.12, 0x356a4b), cone(0.25, 0.6, 1.5, 0x3d7654),
-      cone(0.3, 0.26, 1.12 + 0.24, 0xf4f8ff), cone(0.2, 0.3, 1.66, 0xf4f8ff),
+      cone(0.5, 0.75, 0.62, 0x2a573e), cone(0.42, 0.7, 0.95, 0x2f5d43), cone(0.33, 0.62, 1.26, 0x356a4b), cone(0.22, 0.52, 1.6, 0x3d7654),
+      cone(0.36, 0.22, 1.07, 0xf4f8ff), cone(0.27, 0.22, 1.38, 0xf4f8ff), cone(0.15, 0.24, 1.78, 0xf4f8ff),
     ]);
-    trees = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ter.trees.length + ter.outer.length);
-    trees.castShadow = treeShadows;
-    trees.receiveShadow = false; trees.frustumCulled = false;
-    world.add(trees);
+    const pine = merge([
+      [new THREE.CylinderGeometry(0.05, 0.08, 1.0, 5, 1, true), 0x6b4a32, at(0, 0.5, 0)],
+      [new THREE.DodecahedronGeometry(0.42, 0), 0x2e5a3a, at(0, 1.15, 0, 0, 1, 0.75, 1)],
+      [new THREE.DodecahedronGeometry(0.34, 0), 0x386b45, at(0.1, 1.5, 0.05, 0, 1, 0.75, 1)],
+      [new THREE.DodecahedronGeometry(0.3, 0), 0xf4f8ff, at(0.05, 1.62, 0, 0, 1, 0.35, 1)],
+    ]);
+    const all = ter.trees.length + ter.outer.length;
+    slots = new Int32Array(all);
+    let a = 0, b = 0;
+    for (let i = 0; i < all; i++) slots[i] = isPine(i) ? b++ : a++;
+    trees = new THREE.InstancedMesh(spruce, new THREE.MeshLambertMaterial({ vertexColors: true }), Math.max(1, a));
+    pines = new THREE.InstancedMesh(pine, trees.material, Math.max(1, b));
+    for (const m of [trees, pines]) { m.castShadow = treeShadows; m.receiveShadow = false; m.frustumCulled = false; world.add(m); }
     updateTrees();
   }
 
+  function placeTree(i, t, s) {
+    tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
+    tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(s, s * (0.85 + (i % 7) * 0.05), s));
+    (isPine(i) ? pines : trees).setMatrixAt(slots[i], tmpM);
+  }
   function updateTrees() {
     if (!trees) return;
-    for (let i = 0; i < ter.trees.length; i++) {
-      const t = ter.trees[i], s = ter.alive[i] ? t.s : 0;
-      tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
-      tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(s, s * (0.9 + (i % 7) * 0.04), s));
-      trees.setMatrixAt(i, tmpM);
-    }
+    for (let i = 0; i < ter.trees.length; i++) placeTree(i, ter.trees[i], ter.alive[i] ? ter.trees[i].s : 0);
     if (!trees.outerDone) {
       trees.outerDone = true;
-      for (let i = 0; i < ter.outer.length; i++) {
-        const t = ter.outer[i];
-        tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
-        tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(t.s, t.s * (0.9 + (i % 7) * 0.04), t.s));
-        trees.setMatrixAt(ter.trees.length + i, tmpM);
-      }
+      for (let i = 0; i < ter.outer.length; i++) placeTree(ter.trees.length + i, ter.outer[i], ter.outer[i].s);
     }
-    trees.instanceMatrix.needsUpdate = true;
+    trees.instanceMatrix.needsUpdate = true; pines.instanceMatrix.needsUpdate = true;
   }
 
   function setTerrain(t, depthAt) {

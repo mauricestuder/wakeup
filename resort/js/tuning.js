@@ -11,7 +11,7 @@ export const T = {
   GREEN: 0.17, BLUE: 0.28, RED: 0.42, PISTE_WIDTH: 2.4,
 
   // Guests.
-  WALK: 2.4, SKI: 3.6,
+  WALK: 2.4, SKI: 4.2,
   GUESTS_START: 10, GUESTS_STEP: 6, GUESTS_MAX: 280,   // how many are on the mountain at once
   RUNS: [4, 9],                                         // rides before a guest goes home
   BOARDERS: 0.35,                                       // share of guests on a snowboard
@@ -54,7 +54,7 @@ export const T = {
   CANNON_GAIN: 0.08, SCHOOL_PAY: 0.012, NIGHT_GAIN: 0.15, RESTO_GAIN: 0.25,
   TRICK_CHANCE: 0.08, TRICK_CHANCE_STEP: 0.005, TRICK_CHANCE_MAX: 0.18, TRICK_PAY: 2, TRICK_PAY_STEP: 0.3, AIR_TIME: 0.95,
   UNLOCK_CANNON_RIDES: 2000, UNLOCK_SCHOOL_TIME: 480,
-  TURNAROUND: 9,         // seconds a guest spends walking and queueing per ride, for the income sum
+  TURNAROUND: 8,         // seconds a guest spends walking and queueing per ride, for the income sum
 
   // Rush hour: more guests and faster lifts for a short while.
   RUSH_TIME: 30, RUSH_WAIT: 120, RUSH_GUESTS: 1.5, RUSH_SPEED: 1.5,

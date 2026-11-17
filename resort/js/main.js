@@ -166,6 +166,7 @@ function drain() {
     else if (e.type === 'lift') ui.toast(`<b>Lift ${e.lift.i + 1}</b> is open: ${idle.money(idle.fare(state, e.lift.i))} per ride.`, 'star');
     else if (e.type === 'upgraded') { ui.toast(`Lift ${e.lift.i + 1} is now a <b>${LIFTS[e.lift.type].name.toLowerCase()}</b>.`, 'star'); }
     else if (e.type === 'goal') { sfx.goal(); ui.toast(`<b>Quest done:</b> ${e.goal.text} · +${idle.money(e.reward)}`, 'star', 4200); ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.3, 8); }
+    else if (e.type === 'unlock' && e.id === 'mgr') { sfx.goal(); ui.toast('<b>Managers unlocked!</b> Tap <b>Hire</b> on a board and its manager buys it for you.', 'star', 6000); ui.pulseManagers(); }
     else if (e.type === 'unlock') { sfx.goal(); ui.toast(`<b>New board unlocked:</b> ${e.name}`, 'star', 4600); }
     else if (e.type === 'trick') {
       const p = project(e.x, e.y + 2.2, e.z);

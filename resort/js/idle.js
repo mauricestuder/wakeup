@@ -4,7 +4,7 @@
 import { T, LIFTS, NEXT_TYPE } from './tuning.js';
 import { MAPS } from './maps.js';
 import { makeTerrain, rngFrom, clamp } from './terrain.js';
-import { liftGeom, pisteGeom, along } from './network.js';
+import { liftGeom, pisteGeom, pisteFeatures, along } from './network.js';
 import { planLifts } from './layout.js';
 
 const tmp = { x: 0, y: 0, z: 0, i: 0 };
@@ -91,7 +91,8 @@ function addLift(state, ter, i) {
     dir: Math.atan2(p.b.x - p.a.x, p.b.z - p.a.z), queue: [], clock: 0, travel: 0, riders: 0, pop: 0, rate: 0 };
   shapeLift(l, ter);
   const g = pisteGeom(ter, p.wps);
-  const piste = { id: i + 1, i, pts: g.pts, cum: g.cum, sl: g.sl, len: g.len, diff: g.diff, to: p.from + 1, kick: 0 };
+  pisteFeatures(ter, g, i);
+  const piste = { id: i + 1, i, pts: g.pts, cum: g.cum, sl: g.sl, len: g.len, diff: g.diff, to: p.from + 1, kick: 0, features: g.features };
   state.lifts.push(l); state.liftById[l.id] = l;
   state.pistes.push(piste); state.pisteById[piste.id] = piste;
   // Cut the forest for the piste, the lift line and the stations.
@@ -119,10 +120,14 @@ function syncJumps(state, ter) {
   for (let i = 0; i < n; i++) {
     const p = state.pistes[i];
     if (p.kick) continue;
-    p.kick = p.len * 0.56;
+    const park = p.features.find((f) => f.type === 'park');
+    p.kick = park ? park.s0 + (park.s1 - park.s0) * 0.45 : p.len * 0.56;
+    // Not on a bridge, in a tunnel or among the moguls.
+    for (let tries = 0; tries < 40 && p.features.some((f) => f.type !== 'park' && p.kick > f.s0 - 2 && p.kick < f.s1 + 2); tries++) p.kick += (tries % 2 ? -1 : 1) * tries * 1.2;
+    p.kick = clamp(p.kick, 4, p.len - 4);
     along(p.pts, p.cum, p.kick, tmp);
     const j = Math.min(p.pts.length - 2, tmp.i);
-    p.kickAt = { x: tmp.x, z: tmp.z, y: ter.height(tmp.x, tmp.z), yaw: Math.atan2(p.pts[j + 1].x - p.pts[j].x, p.pts[j + 1].z - p.pts[j].z) };
+    p.kickAt = { x: tmp.x, z: tmp.z, y: tmp.y, yaw: Math.atan2(p.pts[j + 1].x - p.pts[j].x, p.pts[j + 1].z - p.pts[j].z) };
     state.events.push({ type: 'world' });
   }
 }
@@ -276,7 +281,7 @@ export function mgrCost(state, id) {
 // What the manager button of a board shows: 'none' (not available), 'hire', 'on' or 'off'.
 export function mgrState(state, id) {
   if (state.mgr[id]) return state.mgr[id] === 1 ? 'on' : 'off';
-  return state.unl.mgr && unlocked(state, id) ? 'hire' : 'none';
+  return state.unl.mgr && unlocked(state, id) && !offer(state, id).maxed ? 'hire' : 'none';
 }
 export function hire(state, id) {
   if (mgrState(state, id) !== 'hire') return false;

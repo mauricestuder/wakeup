@@ -16,18 +16,21 @@ const PLAN = [
   { type: 'gondola', from: 4, off: [-0.5, -3.5], to: [-3, -30.5], side: -1 },
 ];
 
-function pisteFor(a, b, side, bend) {
+// A piste from the top station b back down to the bottom station a. It snakes across the slope:
+// swings = how many times it changes side, amp = how far it swings out, bend = how far from the lift line.
+function pisteFor(a, b, side, bend, swings = 0, amp = 0) {
   const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), ux = dx / d, uz = dz / d;
   const rx = -uz * side, rz = ux * side; // sideways from the lift line
-  return {
-    rx, rz, ux, uz,
-    wps: [
-      { x: b.x + rx * 2.2 + ux * 0.6, z: b.z + rz * 2.2 + uz * 0.6 },
-      { x: a.x + dx * 0.66 + rx * (bend + 1), z: a.z + dz * 0.66 + rz * (bend + 1) },
-      { x: a.x + dx * 0.3 + rx * bend, z: a.z + dz * 0.3 + rz * bend },
-      { x: a.x + rx * 2.6 - ux * 2.4, z: a.z + rz * 2.6 - uz * 2.4 },
-    ],
-  };
+  const wps = [{ x: b.x + rx * 2.2 + ux * 0.6, z: b.z + rz * 2.2 + uz * 0.6 }];
+  // From the top (t = 1) down to the bottom (t = 0), swinging out and back in.
+  const n = swings + 2;
+  for (let k = 1; k <= n; k++) {
+    const t = 1 - k / (n + 1), wave = k % 2 ? 1 : -1;
+    const off = bend + 1 + (swings ? wave * amp : 0) * Math.sin(Math.PI * Math.min(1, t * 1.25));
+    wps.push({ x: a.x + dx * t + rx * off, z: a.z + dz * t + rz * off });
+  }
+  wps.push({ x: a.x + rx * 2.6 - ux * 2.4, z: a.z + rz * 2.6 - uz * 2.4 });
+  return { rx, rz, ux, uz, wps };
 }
 
 export function planLifts(ter, map) {
@@ -47,12 +50,16 @@ export function planLifts(ter, map) {
       const score = g.rise - dip * (p.type === 'drag' ? 3 : 1) - Math.hypot(ox, oz) * 0.12;
       if (score > best) { best = score; b = c; }
     }
-    // Piste: try both sides and a few bends, keep the one that runs downhill best.
+    // Piste: try both sides, a few bends and snake shapes, keep the longest one that still runs
+    // downhill all the way and stays on the mountain.
     let pick = null, bs = -1e9;
-    for (const side of [p.side * fx, -p.side * fx]) for (const bend of [3.5, 5, 6.5, 8]) {
-      const q = pisteFor(a, b, side, bend), g = pisteGeom(ter, q.wps);
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    for (const side of [p.side * fx, -p.side * fx]) for (const bend of [4, 5.5, 7]) for (const swings of [2, 3, 4]) for (const amp of [3, 4.5, 6]) {
+      if (amp > bend + 2) continue;
+      const q = pisteFor(a, b, side, bend, swings, amp), g = pisteGeom(ter, q.wps);
       if (g.pts.some((t) => !ter.inside(t.x, t.z, 3))) continue;
-      const score = Math.min(0, g.uphill) * 40 - (side === p.side * fx ? 0 : 0.6) - Math.abs(bend - 5) * 0.05;
+      const ratio = g.len / Math.max(8, d);
+      const score = Math.min(0, g.uphill + 0.01) * 60 - Math.abs(ratio - 1.9) * 1.5 - (side === p.side * fx ? 0 : 0.8) - Math.abs(bend - 5.5) * 0.05;
       if (score > bs) { bs = score; pick = q; }
     }
     out.push({ i, type: p.type, from: p.from, a, b, wps: pick.wps,

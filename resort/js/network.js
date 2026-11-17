@@ -97,3 +97,64 @@ export function along(pts, cum, s, out, useGround) {
   out.i = lo;
   return out;
 }
+
+// ---------- piste features ----------
+
+// Finds what makes a piste interesting and stores it as p.features = [{ type, s0, s1, i0, i1 }]:
+// a tunnel where it cuts through a spur, a bridge where it crosses a gully (both keep the
+// piste level instead of following the ground), moguls on the steepest stretch, race gates
+// on lift 4's piste and a fun park on lift 2's. i = which lift the piste belongs to.
+export function pisteFeatures(ter, p, i) {
+  const pts = p.pts, n = pts.length - 1, feats = [];
+  const busy = new Uint8Array(n + 1);
+  const free = (a, b) => { for (let k = Math.max(0, a); k <= Math.min(n, b); k++) if (busy[k]) return false; return true; };
+  const take = (type, a, b) => {
+    for (let k = a; k <= b; k++) busy[k] = 1;
+    feats.push({ type, i0: a, i1: b, s0: p.cum[a], s1: p.cum[b] });
+  };
+  // Tunnels and bridges: compare the ground with a straight line over a few tiles.
+  const W = 5;
+  const off = (k) => { const a = Math.max(0, k - W), b = Math.min(n, k + W); return pts[k].y - (pts[a].y + (pts[b].y - pts[a].y) * (k - a) / Math.max(1, b - a)); };
+  for (const [type, sign, need] of [['tunnel', 1, 0.55], ['bridge', -1, 0.5], ['tunnel', 1, 0.45]]) {
+    let best = null;
+    for (let k = 4; k < n - 4; k++) {
+      if (off(k) * sign < need) continue;
+      let a = k, b = k;
+      while (a > 3 && off(a - 1) * sign > need * 0.35) a--;
+      while (b < n - 3 && off(b + 1) * sign > need * 0.35) b++;
+      a--; b++;
+      const peak = Math.max(...Array.from({ length: b - a + 1 }, (_, m) => off(a + m) * sign));
+      if (b - a >= 3 && b - a <= 14 && free(a - 1, b + 1) && (!best || peak > best.peak)) best = { a, b, peak };
+      k = b;
+    }
+    if (best) {
+      // Level the piste between the two ends: through the rock, or over the gully.
+      const ya = pts[best.a].y, yb = pts[best.b].y;
+      for (let k = best.a; k <= best.b; k++) { pts[k].y = ya + (yb - ya) * (k - best.a) / (best.b - best.a); pts[k].deck = type; }
+      take(type, best.a, best.b);
+    }
+  }
+  // Slopes again, now that some stretches are level.
+  for (let k = 1; k <= n; k++) p.sl[k - 1] = (pts[k - 1].y - pts[k].y) / Math.max(1e-6, p.cum[k] - p.cum[k - 1]);
+  // A stretch for the race on lift 4, and the fun park on lift 2.
+  const span = (from, to) => [Math.round(n * from), Math.round(n * to)];
+  if (i === 3) for (const [x, y] of [[0.3, 0.55], [0.55, 0.8], [0.1, 0.35]]) { const [a, b] = span(x, y); if (free(a, b)) { take('gates', a, b); break; } }
+  if (i === 1) {
+    for (const [x, y] of [[0.22, 0.78], [0.15, 0.6], [0.4, 0.9], [0.1, 0.45], [0.55, 0.92]]) { const [a, b] = span(x, y); if (free(a, b)) { take('park', a, b); break; } }
+  }
+  // Moguls on the steepest free stretch, if it is steep enough.
+  let mog = null;
+  for (let k = 3; k < n - 9; k++) {
+    let s = 0;
+    for (let m = k; m < k + 6; m++) s += p.sl[m];
+    if (free(k, k + 6) && (!mog || s > mog.s)) mog = { k, s };
+  }
+  if (mog && mog.s / 6 > 0.18) take('moguls', mog.k, mog.k + 6);
+  p.features = feats;
+  return feats;
+}
+// Which feature, if any, is at distance s along the piste.
+export function featureAt(p, s) {
+  for (const f of p.features || []) if (s >= f.s0 && s <= f.s1) return f;
+  return null;
+}

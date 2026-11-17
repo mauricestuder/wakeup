@@ -53,9 +53,9 @@ export function createUI(api) {
     const b = document.createElement('button');
     b.className = 'up board'; b.id = 'up-' + id;
     b.style.setProperty('--c', COLOR[id]);
-    b.innerHTML = `<span class="bd">${ICON[id]}</span><span class="nm"></span><i class="lv"></i><span class="nt"></span><span class="pr">${COIN}<b class="num"></b></span><span class="fill"><i></i></span><i class="mg" title="Manager">${ICON.tie}</i>`;
+    b.innerHTML = `<span class="bd"><span class="bi">${ICON[id]}</span><i class="lv"></i></span><span class="nm"></span><span class="nt"></span><span class="pr">${COIN}<b class="num"></b></span><span class="fill"><i></i></span><i class="mg">${ICON.tie}<span></span></i>`;
     deck.appendChild(b);
-    ups[id] = { b, badge: b.querySelector('.bd'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr b'), fill: b.querySelector('.fill i'), mg: b.querySelector('.mg'), icon: id };
+    ups[id] = { b, badge: b.querySelector('.bi'), name: b.querySelector('.nm'), lvl: b.querySelector('.lv'), note: b.querySelector('.nt'), price: b.querySelector('.pr b'), fill: b.querySelector('.fill i'), mg: b.querySelector('.mg'), mgText: b.querySelector('.mg span'), icon: id };
     // The small round button in the corner: hire a manager, or pause and resume one.
     const onMg = (e) => e.target.closest && e.target.closest('.mg');
     // A tap buys once. Holding still for a moment keeps buying. Dragging scrolls the list instead.
@@ -137,7 +137,7 @@ export function createUI(api) {
       txt(u.note, o.note || '');
       txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : money(o.cost));
       const ms = mgrState(state, id);
-      if (u.ms !== ms) { u.ms = ms; u.mg.className = 'mg ' + ms; u.mg.title = ms === 'hire' ? 'Hire a manager' : ms === 'on' ? 'Manager working: tap to pause' : 'Manager paused: tap to resume'; }
+      if (u.ms !== ms) { u.ms = ms; u.mg.className = 'mg ' + ms; u.mgText.textContent = ms === 'hire' ? 'Hire' : ms === 'on' ? 'Manager' : 'Paused'; u.mg.title = ms === 'hire' ? 'Hire a manager for this board' : ms === 'on' ? 'Manager working: tap to pause' : 'Manager paused: tap to resume'; }
       const w = o.maxed || o.locked ? 0 : Math.round(Math.min(1, state.money / o.cost) * 100) / 100;
       if (u.fillW !== w) { u.fillW = w; u.fill.style.transform = `scaleX(${w})`; }
     }
@@ -250,7 +250,7 @@ export function createUI(api) {
   function showHire(id) {
     const cost = mgrCost(last, id), big = id === 'lift' || id === 'upgrade';
     showSheet('Hire a manager', `<p>The <b>${esc(NAMES[id])}</b> manager buys this board for you whenever there is money for it${big ? '' : ', but always leaves enough for your next lift'}.</p>
-      <ul><li>Tap the tie in the corner of the board to pause or resume them.</li><li>Managers stay on this mountain when you move on.</li></ul>
+      <ul><li>Tap the <b>Manager</b> button on the board to pause or resume them.</li><li>Managers stay on this mountain when you move on.</li></ul>
       <button class="btn board gold" id="hireBtn">${COIN}<span>Hire for ${money(cost)}</span></button><button class="btn board" id="hireNo">Not now</button>`);
     const ok = $('hireBtn');
     if (cost > last.money) { ok.classList.add('off'); ok.querySelector('span').textContent = `Hire for ${money(cost)} (not enough yet)`; }
@@ -275,7 +275,7 @@ export function createUI(api) {
       <li><b>Jump park</b> builds kickers. Now and then a skier takes one and you get a trick bonus.</li>
       <li>More boards unlock as you play. The dark ones show what they need.</li>
       <li>Three <b>quests</b> are open at a time. Finishing one pays a reward and unlocks the next.</li>
-      <li>After lift 3 you can hire <b>managers</b>: tap the tie on a board. They buy that board by themselves.</li>
+      <li>After lift 3 you can hire <b>managers</b>: tap the <b>Hire</b> button on a board. They buy that board by themselves.</li>
       <li><b>Events</b> happen every few minutes: powder days pay double, storms stop a lift until you secure it, and a celebrity pays a bonus if you tap them.</li>
       <li>When you close the game the resort keeps earning half its income for up to 8 hours. The <b>Lodge</b> raises both.</li>
       <li>Hold a board to keep buying. <b>Rush hour</b> gives a 30 second boost.</li>
@@ -328,6 +328,8 @@ export function createUI(api) {
   $('howBtn').addEventListener('click', () => { api.click(); showHow(); });
 
   return {
+    // Makes the manager buttons pulse for a while, so they are noticed when they first appear.
+    pulseManagers() { deck.classList.add('pulse'); setTimeout(() => deck.classList.remove('pulse'), 10000); },
     update, pop, flyCoins, toast, closeSheet, showQuests, welcomeBack, labels, free,
     get sheetOpen() { return open; },
     clearLabels() { for (const el of [...labels.children]) if (!el.classList.contains('pop') && !el.classList.contains('fly')) el.remove(); },

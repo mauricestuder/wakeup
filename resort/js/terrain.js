@@ -56,6 +56,11 @@ export function makeTerrain(map) {
       const rise = smooth(0, 0.14, t);
       v += (fbm(i * 0.075, j * 0.028 + 3, 3) - 0.5) * H * map.ridge * (0.3 + t) * rise * 2;
       v += (fbm(i * 0.2, j * 0.2, 3) - 0.5) * H * 0.045 * rise;
+      // Sharp rocky spurs running down the fall line, with gullies between them.
+      const rib = 1 - Math.abs(2 * noise(i * 0.085 + 13, j * 0.022 + 4) - 1);
+      v += (rib * rib * rib - 0.3) * H * (map.rib || 0) * t * rise;
+      // A rock band: a steeper step across part of the slope.
+      v += H * (map.band || 0) * smooth(0.5, 0.56, t) * smooth(0.35, 0.7, noise(i * 0.05 + 30, 2.5));
       v = Math.max(0, v) + noise(i * 0.3, j * 0.3 + 40) * 0.25;
       // A level patch for the car park and the village.
       const d = Math.hypot(i - base.x, j - base.z);
@@ -76,6 +81,20 @@ export function makeTerrain(map) {
     b[j * W + i] = s / n;
   }
   h = b;
+  // Frozen lakes in hollows at the sides of the lower slopes: the ground is levelled to the shore.
+  const lakes = [], lr = rngFrom([map.seed ^ 0x1a4e]);
+  for (const side of [-1, 1]) {
+    const r = 3.2 + lr() * 1.8, x = N / 2 + side * (N / 2 - 10 - lr() * 4), z = N * (0.6 + lr() * 0.2);
+    let lo = 1e9;
+    for (let j = Math.floor(z - r); j <= z + r; j++) for (let i = Math.floor(x - r); i <= x + r; i++) if (Math.hypot(i - x, j - z) <= r) lo = Math.min(lo, h[j * W + i]);
+    for (let j = Math.floor(z - r - 3); j <= z + r + 3; j++) for (let i = Math.floor(x - r - 3); i <= x + r + 3; i++) {
+      const d = Math.hypot(i - x, j - z), k = j * W + i;
+      if (k < 0 || k >= h.length) continue;
+      const f = 1 - smooth(r, r + 3, d);
+      h[k] = h[k] * (1 - f) + (lo - 0.15) * f;
+    }
+    lakes.push({ x, z, r, y: lo - 0.15 });
+  }
   let top = 0;
   for (let k = 0; k < h.length; k++) top = Math.max(top, h[k]);
 
@@ -99,7 +118,7 @@ export function makeTerrain(map) {
     const line = map.treeline + (noise(cx * 0.13, cz * 0.13 + 9) - 0.5) * 0.22;
     const dens = fbm(cx * 0.085 + 50, cz * 0.085 + 50, 3);
     const r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd(), r6 = rnd();
-    if (a > line || slope(cx, cz) > 0.85 || Math.hypot(cx - base.x, cz - base.z) < 7.5 || cz > N - 2.5) continue;
+    if (a > line || slope(cx, cz) > 0.85 || Math.hypot(cx - base.x, cz - base.z) < 7.5 || cz > N - 2.5 || lakes.some((l) => Math.hypot(cx - l.x, cz - l.z) < l.r + 0.8)) continue;
     // The forest thins out gradually: dense cores, loose edges, and single trees and
     // small groups across the open slopes, fewer towards the treeline.
     const edge = smooth(0.34, 0.56, dens), high = 1 - smooth(line - 0.22, line, a);
@@ -141,8 +160,8 @@ export function makeTerrain(map) {
     const up = smooth(N - 1, N - 13, z); // 0 in the valley, 1 on the mountain side
     const f = smooth(0, 3, df);
     let v = df > 0 ? e * (1 - f) + 0.2 * f : e * (1 - 0.5 * smooth(0, 90, db));
-    v += smooth(3, 110, side) * H * (0.3 + 1.6 * fbm(x * 0.011 + 20, z * 0.011 + 20, 3)) * up;
-    v += smooth(FRONT, FRONT + 110, df) * H * (0.2 + 1.1 * fbm(x * 0.012 + 70, z * 0.012 + 70, 3));
+    v += smooth(3, 110, side) * H * (0.4 + 2.1 * fbm(x * 0.011 + 20, z * 0.011 + 20, 3)) * up;
+    v += smooth(FRONT, FRONT + 110, df) * H * (0.25 + 1.6 * fbm(x * 0.012 + 70, z * 0.012 + 70, 3));
     v += (fbm(x * 0.06 + 5, z * 0.06 + 5, 2) - 0.5) * 4 * smooth(2, 30, side * up + Math.max(0, df - FRONT));
     return Math.max(0.05, v);
   };
@@ -170,5 +189,5 @@ export function makeTerrain(map) {
   const road = { z: N + 2.6, y: 0.4, x0: -115, x1: N + 130, bays: [], bayZ: N + 0.3, stop: base.x + 16 };
   for (let i = 0; i < 20; i++) road.bays.push(base.x - 9.975 + i * 1.05);
 
-  return { N, W, H, top, h, base, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm, far, ground, woods, outer, road };
+  return { N, W, H, top, h, base, lakes, height, slope, alt, inside, trees, alive, byTile, treesNear, noise, fbm, far, ground, woods, outer, road };
 }
