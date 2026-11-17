@@ -11,12 +11,12 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <title>Idle Lift</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bree+Serif&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap">
   <style>
     /* Alpine look: wooden boards, piste-sign badges, brass price plates, paper notices. */
     :root { color-scheme: dark; --ink: #14202e; --text: #fff4dc; --brown: #3a2410; --edge: #4f3217; --paper: #fbf0d8; --paper2: #efdfbd; --dim: #e4cfa6;
       --gold: #ffcf4d; --good: #2f9e57; --bad: #d8453b; --green: #2fa35a; --blue: #2f7fe6; --red: #e04848; --black: #2a2f37; --orange: #f08a24; --purple: #8e5bd0;
-      --display: 'Bree Serif', Rockwell, 'Roboto Slab', Georgia, serif;
+      --display: 'Pixelify Sans', 'Courier New', monospace;
       --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
       --wood: repeating-linear-gradient(91deg, rgba(60, 30, 5, .11) 0 1px, transparent 1px 7px), repeating-linear-gradient(88.500deg, rgba(255, 232, 185, .09) 0 2px, transparent 2px 13px), linear-gradient(180deg, #c9945b, #aa7541 55%, #976530);
       --wood-dull: repeating-linear-gradient(91deg, rgba(40, 25, 10, .12) 0 1px, transparent 1px 7px), linear-gradient(180deg, #8f7a63, #74624e 55%, #665543);
@@ -239,6 +239,15 @@
       #deck { background: linear-gradient(180deg, rgba(40, 26, 12, .18), rgba(40, 26, 12, .42)); border-radius: 1em 1em 0 0; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); bottom: 0; padding-bottom: calc(.6em + var(--sb)); }
       #parkBtn b { display: none; } #parkBtn { padding: 0 .5em; }
     }
+
+    /* The blocky pixel look: square corners and hard, offset shadows, like the blocks on the mountain. */
+    .board, #goal, .toast, #sheetBox, #sheetBody, .up .pr, .up .lv, .pkopt, .pkopt .pkt, .seg, .tag, #event button, #next, .stat { border-radius: .2em !important; }
+    .board { box-shadow: inset .12em .12em 0 rgba(255, 236, 200, .45), inset -.12em -.16em 0 rgba(60, 30, 5, .35), .22em .26em 0 #3f2710 !important; }
+    .board::before, .board::after { border-radius: 0; }
+    .up .bd, .q .dot, #goal::before, #event > span { border-radius: .25em !important; }
+    #rush { border-radius: .5em !important; }
+    .x { border-radius: .25em !important; }
+    #hud { -webkit-font-smoothing: none; }
 
     @media (prefers-reduced-motion: reduce) { .toast, #rush.on, .up.can, #sMoney.bump b { animation-duration: .01s; } .up.can .pr::after { animation: none; } }
   </style>

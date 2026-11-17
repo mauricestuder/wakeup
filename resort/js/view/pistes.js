@@ -1,5 +1,5 @@
 // Idle Lift: pistes drawn as groomed ribbons lying on the snow, edged in their difficulty colour.
-import { THREE, merge, at } from './scene.js';
+import { THREE, merge, at, pixMat } from './scene.js';
 import { T, DIFF } from '../tuning.js';
 
 const WHITE = new THREE.Color(0.9, 0.95, 1.0);
@@ -45,8 +45,8 @@ export function createPisteView(scene) {
   const group = new THREE.Group();
   scene.add(group);
   const views = new Map();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-  const signMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = pixMat({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, 3, 0.12);
+  const signMat = pixMat({ vertexColors: true }, 14);
 
   function make(ter, p) {
     const g = new THREE.Group();

@@ -1,5 +1,5 @@
 // Idle Lift: the valley road, the car park, and the cars and coaches that bring the guests.
-import { THREE, merge, at } from './scene.js';
+import { THREE, merge, at, pixMat } from './scene.js';
 import { T } from '../tuning.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -51,7 +51,7 @@ function signTexture() {
 }
 
 export function createCarView(scene, cap = 160) {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = pixMat({ vertexColors: true }, 22);
   const cars = new THREE.InstancedMesh(carGeo(), mat, cap), buses = new THREE.InstancedMesh(busGeo(), mat, 8), doors = new THREE.InstancedMesh(doorGeo(), mat, cap);
   for (const m of [cars, buses, doors]) { m.castShadow = true; m.frustumCulled = false; m.count = 0; scene.add(m); }
   cars.setColorAt(0, PAINT[0]); doors.setColorAt(0, PAINT[0]);

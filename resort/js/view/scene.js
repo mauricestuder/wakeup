@@ -22,6 +22,42 @@ export function merge(parts) {
   out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return out;
 }
+// ---------- the blocky pixel look ----------
+// Every surface gets a small pixel-art texture, like 16 x 16 blocks: a few shades of its own colour,
+// sharp pixels close up. It is laid along the faces of each part in the part's own space, so it
+// sticks to moving things. density = texture pixels per unit, amp = how strong the shading is.
+let PIX = null;
+function pixTex() {
+  if (PIX) return PIX;
+  const n = 16, d = new Uint8Array(n * n * 4);
+  let s = 12345;
+  const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < n * n; i++) {
+    // Four shades, like a hand-made pixel palette, with now and then a darker speck.
+    let v = Math.floor(r() * 4) / 3;
+    if (r() < 0.06) v = 0;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = Math.round(v * 255); d[i * 4 + 3] = 255;
+  }
+  PIX = new THREE.DataTexture(d, n, n, THREE.RGBAFormat);
+  PIX.wrapS = PIX.wrapT = THREE.RepeatWrapping;
+  PIX.magFilter = THREE.NearestFilter; PIX.minFilter = THREE.LinearMipmapLinearFilter; PIX.generateMipmaps = true;
+  PIX.needsUpdate = true;
+  return PIX;
+}
+export function pixMat(o = {}, density = 12, amp = 0.3) {
+  const m = new THREE.MeshLambertMaterial(o);
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.pixTex = { value: pixTex() }; sh.uniforms.pixD = { value: density }; sh.uniforms.pixA = { value: amp };
+    sh.vertexShader = 'varying vec3 vPixP;\nvarying vec3 vPixN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPixP = position; vPixN = normal;');
+    sh.fragmentShader = 'uniform sampler2D pixTex;\nuniform float pixD;\nuniform float pixA;\nvarying vec3 vPixP;\nvarying vec3 vPixN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  vec3 an = abs(vPixN);
+  vec2 tuv = an.x > an.y && an.x > an.z ? vPixP.zy : (an.y > an.z ? vPixP.xz : vPixP.xy);
+  diffuseColor.rgb *= 1.0 + pixA * (texture2D(pixTex, tuv * pixD / 16.0).r - 0.5);`);
+  };
+  m.customProgramCacheKey = () => 'pix' + density + '/' + amp;
+  return m;
+}
+
 export const at = (x, y, z, ry = 0, sx = 1, sy = 1, sz = 1) =>
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(sx, sy, sz));
 
@@ -119,7 +155,7 @@ export function createScene(canvas, opts) {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.computeVertexNormals();
-    land = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    land = new THREE.Mesh(geo, pixMat({ vertexColors: true }, 2, 0.13));
     land.receiveShadow = true;
     world.add(land);
 
@@ -166,7 +202,7 @@ export function createScene(canvas, opts) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    world.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
+    world.add(new THREE.Mesh(g, pixMat({ vertexColors: true }, 0.7, 0.1)));
   }
 
   // Colour every triangle: snow, bare ground where the snow is gone, rock on cliffs.
@@ -225,30 +261,31 @@ export function createScene(canvas, opts) {
   let pines = null, slots = null;
   const isPine = (i) => ((i * 2654435761) >>> 0) % 100 < 28;
   function buildTrees() {
-    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 7, 1, true), c, at(0, y, 0)];
+    // Blocky trees: a spruce of stacked square layers with snow on each, and a leafy tree of cubes.
+    const cube = (w, h, y, c, x = 0, z = 0) => [new THREE.BoxGeometry(w, h, w), c, at(x, y, z)];
     const spruce = merge([
-      [new THREE.CylinderGeometry(0.06, 0.08, 0.4, 5, 1, true), 0x5b4332, at(0, 0.2, 0)],
-      cone(0.5, 0.75, 0.62, 0x2a573e), cone(0.42, 0.7, 0.95, 0x2f5d43), cone(0.33, 0.62, 1.26, 0x356a4b), cone(0.22, 0.52, 1.6, 0x3d7654),
-      cone(0.36, 0.22, 1.07, 0xf4f8ff), cone(0.27, 0.22, 1.38, 0xf4f8ff), cone(0.15, 0.24, 1.78, 0xf4f8ff),
+      cube(0.18, 0.5, 0.25, 0x6b4a2f),
+      cube(1.0, 0.26, 0.6, 0x2f6b3a), cube(0.9, 0.05, 0.75, 0xf4f8ff),
+      cube(0.78, 0.26, 0.88, 0x37784a), cube(0.68, 0.05, 1.03, 0xf4f8ff),
+      cube(0.56, 0.26, 1.16, 0x2f6b3a), cube(0.46, 0.05, 1.31, 0xf4f8ff),
+      cube(0.34, 0.26, 1.44, 0x37784a), cube(0.2, 0.22, 1.68, 0xf4f8ff),
     ]);
     const pine = merge([
-      [new THREE.CylinderGeometry(0.05, 0.08, 1.0, 5, 1, true), 0x6b4a32, at(0, 0.5, 0)],
-      [new THREE.DodecahedronGeometry(0.42, 0), 0x2e5a3a, at(0, 1.15, 0, 0, 1, 0.75, 1)],
-      [new THREE.DodecahedronGeometry(0.34, 0), 0x386b45, at(0.1, 1.5, 0.05, 0, 1, 0.75, 1)],
-      [new THREE.DodecahedronGeometry(0.3, 0), 0xf4f8ff, at(0.05, 1.62, 0, 0, 1, 0.35, 1)],
+      cube(0.16, 1.0, 0.5, 0x7a5232),
+      cube(0.86, 0.6, 1.2, 0x3a8a44), cube(0.56, 0.36, 1.66, 0x46a052), cube(0.5, 0.06, 1.87, 0xf4f8ff), cube(0.7, 0.05, 1.53, 0xf4f8ff, 0.08, 0.08),
     ]);
     const all = ter.trees.length + ter.outer.length;
     slots = new Int32Array(all);
     let a = 0, b = 0;
     for (let i = 0; i < all; i++) slots[i] = isPine(i) ? b++ : a++;
-    trees = new THREE.InstancedMesh(spruce, new THREE.MeshLambertMaterial({ vertexColors: true }), Math.max(1, a));
+    trees = new THREE.InstancedMesh(spruce, pixMat({ vertexColors: true }, 16, 0.35), Math.max(1, a));
     pines = new THREE.InstancedMesh(pine, trees.material, Math.max(1, b));
     for (const m of [trees, pines]) { m.castShadow = treeShadows; m.receiveShadow = false; m.frustumCulled = false; world.add(m); }
     updateTrees();
   }
 
   function placeTree(i, t, s) {
-    tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
+    tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), (i % 4) * Math.PI / 2); // blocks stay square to the world
     tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(s, s * (0.85 + (i % 7) * 0.05), s));
     (isPine(i) ? pines : trees).setMatrixAt(slots[i], tmpM);
   }

@@ -1,5 +1,5 @@
 // Idle Lift: all guests as one instanced mesh, moved smoothly between simulation steps.
-import { THREE, merge, at } from './scene.js';
+import { THREE, merge, at, pixMat } from './scene.js';
 import { LIFTS, T } from '../tuning.js';
 import { featureAt } from '../network.js';
 
@@ -22,15 +22,16 @@ function bodyParts(board) {
     [box(0.07, 0.24, 0.08), 0xffffff, tilt(0.155, 0.47, 0.02, 0.35, -arm)],
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(-0.155 - Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)], // gloves
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(0.155 + Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)],
-    [box(0.14, 0.06, 0.14), 0xf0c8a0, at(0, 0.62, 0)],                    // face and neck
-    [box(0.18, 0.13, 0.18), 0x8c8c8c, at(0, 0.72, -0.005)],               // helmet, a darker shade of the jacket
+    [box(0.24, 0.22, 0.22), 0xf0c8a0, at(0, 0.71, 0)],                    // a big square head
+    [box(0.26, 0.09, 0.24), 0x8c8c8c, at(0, 0.84, -0.01)],                // helmet, a darker shade of the jacket
+    [box(0.045, 0.045, 0.02), 0x1e1610, at(-0.055, 0.72, 0.112)], [box(0.045, 0.045, 0.02), 0x1e1610, at(0.055, 0.72, 0.112)], // pixel eyes
     [box(0.21, 0.29, 0.15), 0x3a3a3a, at(0, 0.17, 0)],                    // trousers
     [box(0.1, 0.06, 0.16), 0x202020, at(-0.055, 0.04, 0.01)], [box(0.1, 0.06, 0.16), 0x202020, at(0.055, 0.04, 0.01)], // boots
   ];
 }
 // The gear, in white so the instance colour paints it.
 function gearParts(board) {
-  const parts = [[box(0.16, 0.05, 0.03), 0xffffff, at(0, 0.67, 0.095)]]; // goggles
+  const parts = [[box(0.26, 0.05, 0.03), 0xffffff, at(0, 0.8, 0.115)]]; // goggles on the helmet
   if (board) {
     parts.push([box(1.0, 0.04, 0.28), 0xffffff, at(0, 0.01, 0)]);          // the board, across the rider
     parts.push([box(0.12, 0.045, 0.3), 0x202020, at(-0.3, 0.015, 0)], [box(0.12, 0.045, 0.3), 0x202020, at(0.3, 0.015, 0)]); // tips
@@ -48,7 +49,7 @@ function gearParts(board) {
 }
 
 export function createGuestView(scene, cap = 440) {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = pixMat({ vertexColors: true }, 44);
   const make = (geo, colors) => {
     const mesh = new THREE.InstancedMesh(geo, mat, cap);
     mesh.castShadow = true; mesh.frustumCulled = false; mesh.count = 0;

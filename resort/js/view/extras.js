@@ -1,7 +1,7 @@
 // Idle Lift: the small things that make the mountain feel lived in. Benches, marker
 // poles, boulders, snowmen, kickers and floodlights. Everything is baked into one mesh,
 // rebuilt only when the resort changes, so it costs almost nothing to draw.
-import { THREE, merge, at } from './scene.js';
+import { THREE, merge, at, pixMat } from './scene.js';
 import { rngFrom } from '../terrain.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -20,11 +20,12 @@ function bench(parts, x, y, z, ry) {
 }
 
 function snowman(parts, x, y, z, ry) {
-  const ball = (r, yy) => parts.push([new THREE.SphereGeometry(r, 8, 6), SNOWY, at(x, y + yy, z)]);
+  // Three snow blocks, like everything else on the mountain.
+  const ball = (r, yy) => parts.push([box(r * 1.7, r * 1.7, r * 1.7), SNOWY, at(x, y + yy, z, ry)]);
   ball(0.42, 0.34); ball(0.3, 0.86); ball(0.2, 1.24);
   parts.push([new THREE.ConeGeometry(0.05, 0.22, 5), ORANGE, tipped(x + Math.sin(ry) * 0.24, y + 1.24, z + Math.cos(ry) * 0.24, ry, Math.PI / 2)]);
-  parts.push([new THREE.CylinderGeometry(0.16, 0.16, 0.2, 8), 0x23272e, at(x, y + 1.5, z)]);
-  parts.push([new THREE.CylinderGeometry(0.25, 0.25, 0.03, 8), 0x23272e, at(x, y + 1.41, z)]);
+  parts.push([box(0.3, 0.2, 0.3), 0x23272e, at(x, y + 1.5, z, ry)]);
+  parts.push([box(0.46, 0.04, 0.46), 0x23272e, at(x, y + 1.41, z, ry)]);
 }
 
 // A point on the piste at index i, with the direction across it (nx, nz) and its height.
@@ -123,7 +124,7 @@ function feature(parts, ter, p, f, rnd) {
 }
 
 export function createExtraView(scene) {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = pixMat({ vertexColors: true }, 12);
   const glow = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
   let mesh = null, lamps = null, key = '';
 
@@ -204,8 +205,8 @@ export function createExtraView(scene) {
     for (let n = 0, tries = 0; n < 16 && tries < 300; tries++) {
       const x = 6 + rnd() * (ter.N - 12), z = 8 + rnd() * (ter.N - 22), s = 0.35 + rnd() * 0.7;
       if (!clearOf(x, z)) continue;
-      parts.push([new THREE.DodecahedronGeometry(0.7, 0), STONE, at(x, H(x, z) + s * 0.25, z, rnd() * 6, s * 1.2, s * 0.8, s)]);
-      parts.push([new THREE.DodecahedronGeometry(0.55, 0), SNOWY, at(x, H(x, z) + s * 0.55, z, rnd() * 6, s * 1.1, s * 0.35, s * 0.9)]);
+      parts.push([box(1.1, 1.0, 1.0), STONE, at(x, H(x, z) + s * 0.25, z, 0, s * 1.2, s * 0.8, s)]);
+      parts.push([box(0.9, 0.3, 0.8), SNOWY, at(x, H(x, z) + s * 0.7, z, 0, s * 1.1, s, s)]);
       n++;
     }
 
