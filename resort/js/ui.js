@@ -70,7 +70,13 @@ export function createUI(api) {
     b.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) stop(); });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
     b.addEventListener('click', (e) => {
-      if (onMg(e)) { api.click(); if (mgrState(last, id) === 'hire') showHire(id); else api.toggleMgr(id); held = false; return; }
+      if (onMg(e)) {
+        api.click(); held = false;
+        const ms = mgrState(last, id);
+        if (ms === 'soon') showSheet('Managers', `<p>A manager buys a board for you, again and again, whenever there is money for it.</p><p>Managers unlock when you open <b>lift 3</b> (${last.open} of 3 open now).</p><button class="btn board gold" id="okBtn">OK</button>`), $('okBtn').addEventListener('click', () => { api.click(); closeSheet(); });
+        else if (ms === 'hire') showHire(id); else api.toggleMgr(id);
+        return;
+      }
       if (!held) api.buy(id, true); held = false;
     });
     b.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -137,7 +143,7 @@ export function createUI(api) {
       txt(u.note, o.note || '');
       txt(u.price, o.maxed ? 'Done' : o.locked ? 'Locked' : money(o.cost));
       const ms = mgrState(state, id);
-      if (u.ms !== ms) { u.ms = ms; u.mg.className = 'mg ' + ms; u.mgText.textContent = ms === 'hire' ? 'Hire' : ms === 'on' ? 'Manager' : 'Paused'; u.mg.title = ms === 'hire' ? 'Hire a manager for this board' : ms === 'on' ? 'Manager working: tap to pause' : 'Manager paused: tap to resume'; }
+      if (u.ms !== ms) { u.ms = ms; u.mg.className = 'mg ' + ms; u.mgText.textContent = ms === 'soon' ? '🔒 Manager' : ms === 'hire' ? 'Hire' : ms === 'on' ? 'Manager' : 'Paused'; u.mg.title = ms === 'soon' ? 'Managers unlock at lift 3' : ms === 'hire' ? 'Hire a manager for this board' : ms === 'on' ? 'Manager working: tap to pause' : 'Manager paused: tap to resume'; }
       const w = o.maxed || o.locked ? 0 : Math.round(Math.min(1, state.money / o.cost) * 100) / 100;
       if (u.fillW !== w) { u.fillW = w; u.fill.style.transform = `scaleX(${w})`; }
     }

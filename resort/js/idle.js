@@ -278,10 +278,11 @@ export function mgrCost(state, id) {
   if (id === 'lift' || id === 'upgrade') return Math.ceil(T.MGR_LIFT * T.LIFT_COST[Math.min(state.open, T.LIFT_COUNT - 1)] * cs * (id === 'upgrade' ? 0.5 : 1));
   return Math.ceil(T.MGR_FACTOR * TABLE[id].base * cs);
 }
-// What the manager button of a board shows: 'none' (not available), 'hire', 'on' or 'off'.
+// What the manager button of a board shows: 'none' (not available), 'soon' (unlocks at lift 3), 'hire', 'on' or 'off'.
 export function mgrState(state, id) {
   if (state.mgr[id]) return state.mgr[id] === 1 ? 'on' : 'off';
-  return state.unl.mgr && unlocked(state, id) && !offer(state, id).maxed ? 'hire' : 'none';
+  if (!unlocked(state, id) || offer(state, id).maxed) return 'none';
+  return state.unl.mgr ? 'hire' : 'soon';
 }
 export function hire(state, id) {
   if (mgrState(state, id) !== 'hire') return false;
