@@ -1,4 +1,4 @@
-// First Chair: all guests as one instanced mesh, moved smoothly between simulation steps.
+// Idle Lift: all guests as one instanced mesh, moved smoothly between simulation steps.
 import { THREE, merge, at } from './scene.js';
 import { LIFTS, T } from '../tuning.js';
 

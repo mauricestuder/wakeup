@@ -1,4 +1,4 @@
-// First Chair: the shapes of lifts and pistes on the mountain.
+// Idle Lift: the shapes of lifts and pistes on the mountain.
 import { T, LIFTS } from './tuning.js';
 import { clamp } from './terrain.js';
 

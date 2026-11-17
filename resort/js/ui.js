@@ -1,4 +1,4 @@
-// First Chair: everything on screen that is not the mountain. The money sign, the
+// Idle Lift: everything on screen that is not the mountain. The money sign, the
 // upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
 import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, mgrState, mgrCost, NAMES, EVENTS, awayOf } from './idle.js';

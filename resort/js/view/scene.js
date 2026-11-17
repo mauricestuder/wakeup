@@ -1,4 +1,4 @@
-// First Chair: the 3D stage. Renderer, sky, light, the mountain mesh, the forest and falling snow.
+// Idle Lift: the 3D stage. Renderer, sky, light, the mountain mesh, the forest and falling snow.
 import * as THREE from '../../../game/vendor/three.module.min.js';
 import { T, DIFF } from '../tuning.js';
 import { clamp, smooth } from '../terrain.js';

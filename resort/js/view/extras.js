@@ -1,4 +1,4 @@
-// First Chair: the small things that make the mountain feel lived in. Benches, marker
+// Idle Lift: the small things that make the mountain feel lived in. Benches, marker
 // poles, boulders, snowmen, kickers and floodlights. Everything is baked into one mesh,
 // rebuilt only when the resort changes, so it costs almost nothing to draw.
 import { THREE, merge, at } from './scene.js';

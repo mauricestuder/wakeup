@@ -1,4 +1,4 @@
-// First Chair: boot, the game loop, saving, and wiring the rules to the 3D view and the buttons.
+// Idle Lift: boot, the game loop, saving, and wiring the rules to the 3D view and the buttons.
 import { createScene, THREE } from './view/scene.js';
 import { createCamera } from './view/camera.js';
 import { createLiftView } from './view/lifts.js';

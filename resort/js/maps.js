@@ -1,4 +1,4 @@
-// First Chair: the three mountains.
+// Idle Lift: the three mountains.
 // H = summit height in tiles, curve = how much steeper it gets towards the top,
 // narrow = how much the massif narrows, ridge = strength of ridges and gullies.
 // flip mirrors the lift plan left to right, spread widens it.

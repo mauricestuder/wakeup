@@ -1,4 +1,4 @@
-// First Chair: synthesised sound. Mountain wind, a murmur that grows with the crowd, and small
+// Idle Lift: synthesised sound. Mountain wind, a murmur that grows with the crowd, and small
 // clicks and chimes. No audio files needed.
 
 let ctx = null, master = null, wind = null, windF = null, crowd = null, volume = 0.7;

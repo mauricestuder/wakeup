@@ -1,4 +1,4 @@
-// First Chair: where the six lifts and their pistes go on a mountain.
+// Idle Lift: where the six lifts and their pistes go on a mountain.
 // The plan is the same every time for the same mountain. Lifts form a small tree:
 // some start at the car park, the others at the top of an earlier lift. Every
 // piste runs from the top of its lift back down to the bottom of it.

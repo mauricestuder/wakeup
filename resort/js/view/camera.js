@@ -1,4 +1,4 @@
-// First Chair: the camera. It orbits a point on the ground.
+// Idle Lift: the camera. It orbits a point on the ground.
 // Mouse: drag pans, right-drag (or Shift-drag) rotates, wheel zooms. Keys: WASD / arrows, Q E, + -.
 // Touch: one finger pans, two fingers pinch to zoom, twist to rotate, slide both up or down to tilt.
 import * as THREE from '../../../game/vendor/three.module.min.js';

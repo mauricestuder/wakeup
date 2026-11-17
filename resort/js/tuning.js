@@ -1,4 +1,4 @@
-// First Chair: every number of the game lives here, so balancing is one file.
+// Idle Lift: every number of the game lives here, so balancing is one file.
 
 export const T = {
   N: 96,                 // the mountain is N x N tiles

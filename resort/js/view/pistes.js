@@ -1,4 +1,4 @@
-// First Chair: pistes drawn as groomed ribbons lying on the snow, edged in their difficulty colour.
+// Idle Lift: pistes drawn as groomed ribbons lying on the snow, edged in their difficulty colour.
 import { THREE, merge, at } from './scene.js';
 import { T, DIFF } from '../tuning.js';
 

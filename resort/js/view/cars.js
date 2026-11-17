@@ -1,4 +1,4 @@
-// First Chair: the valley road, the parking bays, and the cars and coaches that bring the guests.
+// Idle Lift: the valley road, the parking bays, and the cars and coaches that bring the guests.
 import { THREE, merge, at } from './scene.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);

@@ -1,4 +1,4 @@
-// First Chair: the idle game. The resort runs on its own: guests arrive, ride,
+// Idle Lift: the idle game. The resort runs on its own: guests arrive, ride,
 // ski and pay. The player spends the money on upgrades. Nothing in here touches
 // three.js or the page, so the rules can be run in plain Node.
 import { T, LIFTS, NEXT_TYPE } from './tuning.js';

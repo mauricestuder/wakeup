@@ -2,7 +2,7 @@
 // show up on the next launch instead of after the 10-minute browser cache),
 // and falls back to the last copy when offline.
 
-const CACHE = 'first-chair';
+const CACHE = 'idle-lift';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));

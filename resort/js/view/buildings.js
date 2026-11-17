@@ -1,4 +1,4 @@
-// First Chair: low-poly buildings and the village at the car park.
+// Idle Lift: low-poly buildings and the village at the car park.
 import { THREE, merge, at } from './scene.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);

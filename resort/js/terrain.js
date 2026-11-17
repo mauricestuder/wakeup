@@ -1,4 +1,4 @@
-// First Chair: the mountain itself. Heights, slopes and forest. No rendering here,
+// Idle Lift: the mountain itself. Heights, slopes and forest. No rendering here,
 // so the rules can be tested without a browser.
 import { T } from './tuning.js';
 

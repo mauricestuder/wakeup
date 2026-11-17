@@ -1,4 +1,4 @@
-// First Chair: lifts on screen. Stations, pylons, cables and the moving bars, chairs and cabins.
+// Idle Lift: lifts on screen. Stations, pylons, cables and the moving bars, chairs and cabins.
 import { THREE, merge, at } from './scene.js';
 import { LIFTS } from '../tuning.js';
 import { along } from '../network.js';

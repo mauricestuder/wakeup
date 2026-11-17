@@ -119,9 +119,9 @@ at `https://mauricestuder.github.io/wakeup/<folder>/`.
 | `game/` | First-person escape shooter with a PS1 look |
 | `ski/` | **Fresh Line**: snowboard and ski tricks down ten mountains |
 | `build/` | **High Ground**: build, edit and aim trainer |
-| `resort/` | **First Chair**: idle ski resort tycoon (see below) |
+| `resort/` | **Idle Lift**: idle ski resort tycoon (see below) |
 
-### First Chair (`resort/`)
+### Idle Lift (`resort/`)
 
 An idle ski resort on a 3D mountain, for phone and PC. The resort runs itself:
 guests arrive, queue, ride the lifts and ski down. Your income per second is
