@@ -253,6 +253,19 @@
       #parkBtn b { display: none; } #parkBtn { padding: 0 .5em; }
     }
 
+    /* Cash bubbles over the stations: a speech bubble with a coin and the amount. Red and wobbling when full. */
+    .cash { position: absolute; left: 0; top: 0; pointer-events: auto !important; display: flex; align-items: center; gap: .3em; padding: .28em .65em .28em .32em; border-radius: 1.2em;
+      background: #fffdf3; color: #2a1a08; border: .16em solid #1e1610; box-shadow: 0 .22em 0 #1e1610; font-family: var(--display); font-size: 1.05em; white-space: nowrap; transform-origin: 50% 100%; will-change: transform; cursor: pointer; }
+    .cash::after { content: ''; position: absolute; left: 50%; bottom: -.62em; width: .7em; height: .7em; margin-left: -.35em; background: inherit; border: inherit; border-width: 0 .16em .16em 0; transform: rotate(45deg); }
+    .cash .cc { width: 1.35em; height: 1.35em; display: block; } .cash .cc svg { width: 100%; height: 100%; display: block; }
+    .cash b { font-weight: 400; } .cash i { display: none; font-style: normal; font-size: .72em; letter-spacing: .06em; }
+    .cash.full { background: #ff5a4a; color: #fff; animation: wob .6s ease-in-out infinite; } .cash.full i { display: inline; }
+    @keyframes wob { 25% { rotate: -6deg; } 75% { rotate: 6deg; } }
+    .cash:active { filter: brightness(.9); }
+
+    /* Cartoon touch: thick dark outlines on the wooden boards and buttons. */
+    .board { border-color: #1e1610; }
+
     @media (prefers-reduced-motion: reduce) { .toast, #rush.on, .up.can, #sMoney.bump b { animation-duration: .01s; } .up.can .pr::after { animation: none; } }
   </style>
 </head>

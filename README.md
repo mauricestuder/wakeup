@@ -152,6 +152,14 @@ something. You spend the money on wooden upgrade boards.
   (110 bays) and climb out; when they are done they walk back, climb in and
   drive off. Guests without a car take the coach home. Skiers and snowboarders
   share the pistes. All prices are whole dollars.
+- **Collect your money:** what each lift earns piles up as coins at its
+  station, and parking and lessons at the car-park till. Tap the bubble to
+  collect it. A full box turns red and stops filling. **Cash box** makes the
+  boxes bigger (its last level has no limit), and a **Station manager**
+  collects a station by itself and sells 10% more. Money earned while the game
+  was closed waits in the boxes.
+- Cartoon look: toon shading, black outlines, bright colours, big-headed
+  guests, and lifts and huts that pop up with a wobble.
 - The **P** button sets the parking price, from Free to Rip-off: cheap parking
   brings more guests, dear parking pays more per guest. The sheet shows what
   each price earns.
@@ -172,7 +180,7 @@ resort/
   js/network.js         shapes of lifts and pistes           (no rendering)
   js/layout.js          where the six lifts go on a mountain (no rendering)
   js/idle.js            the rules: guests, income, buying, milestones, saving (no rendering)
-  js/view/              three.js scene, camera, lifts, pistes, buildings, guests, extras, cars, deco (village and balloons)
+  js/view/              three.js scene, camera, lifts, pistes, buildings, guests, extras, cars, deco (village and balloons), cash (coin piles)
   js/ui.js              money sign, upgrade boards, quest list, pop-ups, notices
   js/audio.js           synthesised sound
   js/main.js            boot and game loop

@@ -1,5 +1,5 @@
 // Idle Lift: lifts on screen. Stations, pylons, cables and the moving bars, chairs and cabins.
-import { THREE, merge, at } from './scene.js';
+import { THREE, merge, at, toon, popScale } from './scene.js';
 import { LIFTS } from '../tuning.js';
 import { along } from '../network.js';
 
@@ -92,7 +92,7 @@ export function createLiftView(scene) {
   const group = new THREE.Group();
   scene.add(group);
   const views = new Map();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = toon({ vertexColors: true });
   const cableMat = new THREE.LineBasicMaterial({ color: 0x1d2229 });
   const geos = {};
   const geo = (k, f) => geos[k] || (geos[k] = f());
@@ -100,13 +100,13 @@ export function createLiftView(scene) {
   function make(ter, l) {
     const L = LIFTS[l.type], g = new THREE.Group();
     const dx = Math.sin(l.dir), dz = Math.cos(l.dir), px = dz, pz = -dx; // p = to the right of the travel direction
-    const n = l.pts.length - 1;
+    const n = l.pts.length - 1, stations = [];
     for (const [i, top] of [[0, false], [n, true]]) {
       const m = new THREE.Mesh(geo(l.type + (top ? 'T' : 'B'), () => stationGeo(l.type, top)), mat);
       m.position.set(l.pts[i].x, l.pts[i].g, l.pts[i].z);
       m.rotation.y = l.dir;
       m.castShadow = true; m.receiveShadow = true;
-      g.add(m);
+      g.add(m); stations.push(m);
     }
     // Pylons: one every other point, each exactly as tall as the cable is high there.
     const pyl = [];
@@ -124,7 +124,7 @@ export function createLiftView(scene) {
     const car = new THREE.InstancedMesh(geo('car' + l.type, () => carrierGeo(l.type)), mat, count);
     car.castShadow = true; car.frustumCulled = false;
     g.add(car);
-    g.userData = { car, spacing, px, pz, cap: count, type: l.type };
+    g.userData = { car, spacing, px, pz, cap: count, type: l.type, stations, born: performance.now() };
     return g;
   }
 
@@ -145,6 +145,13 @@ export function createLiftView(scene) {
       }
       car.count = n;
       car.instanceMatrix.needsUpdate = true;
+      // New stations pop up with a cartoon wobble.
+      const age = (performance.now() - v.userData.born) / 700;
+      if (!v.userData.popped) {
+        const [a, b] = popScale(age);
+        for (const m of v.userData.stations) m.scale.set(a, b, a);
+        if (age >= 1) v.userData.popped = true;
+      }
       v.visible = true;
     }
   }

@@ -8,8 +8,10 @@ import { liftGeom, pisteGeom, pisteFeatures, along } from './network.js';
 import { planLifts } from './layout.js';
 
 const tmp = { x: 0, y: 0, z: 0, i: 0 };
-export const UPGRADES = ['lift', 'upgrade', 'speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
-const LEVELS = ['speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
+export const UPGRADES = ['lift', 'upgrade', 'speed', 'guests', 'ticket', 'hut', 'safe', 'smgr', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
+const LEVELS = ['speed', 'guests', 'ticket', 'hut', 'safe', 'smgr', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
+// The cash boxes, in the order station managers are hired: lift 1, the till at the car park, lifts 2 to 6.
+export const STATIONS = ['1', 'till', '2', '3', '4', '5', '6'];
 
 export const mapOf = (state) => MAPS[state.level % MAPS.length];
 export const costScale = (state) => Math.pow(T.NEXT_COST, state.level);
@@ -24,7 +26,7 @@ export function newGame(level = 0, life = null, unl = null) {
   for (const k of LEVELS) up[k] = 0;
   return {
     v: 3, level, money: Math.round(T.START_MONEY * T.MONEY * Math.pow(T.NEXT_COST, level)), earned: 0, rides: 0, tricks: 0, time: 0,
-    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0, mgr: {}, mgrT: 0, event: null, evT: T.EVENT_FIRST, park: T.PARK_START,
+    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0, mgr: {}, mgrT: 0, event: null, evT: T.EVENT_FIRST, park: T.PARK_START, box: {}, collects: 0,
     life: { rides: 0, time: 0, tricks: 0, ...(life || {}) }, unl: { ...(unl || {}) },
   };
 }
@@ -32,7 +34,7 @@ export function newGame(level = 0, life = null, unl = null) {
 export const toSave = (s) => ({
   v: 3, level: s.level, money: s.money, earned: s.earned, rides: s.rides, tricks: s.tricks, time: s.time,
   open: s.open, types: s.types.slice(), up: { ...s.up }, done: { ...s.done }, rushWait: Math.max(0, s.rushWait + s.rush),
-  mgr: { ...s.mgr }, evT: Math.max(30, s.evT), park: s.park, savedAt: Date.now(),
+  mgr: { ...s.mgr }, evT: Math.max(30, s.evT), park: s.park, box: Object.fromEntries(Object.entries(s.box).filter(([, v]) => v >= 1).map(([k, v]) => [k, Math.floor(v)])), collects: s.collects, savedAt: Date.now(),
   life: { ...s.life }, unl: { ...s.unl },
 });
 
@@ -49,6 +51,8 @@ export function fromSave(d) {
   for (const id of UPGRADES) if (d.mgr && (d.mgr[id] === 1 || d.mgr[id] === 2)) s.mgr[id] = d.mgr[id];
   if (+d.evT > 0) s.evT = +d.evT;
   if (d.park !== undefined) s.park = clamp(d.park | 0, 0, T.PARK.length - 1);
+  for (const k of STATIONS) if (d.box && +d.box[k] > 0) s.box[k] = +d.box[k];
+  s.collects = Math.max(0, d.collects | 0);
   s.savedAt = +d.savedAt || 0;
   // Saves from before the totals existed: start them from this mountain's numbers.
   if (!d.life) { s.life.rides = s.rides; s.life.time = s.time; }
@@ -158,7 +162,7 @@ export function refreshRate(state) {
   const rush = state.rush, ev = state.event;
   state.rush = 0; state.event = null;
   sumRate(state);
-  state.steady = state.rate;
+  state.steady = state.rate; state.steadyParts = state.parts;
   state.rush = rush; state.event = ev;
   sumRate(state);
 }
@@ -168,14 +172,16 @@ function sumRate(state) {
   let wsum = 0;
   for (const l of state.lifts) wsum += 1 + 0.25 * l.i;
   let total = 0, rides = 0;
+  const parts = {};
   for (const l of state.lifts) {
     const L = LIFTS[l.type], p = state.pisteById[l.id];
     const carry = L.seats / L.interval * sm;
     const lap = l.len / (L.speed * sm) + p.len / ski + T.TURNAROUND;
     const want = guests * (1 + 0.25 * l.i) / wsum / lap;
     l.rides = closed(state, l) ? 0 : Math.min(carry, want);
-    l.rate = l.rides * fare(state, l.i);
+    l.rate = l.rides * fare(state, l.i) * (managed(state, String(l.id)) ? 1 + T.SMGR_GAIN : 1);
     total += l.rate; rides += l.rides;
+    parts[l.id] = l.rate;
   }
   state.lessons = guests * T.SCHOOL_PAY * T.MONEY * state.up.school * ticketAt(state.up.ticket) * bonusOf(state);
   // Parking: every guest pays a little per second, in fares of the average open lift.
@@ -183,6 +189,9 @@ function sumRate(state) {
   for (const l of state.lifts) avg += fare(state, l.i);
   avg /= Math.max(1, state.lifts.length);
   state.parking = guests * parkOf(state).fee * T.PARK_PAY * avg;
+  if (managed(state, 'till')) { state.lessons *= 1 + T.SMGR_GAIN; state.parking *= 1 + T.SMGR_GAIN; }
+  parts.till = state.lessons + state.parking;
+  state.parts = parts; state.partSum = total + parts.till;
   // A whole number of dollars, so the sign shows exactly what is paid.
   state.rate = Math.max(1, Math.round((total + state.lessons + state.parking) * (eventIs(state, 'powder') ? T.POWDER_PAY : 1)));
   state.rideRate = rides;
@@ -207,8 +216,8 @@ export function setPark(state, k) {
   return true;
 }
 
-const TABLE = { speed: T.SPEED, guests: T.GUESTS, ticket: T.TICKET, hut: T.HUT, jump: T.JUMP, cannon: T.CANNON, school: T.SCHOOL, night: T.NIGHT, resto: T.RESTO, lodge: T.LODGE };
-export const NAMES = { lift: 'New lift', upgrade: 'Upgrade lift', speed: 'Lift speed', guests: 'More guests', ticket: 'Ticket price', hut: 'Ski hut', jump: 'Jump park', cannon: 'Snow guns', school: 'Ski school', night: 'Night skiing', resto: 'Restaurant', lodge: 'Lodge', mgr: 'Managers' };
+const TABLE = { safe: T.SAFE, smgr: { base: T.SMGR_COST[0], growth: 3, max: STATIONS.length }, speed: T.SPEED, guests: T.GUESTS, ticket: T.TICKET, hut: T.HUT, jump: T.JUMP, cannon: T.CANNON, school: T.SCHOOL, night: T.NIGHT, resto: T.RESTO, lodge: T.LODGE };
+export const NAMES = { lift: 'New lift', upgrade: 'Upgrade lift', speed: 'Lift speed', guests: 'More guests', ticket: 'Ticket price', hut: 'Ski hut', jump: 'Jump park', cannon: 'Snow guns', school: 'Ski school', night: 'Night skiing', resto: 'Restaurant', lodge: 'Lodge', mgr: 'Managers', safe: 'Cash box', smgr: 'Station manager' };
 const pct = (v) => Math.round(v * 100) + '%';
 
 // What has to happen before an upgrade shows up for good.
@@ -220,6 +229,8 @@ const UNLOCKS = {
   resto: { text: 'Open lift 5', test: (s) => s.open >= 5 },
   lodge: { text: 'Open lift 3', test: (s) => s.open >= 3 },
   mgr: { text: 'Open lift 3', test: (s) => s.open >= 3 },
+  safe: { text: 'Open lift 2', test: (s) => s.open >= 2 },
+  smgr: { text: 'Open lift 2', test: (s) => s.open >= 2 },
 };
 export const unlocked = (state, id) => !UNLOCKS[id] || !!state.unl[id];
 export function checkUnlocks(state) {
@@ -257,6 +268,18 @@ export function offer(state, id) {
   }
   const name = NAMES[id];
   if (!unlocked(state, id)) return { name, locked: true, secret: true, note: UNLOCKS[id].text };
+  if (id === 'smgr') {
+    const n = state.up.smgr, key = STATIONS[n];
+    if (n >= STATIONS.length) return { name, level: n, maxed: true, note: 'Every station has one' };
+    const where = key === 'till' ? 'Car park till' : 'Lift ' + key;
+    if (key !== 'till' && +key > state.open) return { name, level: n, locked: true, note: `Open lift ${key} first` };
+    return { name, level: n, cost: Math.ceil(T.SMGR_COST[n] * cs), note: `${where}: collects, +${pct(T.SMGR_GAIN)}` };
+  }
+  if (id === 'safe') {
+    const lvl = state.up.safe, mm = (l) => (l >= T.SAFE.max ? 'no limit' : Math.round(boxTime(l) / 60) + ' min');
+    return { name, level: lvl, cost: Math.ceil(T.SAFE.base * Math.pow(T.SAFE.growth, lvl) * cs), maxed: lvl >= T.SAFE.max,
+      note: lvl >= T.SAFE.max ? 'Vault: no limit' : `Holds ${mm(lvl)} → ${mm(lvl + 1)}` };
+  }
   const tb = TABLE[id], lvl = state.up[id];
   const base = { name, level: lvl, cost: Math.ceil(tb.base * Math.pow(tb.growth, lvl) * cs), maxed: lvl >= tb.max };
   if (id === 'speed') return { ...base, note: base.maxed ? 'Fastest' : `${pct(1 + T.SPEED_GAIN * lvl)} → ${pct(1 + T.SPEED_GAIN * (lvl + 1))}` };
@@ -280,6 +303,41 @@ export function offer(state, id) {
   return { ...base, note: base.maxed ? 'Three stars' : `Income +${pct(T.RESTO_GAIN * (lvl + 1))}` };
 }
 
+// ---------- cash boxes ----------
+
+export const managed = (state, key) => STATIONS.indexOf(key) < (state.up.smgr || 0);
+const boxTime = (lvl) => T.BOX_TIME * Math.pow(T.BOX_GROW, lvl);
+// How much a station's box holds: some minutes of its steady income. Infinity at the last Cash box level.
+export function boxCap(state, key) {
+  if (state.up.safe >= T.SAFE.max) return Infinity;
+  const part = (state.steadyParts || state.parts || {})[key] || 0;
+  return Math.max(10 * T.MONEY, part * boxTime(state.up.safe));
+}
+export const boxFull = (state, key) => (state.box[key] || 0) >= boxCap(state, key) - 0.5;
+// Shares money out to the stations by what each earns. Managed stations pay the bank at once.
+function payIn(state, pay, capped = true) {
+  const sum = state.partSum || 0;
+  if (!(sum > 0)) { state.money += pay; state.earned += pay; return; }
+  for (const k of STATIONS) {
+    const v = pay * (state.parts[k] || 0) / sum;
+    if (!(v > 0)) continue;
+    if (managed(state, k)) { state.money += v; state.earned += v; continue; }
+    const have = state.box[k] || 0, cap = capped ? boxCap(state, k) : Infinity;
+    if (have < cap) state.box[k] = Math.min(cap, have + v);
+  }
+}
+// Empties a box into the bank. Returns what it paid.
+export function collect(state, key) {
+  const amt = Math.floor(state.box[key] || 0);
+  if (amt < 1) return 0;
+  state.box[key] -= amt;
+  state.money += amt; state.earned += amt; state.collects++;
+  state.events.push({ type: 'collect', key, amt });
+  checkGoals(state);
+  return amt;
+}
+export const waiting = (state) => STATIONS.reduce((a, k) => a + (state.box[k] || 0), 0);
+
 // ---------- offline ----------
 
 // [share of the income, hours] while the game is closed.
@@ -292,9 +350,10 @@ export function payAway(state, now = Date.now()) {
   state.savedAt = 0;
   if (!(away >= 60) || away > 3600 * 24 * 400) return null; // no save time, or a clock that went wrong
   const [share, hours] = awayOf(state), t = Math.min(away, hours * 3600);
-  const pay = Math.round(state.steady * share * t);
-  state.money += pay; state.earned += pay;
-  return { away, paid: t, share, hours, pay };
+  const pay = Math.round(state.steady * share * t), bank = state.money;
+  // It waits in the cash boxes (as much as it is, however small the boxes); managed stations pay the bank.
+  payIn(state, pay, false);
+  return { away, paid: t, share, hours, pay, boxed: Math.max(0, pay - Math.round(state.money - bank)) };
 }
 
 // ---------- managers ----------
@@ -422,6 +481,8 @@ export function buy(state, ter, id) {
     state.up[id]++;
     if (id === 'hut') syncHuts(state);
     if (id === 'jump') syncJumps(state, ter);
+    // A new station manager empties the box at once and from now on pays straight to the bank.
+    if (id === 'smgr') { const k = STATIONS[state.up.smgr - 1]; state.events.push({ type: 'smgr', key: k }); collect(state, k); }
     if (id === 'night' && state.up.night === 1) state.events.push({ type: 'world' });
   }
   checkUnlocks(state);
@@ -443,11 +504,14 @@ const gondolas = (s) => s.lifts.filter((l) => l.type === 'gondola').length;
 export const GOALS = [
   { id: 'r25', text: 'Sell 25 rides', reward: 30, test: (s) => [s.rides, 25] },
   { id: 'g1', text: 'Buy More guests', reward: 40, test: (s) => [s.up.guests, 1] },
+  { id: 'cl10', text: 'Collect cash 10 times', reward: 60, test: (s) => [s.collects, 10] },
   { id: 'l2', text: 'Open lift 2', reward: 150, test: (s) => [s.open, 2] },
+  { id: 'sm1', text: 'Hire a station manager', reward: 500, test: (s) => [s.up.smgr, 1] },
   { id: 'c1', text: 'Upgrade a lift to a chairlift', reward: 800, test: (s) => [s.lifts.filter((l) => l.i < 2 && l.type !== 'drag').length, 1] },
   { id: 's3', text: 'Lift speed level 3', reward: 200, test: (s) => [s.up.speed, 3] },
   { id: 'r500', text: 'Sell 500 rides', reward: 500, test: (s) => [s.rides, 500] },
   { id: 'h1', text: 'Build a ski hut', reward: 1500, test: (s) => [s.up.hut, 1] },
+  { id: 'sf3', text: 'Cash box level 3', reward: 2500, test: (s) => [s.up.safe, 3] },
   { id: 'g100', text: 'Room for 100 guests', reward: 8000, test: (s) => [capAt(s.up.guests), 100] },
   { id: 'l3', text: 'Open lift 3', reward: 2000, test: (s) => [s.open, 3] },
   { id: 'j1', text: 'Build a jump park', reward: 400, test: (s) => [s.up.jump, 1] },
@@ -870,7 +934,7 @@ export function tick(state, ter, dt) {
 
   // The steady income: the same every second until something is bought.
   const pay = state.rate * dt, sold = state.rideRate * dt;
-  state.money += pay; state.earned += pay;
+  payIn(state, pay);
   state.rides += sold; state.life.rides += sold;
 
   // New guests keep coming by road until the mountain holds as many as it has room for.

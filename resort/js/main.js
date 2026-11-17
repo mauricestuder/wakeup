@@ -1,5 +1,5 @@
 // Idle Lift: boot, the game loop, saving, and wiring the rules to the 3D view and the buttons.
-import { createScene, THREE } from './view/scene.js';
+import { createScene, THREE, outlineAll, setOutlines } from './view/scene.js';
 import { createCamera } from './view/camera.js';
 import { createLiftView } from './view/lifts.js';
 import { createPisteView } from './view/pistes.js';
@@ -8,6 +8,7 @@ import { createGuestView } from './view/guests.js';
 import { createExtraView } from './view/extras.js';
 import { createCarView } from './view/cars.js';
 import { createDecoView } from './view/deco.js';
+import { createCashView, cashSpot } from './view/cash.js';
 import { T, LIFTS } from './tuning.js';
 import { MAPS } from './maps.js';
 import * as idle from './idle.js';
@@ -24,8 +25,8 @@ if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'a
 
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
-const cam = createCamera(stage.camera, canvas, { onTap: (x, y) => { initAudio(); tapCeleb(x, y); } });
-const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene), deco: createDecoView(stage.scene) };
+const cam = createCamera(stage.camera, canvas, { onTap: (x, y) => { initAudio(); if (!(playing && tapCash(x, y))) tapCeleb(x, y); } });
+const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene), deco: createDecoView(stage.scene), cash: createCashView(stage.scene) };
 
 let state = null, ter = null, playing = false, saveT = 0, popT = 0, follow = 0;
 
@@ -58,16 +59,16 @@ const ui = createUI({
 
 // Each level is lighter than the one before. Auto starts at the top and steps down when frames come slowly.
 const LEVELS = [
-  { scale: 1, trees: false, shadows: true },
-  { scale: 0.8, trees: false, shadows: true },
-  { scale: 0.8, trees: false, shadows: false },
-  { scale: 0.62, trees: false, shadows: false },
+  { scale: 1, trees: false, shadows: true, outlines: true },
+  { scale: 0.8, trees: false, shadows: true, outlines: true },
+  { scale: 0.8, trees: false, shadows: false, outlines: false },
+  { scale: 0.62, trees: false, shadows: false, outlines: false },
 ];
 const quality = { level: 0, time: 0, frames: 0, warm: 0, lastFps: 0, stuck: 0, done: false };
 function setLevel(n) {
   quality.level = n;
   const q = LEVELS[n];
-  stage.setScale(q.scale); stage.setTreeShadows(q.trees); stage.setShadows(q.shadows);
+  stage.setScale(q.scale); stage.setTreeShadows(q.trees); stage.setShadows(q.shadows); setOutlines(q.outlines);
 }
 // Called every frame with the real frame time. Looks at 3 seconds at a time.
 function watchQuality(dt) {
@@ -119,7 +120,9 @@ function world() {
   syncViews();
   stage.updateTrees(); stage.repaint();
   stage.setWeather(state.weather);
-  ui.clearLabels(); tags.clear(); star = null; follow = 0;
+  ui.clearLabels(); tags.clear(); bubbles.clear(); star = null; follow = 0;
+  views.cash.clear();
+  outlineAll(stage.scene);
   frameAll(true);
 }
 
@@ -142,7 +145,7 @@ function start(fresh) {
 function quit() {
   save();
   playing = false;
-  ui.clearLabels(); tags.clear(); star = null; follow = 0;
+  ui.clearLabels(); tags.clear(); bubbles.clear(); star = null; follow = 0;
   ui.showMenu(store.get('idle', null));
 }
 
@@ -177,6 +180,12 @@ function drain() {
     }
     else if (e.type === 'rushEnd') ui.toast('Rush hour is over.');
     else if (e.type === 'hired') ui.toast(`<b>Manager hired</b> for ${e.name}.`, 'star');
+    else if (e.type === 'collect') {
+      sfx.cash(); views.cash.bump(e.key);
+      const p = cashScreen(e.key);
+      if (p && p.front) { ui.pop(p.x, p.y - 10, '+' + idle.money(e.amt)); ui.flyCoins(p.x, p.y, Math.min(9, 3 + Math.floor(Math.log10(e.amt + 1)))); }
+    }
+    else if (e.type === 'smgr') ui.toast(`<b>Station manager hired</b> at ${e.key === 'till' ? 'the car park till' : 'lift ' + e.key}. Its cash now comes in by itself, and it sells ${Math.round(T.SMGR_GAIN * 100)}% more.`, 'star', 4200);
     else if (e.type === 'event') {
       const ev = e.event;
       sfx.goal();
@@ -197,7 +206,7 @@ function drain() {
       ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.4, 8);
     }
   }
-  if (sync) syncViews();
+  if (sync) { syncViews(); outlineAll(stage.scene); }
   if (trees) { stage.updateTrees(); stage.repaint(); }
 }
 
@@ -260,6 +269,48 @@ function updateTags() {
   }
 }
 
+// ---------- cash bubbles ----------
+// A tappable bubble over every station with money waiting. Full boxes turn red and wobble.
+const bubbles = new Map();
+function cashScreen(key) {
+  const s = cashSpot(state, ter, key);
+  return s ? project(s.x, s.y + (key === 'till' ? 2.6 : 3.4), s.z) : null;
+}
+function collectAt(key) { initAudio(); if (idle.collect(state, key)) drain(); }
+function updateBubbles() {
+  for (const key of idle.STATIONS) {
+    let el = bubbles.get(key);
+    const have = Math.floor(state.box[key] || 0), man = idle.managed(state, key);
+    const s = !man && have >= 1 ? cashScreen(key) : null;
+    // Not under the boards or off the screen.
+    if (!s || !s.front || s.y < 40 || s.x < 20 || s.x > innerWidth * (1 - ui.free.right) - 20 || s.y > innerHeight * (1 - ui.free.bottom)) { if (el) el.hidden = true; continue; }
+    if (!el) {
+      el = document.createElement('button');
+      el.className = 'cash'; el.innerHTML = '<span class="cc"></span><b class="num"></b><i>FULL</i>';
+      el.querySelector('.cc').innerHTML = document.querySelector('#sMoney .coin').innerHTML;
+      el.addEventListener('pointerdown', (e) => { e.stopPropagation(); collectAt(key); });
+      bubbles.set(key, el); ui.labels.appendChild(el);
+    }
+    el.hidden = false;
+    const full = idle.boxFull(state, key), cap = idle.boxCap(state, key);
+    const f = isFinite(cap) ? Math.min(1, have / cap) : Math.min(1, have / (((state.steadyParts || {})[key] || 1) * 600));
+    const text = idle.money(have);
+    if (el._t !== text) { el._t = text; el.querySelector('b').textContent = text; }
+    el.classList.toggle('full', full);
+    el.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px) translate(-50%, -100%) scale(${(0.82 + f * 0.3).toFixed(2)})`;
+  }
+}
+// A tap on the mountain near a bubble counts as well.
+function tapCash(x, y) {
+  for (const key of idle.STATIONS) {
+    const el = bubbles.get(key);
+    if (!el || el.hidden) continue;
+    const r = el.getBoundingClientRect();
+    if (Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y) < (isTouch ? 56 : 40)) { collectAt(key); return true; }
+  }
+  return false;
+}
+
 // ---------- keys ----------
 
 addEventListener('keydown', (e) => {
@@ -297,6 +348,8 @@ function frame(t) {
     views.lifts.update(state);
     views.guests.update(state, ter, dt, idle.speedOf(state));
     views.cars.update(state, ter);
+    views.cash.update(state, ter, dt);
+    views.buildings.update();
     if (follow) { const g = idle.celebGuest(state); if (g) { cam.goal.x = g.x; cam.goal.z = g.z + 6; cam.goal.dist = Math.min(cam.goal.dist, 40); } else follow = 0; }
     ui.update(state, dt);
     popT += dt; if (popT >= 1) { popT = 0; pops(); }
@@ -306,11 +359,12 @@ function frame(t) {
     views.lifts.update(state || demo);
     if (!state) { idle.tick(demo, dter, Math.min(0.05, dt)); demo.events.length = 0; views.guests.update(demo, dter, dt, 1); views.cars.update(demo, dter); }
   }
-  fitT += dt; if (fitT > 0.5) { fitT = 0; fit(); }
+  fitT += dt; if (fitT > 0.5) { fitT = 0; fit(); outlineAll(stage.scene); }
   views.deco.update(dt);
   cam.update(dt);
   stage.update(dt, playing ? idle.clockOf(state) : 640, cam.target);
-  if (playing) { updateTags(); updateStar(); }
+  if (playing) { updateTags(); updateStar(); updateBubbles(); }
+  else for (const el of bubbles.values()) el.hidden = true;
   stage.render();
   setAmbience(Math.min(1, cam.now.dist / 150), playing && state.weather === 'snow' ? 0.3 : 0, playing ? state.guests.length : 0, !playing);
 }

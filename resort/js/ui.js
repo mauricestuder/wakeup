@@ -23,6 +23,8 @@ const ICON = {
   peak: svg('<path d="M2.500 19.500l6.500-11 4 6 2.500-3.500 6 8.500zM7.300 11.500l1.700 1.300 1.500-1.500"/>'),
   quest: svg('<path d="M12 21V3M12 5h7l2 2-2 2h-7zM12 11H5l-2 2 2 2h7z"/>'),
   lodge: svg('<path d="M3 20V10l9-6 9 6v10M3 20h18M7 20v-5h10v5M7 17.500h10M9.500 11h5"/>'),
+  safe: svg('<rect x="3.500" y="5" width="17" height="14" rx="2"/><circle cx="12" cy="12" r="3.200"/><path d="M12 8.800V7M15.200 12H17M7 19v2M17 19v2"/>'),
+  smgr: svg('<circle cx="12" cy="7" r="3.500"/><path d="M5 21c0-4 3-6.500 7-6.500s7 2.500 7 6.500M11 14.600h2l-.5 2.400.5 3.500-1 1-1-1 .5-3.500z"/>'),
   tie: svg('<path d="M10 3h4l-1 3 2.500 10L12 20l-3.500-4L11 6z"/>'),
   powder: svg('<path d="M12 3v18M4.200 7.500l15.600 9M19.800 7.500l-15.600 9"/>'),
   storm: svg('<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>'),
@@ -30,7 +32,7 @@ const ICON = {
   lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
 };
 // Every board has the colour of a piste sign.
-const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)',
+const COLOR = { lift: 'var(--blue)', upgrade: 'var(--red)', speed: 'var(--orange)', guests: 'var(--green)', ticket: '#c9941a', hut: 'var(--black)', safe: '#2f9e8f', smgr: '#b3541a',
   jump: 'var(--purple)', cannon: '#3aa6c9', school: 'var(--green)', night: '#34406e', resto: 'var(--red)', lodge: '#8a5a2b' };
 // The money logo: a gold coin with a mountain and a chairlift on it.
 const COIN = `<svg class="coinpic" viewBox="0 0 32 32" aria-hidden="true">
@@ -284,12 +286,15 @@ export function createUI(api) {
   function welcomeBack(o) {
     showSheet('Welcome back!', `<p>You were away for <b>${hm(o.away)}</b>. While you were gone the resort kept running at ${Math.round(o.share * 100)}% and earned</p>
       <p class="big">${COIN}<b class="num">${money(o.pay)}</b></p>
+      ${o.boxed > 0 ? `<p><b>${money(o.boxed)}</b> of it is waiting in your cash boxes: tap the bubbles at the stations to collect it.</p>` : ''}
       ${o.away > o.paid ? `<p><small>Only the first ${o.hours} hours count. The <b>Lodge</b> board raises the share and the hours.</small></p>` : `<p><small>The <b>Lodge</b> board raises the share and the hours.</small></p>`}
-      <button class="btn board gold" id="wbOk">Collect</button>`);
-    $('wbOk').addEventListener('click', () => { api.click(); closeSheet(); flyCoins(innerWidth * (1 - free.right) / 2, innerHeight * 0.45, 8); });
+      <button class="btn board gold" id="wbOk">${o.boxed > 0 ? 'Go collect' : 'Collect'}</button>`);
+    $('wbOk').addEventListener('click', () => { api.click(); closeSheet(); if (o.boxed < o.pay) flyCoins(innerWidth * (1 - free.right) / 2, innerHeight * 0.45, 8); });
   }
 
   const HOW = `<ul>
+      <li><b>Collect your money!</b> What the lifts earn waits in a pile of coins at each station, and parking and lessons wait at the car park till. Tap the bubble to collect. A full box (red) stops filling.</li>
+      <li><b>Cash box</b> makes the boxes bigger; its last level has no limit. A <b>Station manager</b> collects a station's cash by itself and sells 10% more.</li>
       <li>Guests arrive by car and coach on their own. Your income per second depends on your lifts, your guests and your prices, and stays the same until you buy something.</li>
       <li><b>New lift</b> opens the next lift and piste. Higher lifts pay more per ride.</li>
       <li><b>Upgrade lift</b> turns a lift into a chairlift, then a gondola, so more guests fit.</li>
