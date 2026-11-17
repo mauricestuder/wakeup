@@ -267,7 +267,15 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'Escape') ui.closeSheet();
 });
 
-addEventListener('resize', () => { stage.resize(); box = canvas.getBoundingClientRect(); });
+// Keep the 3D picture the size of the screen. Phones change the visible height when the browser
+// bar slides in or out, often without a resize event, so several signals are watched, and the
+// game loop checks twice a second as a safety net.
+function fit() { if (stage.resize()) box = canvas.getBoundingClientRect(); }
+addEventListener('resize', fit);
+addEventListener('orientationchange', () => setTimeout(fit, 120));
+if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+if (window.ResizeObserver) new ResizeObserver(fit).observe(canvas);
+let fitT = 0;
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
 
@@ -295,6 +303,7 @@ function frame(t) {
     views.lifts.update(state || demo);
     if (!state) { idle.tick(demo, dter, Math.min(0.05, dt)); demo.events.length = 0; views.guests.update(demo, dter, dt, 1); views.cars.update(demo, dter); }
   }
+  fitT += dt; if (fitT > 0.5) { fitT = 0; fit(); }
   cam.update(dt);
   stage.update(dt, playing ? idle.clockOf(state) : 640, cam.target);
   if (playing) { updateTags(); updateStar(); }

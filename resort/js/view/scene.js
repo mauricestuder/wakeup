@@ -304,13 +304,19 @@ export function createScene(canvas, opts) {
     sky.position.copy(camera.position);
   }
 
-  function resize() {
+  // Matches the 3D picture to the canvas's real size on screen. Cheap when nothing changed,
+  // so it can be called often: phones change the visible height when their browser bar slides.
+  let lastW = 0, lastH = 0;
+  function resize(force = false) {
     const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+    if (!force && w === lastW && h === lastH) return false;
+    lastW = w; lastH = h;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     // Narrow screens get a wider lens so the mountain still fits.
     camera.fov = w < h ? 56 : 42;
     camera.updateProjectionMatrix();
+    return true;
   }
 
   return {
@@ -322,7 +328,7 @@ export function createScene(canvas, opts) {
     // Tree shadows are the most expensive part of the shadow map.
     setTreeShadows: () => {},
     // Render at a share of the screen's resolution.
-    setScale: (f) => { if (f !== scale) { scale = f; renderer.setPixelRatio(baseRatio * f); resize(); } },
+    setScale: (f) => { if (f !== scale) { scale = f; renderer.setPixelRatio(baseRatio * f); resize(true); } },
     render: () => { if ((frameNo++ & 1) === 0) renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); },
   };
 }
