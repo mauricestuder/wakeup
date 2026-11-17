@@ -1,13 +1,16 @@
 // Idle Lift: things that make the valley lively and colourful. A village of painted chalets and
 // a church along the road, flags at the base, hot-air balloons drifting over the slopes,
 // paragliders spiralling down from the top, and skaters on the frozen lakes. Looks only.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at, GLOW } from './scene.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const SNOWY = 0xf4f7fb, STONE = 0x6a6f78, GLASS = 0x26384d, WOOD = 0x6b4a2f;
-const WALLS = [0xe5484d, 0xf2c230, 0x5aa9e6, 0x6fc3a0, 0xf28fb1, 0xf4a259, 0xb48ae6, 0xfff1d6, 0x9a6a3a, 0x3fae8a];
-const SHUTTERS = [0x2f6f4f, 0x8a2f2f, 0x2f4f8a, 0x6b4a2f, 0xffffff];
-const ROOFS = [0xb3412f, 0x2f5f9e, 0x2f7d4f, 0x7a4a2a, 0x8a2f5a, 0x3a3f47];
+// Cozy village colours: warm timber, cream and soft painted pastels, with lit windows.
+const SNOWY = 0xfffaf4, STONE = 0x8a8088, GLASS = GLOW, WOOD = 0x7a5238;
+const WALLS = [0xa86f45, 0x8f5a36, 0xb87c4e, 0xfff0d8, 0xf3d9b8, 0xe98a7c, 0x9cc7b4, 0xa9c3e6, 0xf2c38a, 0xd9a3c4];
+const SHUTTERS = [0x4f7a5e, 0x9a4a3f, 0x4f628a, 0x6b4a2f, 0xfff4e6];
+const ROOFS = [0xa4473a, 0x5a6f96, 0x5a8566, 0x7a4f3a, 0x8f5068, 0x5a5560];
+// Chimney tops of the chalets, where the smoke comes out.
+const CHIMNEYS = [];
 const BRIGHT = [0xff4d4d, 0xffc61a, 0x2f8cff, 0x34c46a, 0xff7ad1, 0xff8a1a, 0x9a5cff, 0x18c8c8];
 
 // A rnd() that is the same for the same mountain every time.
@@ -36,6 +39,7 @@ function chalet(r, m) {
     [box(0.45, 0.65, 0.05), 0x3b2616, at(-w * 0.28, 0.33, d / 2 + 0.01)],
     [box(0.28, 0.5, 0.28), STONE, at(w * 0.3, h + 0.55, -d * 0.15)], [box(0.34, 0.06, 0.34), SNOWY, at(w * 0.3, h + 0.82, -d * 0.15)],
   ];
+  CHIMNEYS.push(new THREE.Vector3(w * 0.3, h + 0.9, -d * 0.15).applyMatrix4(m));
   for (let f = 0; f < floors; f++) {
     const y = 0.55 + f * 0.95;
     for (const x of f ? [-w * 0.25, w * 0.25] : [w * 0.18, w * 0.38]) {
@@ -64,12 +68,12 @@ function church(m) {
 
 // A striped hot-air balloon: each slice of the envelope in its own colour.
 function balloonGeo(colors) {
-  const g = new THREE.SphereGeometry(2.2, 8, 6).toNonIndexed(); // chunky, few faces
+  const g = new THREE.SphereGeometry(2.2, 16, 12).toNonIndexed();
   g.scale(1, 1.15, 1);
   const pos = g.attributes.position, col = [], c = new THREE.Color();
   for (let i = 0; i < pos.count; i += 3) {
     const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
-    const k = Math.floor(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 8) % colors.length;
+    const k = Math.floor(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 16) % colors.length;
     c.set(colors[k]);
     for (let v = 0; v < 3; v++) col.push(c.r, c.g, c.b);
   }
@@ -116,17 +120,19 @@ function skaterGeo() {
 }
 
 export function createDecoView(scene) {
-  const mat = pixMat({ vertexColors: true, side: THREE.DoubleSide }, 10);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const group = new THREE.Group();
   scene.add(group);
   let key = null, t = 0;
   const balloons = [], gliders = [], skaters = [];
-  let skateMesh = null;
+  let skateMesh = null, smoke = null;
+  const PUFFS = 6;
   const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
 
   function sync(state, ter) {
     if (key === ter) return;
     clear(); key = ter;
+    CHIMNEYS.length = 0;
     const R = ter.road, L = R.lot, N = ter.N, b = ter.base, r = rng(Math.round(ter.top * 1000) + N);
     const parts = [];
     // Clear the forest where a building stands (the trees are drawn after this).
@@ -163,6 +169,11 @@ export function createDecoView(scene) {
     m.castShadow = true; m.receiveShadow = true;
     group.add(m);
 
+    // Soft smoke curling up from every chimney.
+    smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.22, 1), new THREE.MeshLambertMaterial({ color: 0xf6eee8, transparent: true, opacity: 0.55, depthWrite: false }), CHIMNEYS.length * PUFFS);
+    smoke.frustumCulled = false; smoke.chim = CHIMNEYS.map((p) => ({ p: p.clone(), ph: r() }));
+    group.add(smoke);
+
     // Balloons drift in big slow loops over the lower and middle slopes.
     const sets = [[0xff4d4d, 0xffc61a], [0x2f8cff, 0xffffff, 0x34c46a], [0xff7ad1, 0x9a5cff, 0xffc61a], [0xff8a1a, 0x18c8c8]];
     for (let i = 0; i < 4; i++) {
@@ -178,7 +189,7 @@ export function createDecoView(scene) {
       gliders.push({ mesh, life: 70 + 20 * r(), age: r() * 70, x0: N * (0.3 + 0.2 * i), z0: N * 0.18, ph: r() * 6.28, y: 0 });
     }
     // Skaters going round on each frozen lake.
-    skateMesh = new THREE.InstancedMesh(skaterGeo(), pixMat({ vertexColors: true }, 10), ter.lakes.length * 5);
+    skateMesh = new THREE.InstancedMesh(skaterGeo(), new THREE.MeshLambertMaterial({ vertexColors: true }), ter.lakes.length * 5);
     skateMesh.castShadow = true; skateMesh.frustumCulled = false;
     const c = new THREE.Color();
     let n = 0;
@@ -212,6 +223,15 @@ export function createDecoView(scene) {
       g.mesh.rotation.copy(tmpE);
       g.mesh.visible = u < 0.98;
     }
+    if (smoke) {
+      let i = 0;
+      for (const c of smoke.chim) for (let k = 0; k < PUFFS; k++) {
+        const u = (t * 0.16 + c.ph + k / PUFFS) % 1, sz = (0.45 + u * 1.5) * (1 - Math.max(0, u - 0.7) / 0.3);
+        tmpM.compose(tmpV.set(c.p.x + Math.sin(u * 4 + c.ph * 6) * 0.3 + u * 1.1, c.p.y + u * 3.4, c.p.z + u * 0.5), tmpQ.identity(), tmpS.set(sz, sz, sz));
+        smoke.setMatrixAt(i++, tmpM);
+      }
+      smoke.instanceMatrix.needsUpdate = true;
+    }
     if (skateMesh) {
       skaters.forEach((s, i) => {
         const a = s.ph + t * s.sp * (2.2 / s.rad), x = s.l.x + Math.cos(a) * s.rad, z = s.l.z + Math.sin(a) * s.rad;
@@ -225,7 +245,7 @@ export function createDecoView(scene) {
 
   function clear() {
     for (const o of [...group.children]) { group.remove(o); o.geometry?.dispose(); }
-    balloons.length = 0; gliders.length = 0; skaters.length = 0; skateMesh = null; key = null;
+    balloons.length = 0; gliders.length = 0; skaters.length = 0; skateMesh = null; smoke = null; key = null;
   }
 
   return { sync, update, clear };

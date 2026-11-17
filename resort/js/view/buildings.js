@@ -1,8 +1,8 @@
 // Idle Lift: low-poly buildings and the village at the car park.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at, GLOW } from './scene.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const SNOWY = 0xf4f7fb, STONE = 0x6a6f78, GLASS = 0x26384d;
+const SNOWY = 0xfffaf4, STONE = 0x8a8088, GLASS = GLOW; // lit, warm windows
 
 // A pitched roof with its ridge along z.
 function gable(w, d, h) {
@@ -87,7 +87,7 @@ export function createBuildingView(scene) {
   const group = new THREE.Group(), village = new THREE.Group();
   scene.add(group, village);
   const views = new Map(), geos = {};
-  const mat = pixMat({ vertexColors: true, side: THREE.DoubleSide }, 10);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
 
   function mesh(type) {
     const m = new THREE.Mesh(geos[type] || (geos[type] = MODELS[type]()), mat);

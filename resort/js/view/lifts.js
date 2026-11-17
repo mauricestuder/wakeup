@@ -1,5 +1,5 @@
 // Idle Lift: lifts on screen. Stations, pylons, cables and the moving bars, chairs and cabins.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { LIFTS } from '../tuning.js';
 import { along } from '../network.js';
 
@@ -92,7 +92,7 @@ export function createLiftView(scene) {
   const group = new THREE.Group();
   scene.add(group);
   const views = new Map();
-  const mat = pixMat({ vertexColors: true }, 14);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const cableMat = new THREE.LineBasicMaterial({ color: 0x1d2229 });
   const geos = {};
   const geo = (k, f) => geos[k] || (geos[k] = f());

@@ -8,7 +8,7 @@ export const T = {
   MONEY: 10,             // every fare, price and reward is multiplied by this, so nothing needs cents
 
   // Piste colour: steepness (drop per tile) below these limits.
-  GREEN: 0.17, BLUE: 0.28, RED: 0.42, PISTE_WIDTH: 2.4,
+  GREEN: 0.17, BLUE: 0.28, RED: 0.42, PISTE_WIDTH: 3.6,
 
   // Guests.
   WALK: 2.4, SKI: 4.2,

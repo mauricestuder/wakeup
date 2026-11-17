@@ -22,51 +22,19 @@ export function merge(parts) {
   out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return out;
 }
-// ---------- the blocky pixel look ----------
-// Every surface gets a small pixel-art texture, like 16 x 16 blocks: a few shades of its own colour,
-// sharp pixels close up. It is laid along the faces of each part in the part's own space, so it
-// sticks to moving things. density = texture pixels per unit, amp = how strong the shading is.
-let PIX = null;
-function pixTex() {
-  if (PIX) return PIX;
-  const n = 16, d = new Uint8Array(n * n * 4);
-  let s = 12345;
-  const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < n * n; i++) {
-    // Four shades, like a hand-made pixel palette, with now and then a darker speck.
-    let v = Math.floor(r() * 4) / 3;
-    if (r() < 0.06) v = 0;
-    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = Math.round(v * 255); d[i * 4 + 3] = 255;
-  }
-  PIX = new THREE.DataTexture(d, n, n, THREE.RGBAFormat);
-  PIX.wrapS = PIX.wrapT = THREE.RepeatWrapping;
-  PIX.magFilter = THREE.NearestFilter; PIX.minFilter = THREE.LinearMipmapLinearFilter; PIX.generateMipmaps = true;
-  PIX.needsUpdate = true;
-  return PIX;
-}
-export function pixMat(o = {}, density = 12, amp = 0.3) {
-  const m = new THREE.MeshLambertMaterial(o);
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.pixTex = { value: pixTex() }; sh.uniforms.pixD = { value: density }; sh.uniforms.pixA = { value: amp };
-    sh.vertexShader = 'varying vec3 vPixP;\nvarying vec3 vPixN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPixP = position; vPixN = normal;');
-    sh.fragmentShader = 'uniform sampler2D pixTex;\nuniform float pixD;\nuniform float pixA;\nvarying vec3 vPixP;\nvarying vec3 vPixN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  vec3 an = abs(vPixN);
-  vec2 tuv = an.x > an.y && an.x > an.z ? vPixP.zy : (an.y > an.z ? vPixP.xz : vPixP.xy);
-  diffuseColor.rgb *= 1.0 + pixA * (texture2D(pixTex, tuv * pixD / 16.0).r - 0.5);`);
-  };
-  m.customProgramCacheKey = () => 'pix' + density + '/' + amp;
-  return m;
-}
+// Window light: a colour brighter than white, so lit windows glow warm at any time of day.
+export const GLOW = new THREE.Color(2.6, 1.7, 0.75);
 
 export const at = (x, y, z, ry = 0, sx = 1, sy = 1, sz = 1) =>
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(sx, sy, sz));
 
+// Cozy skies: soft blue overhead fading to a warm peach haze at the horizon.
 const SKY = {
-  sun: { top: 0x3f86d8, mid: 0xbfdcf2, fog: 0xcfe3f3, sun: 2.5, amb: 1.25, far: 520 },
-  cloud: { top: 0x8ea3b6, mid: 0xcfd8df, fog: 0xd2dae0, sun: 1.1, amb: 1.25, far: 420 },
-  snow: { top: 0xa9b4bf, mid: 0xdfe4e8, fog: 0xe2e6ea, sun: 0.7, amb: 1.4, far: 230 },
-  storm: { top: 0x6f7b87, mid: 0xb3bcc4, fog: 0xbcc4cb, sun: 0.4, amb: 1.25, far: 150 },
-  thaw: { top: 0x5d98d2, mid: 0xdfe3d2, fog: 0xdfe6dc, sun: 2.0, amb: 1.0, far: 480 },
+  sun: { top: 0x6fa6dd, mid: 0xffe3cc, fog: 0xf6e4d6, sun: 3.0, amb: 0.95, far: 520 },
+  cloud: { top: 0x9aa6c4, mid: 0xe8dcd6, fog: 0xe6dcd6, sun: 1.1, amb: 1.25, far: 420 },
+  snow: { top: 0xaeb2c8, mid: 0xe9e3e4, fog: 0xebe5e6, sun: 0.7, amb: 1.4, far: 230 },
+  storm: { top: 0x777c96, mid: 0xbfbccb, fog: 0xc6c2cf, sun: 0.4, amb: 1.25, far: 150 },
+  thaw: { top: 0x6fa0d6, mid: 0xf2e2c8, fog: 0xece2d0, sun: 2.0, amb: 1.0, far: 480 },
 };
 
 export function createScene(canvas, opts) {
@@ -78,17 +46,17 @@ export function createScene(canvas, opts) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false; // redrawn every second frame, see render()
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = 1.3;
 
   let treeShadows = false; // tree shade is painted on the snow instead, see paintLand
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xcfe3f3, 120, 520);
+  scene.fog = new THREE.Fog(0xf6e4d6, 120, 520);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 900);
 
-  const hemi = new THREE.HemisphereLight(0xdcebff, 0xeaf0ff, 1.25);
+  const hemi = new THREE.HemisphereLight(0xfff0e0, 0xd8d4ff, 1.25);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
+  const sun = new THREE.DirectionalLight(0xffe2bd, 2.3);
   sun.castShadow = true;
   const sm = opts.touch ? 1024 : 2048;
   sun.shadow.mapSize.set(sm, sm);
@@ -98,7 +66,7 @@ export function createScene(canvas, opts) {
   scene.add(sun, sun.target);
 
   // Sky dome.
-  const skyU = { top: { value: new THREE.Color(0x3f86d8) }, mid: { value: new THREE.Color(0xbfdcf2) } };
+  const skyU = { top: { value: new THREE.Color(0x6fa6dd) }, mid: { value: new THREE.Color(0xffe3cc) } };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(800, 24, 12), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
     vertexShader: 'varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
@@ -137,8 +105,9 @@ export function createScene(canvas, opts) {
   let ter = null, land = null, trees = null, overlay = 'none', snowFn = null;
   const world = new THREE.Group();
   scene.add(world);
-  const SNOW = new THREE.Color(0.95, 0.97, 1.0), SHADE = new THREE.Color(0.74, 0.83, 0.99), ROCK = new THREE.Color(0.45, 0.44, 0.47),
-    GRASS = new THREE.Color(0.47, 0.5, 0.33), DARKROCK = new THREE.Color(0.3, 0.29, 0.32), WIND = new THREE.Color(0.86, 0.91, 0.99), ICE = new THREE.Color(0.55, 0.78, 0.92), DIRT = new THREE.Color(0.5, 0.43, 0.34), UNDER = new THREE.Color(0.56, 0.66, 0.84);
+  // Soft, warm snow with lavender shade, like a winter storybook.
+  const SNOW = new THREE.Color(1.0, 0.975, 0.95), SHADE = new THREE.Color(0.8, 0.8, 0.98), ROCK = new THREE.Color(0.55, 0.49, 0.5),
+    GRASS = new THREE.Color(0.55, 0.58, 0.38), DARKROCK = new THREE.Color(0.4, 0.35, 0.4), WIND = new THREE.Color(0.93, 0.92, 1.0), ICE = new THREE.Color(0.6, 0.82, 0.92), DIRT = new THREE.Color(0.58, 0.46, 0.38), UNDER = new THREE.Color(0.66, 0.64, 0.88);
   const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3();
 
   function buildLand() {
@@ -155,7 +124,7 @@ export function createScene(canvas, opts) {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.computeVertexNormals();
-    land = new THREE.Mesh(geo, pixMat({ vertexColors: true }, 2, 0.13));
+    land = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
     land.receiveShadow = true;
     world.add(land);
 
@@ -174,7 +143,7 @@ export function createScene(canvas, opts) {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hs[j * n + i] = ter.ground(line[i], line[j]);
     // One colour per corner, so the far slopes shade softly instead of in flat patches.
     const pos = new Float32Array(n * n * 3), col = new Float32Array(n * n * 3), idx = [];
-    const FOREST = new THREE.Color(0.3, 0.42, 0.36), nn = new THREE.Vector3();
+    const FOREST = new THREE.Color(0.36, 0.5, 0.44), nn = new THREE.Vector3();
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const k = (j * n + i) * 3, x = line[i], z = line[j], y = hs[j * n + i];
       // Slightly sunk where it meets the real mountain, so the two never fight over the same spot.
@@ -202,7 +171,7 @@ export function createScene(canvas, opts) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    world.add(new THREE.Mesh(g, pixMat({ vertexColors: true }, 0.7, 0.1)));
+    world.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
   }
 
   // Colour every triangle: snow, bare ground where the snow is gone, rock on cliffs.
@@ -234,7 +203,7 @@ export function createScene(canvas, opts) {
         if (depth <= 0) tmpC.copy(DIRT);
       } else {
         // West and north faces sit in blue shade, like a real snowfield.
-        tmpC.copy(SNOW).lerp(SHADE, clamp(0.3 - nor[t] * 1.3 + nor[t + 2] * 0.6 + (n - 0.5) * 0.4, 0, 1) * 0.7);
+        tmpC.copy(SNOW).lerp(SHADE, clamp(0.3 - nor[t] * 1.3 + nor[t + 2] * 0.6 + (n - 0.5) * 0.4, 0, 1) * 0.55);
         const bare = 1 - smooth(-2, 14, depth + (n - 0.5) * 12);
         if (bare > 0) tmpC.lerp(n > 0.55 ? DIRT : GRASS, bare * 0.92);
         // Shade under the trees, painted on once. Much cheaper than real tree shadows every frame.
@@ -261,31 +230,32 @@ export function createScene(canvas, opts) {
   let pines = null, slots = null;
   const isPine = (i) => ((i * 2654435761) >>> 0) % 100 < 28;
   function buildTrees() {
-    // Blocky trees: a spruce of stacked square layers with snow on each, and a leafy tree of cubes.
-    const cube = (w, h, y, c, x = 0, z = 0) => [new THREE.BoxGeometry(w, h, w), c, at(x, y, z)];
+    // Soft, plump trees: round tiers with a pillow of snow on each, and fluffy round pines.
+    const cone = (r, hh, y, c) => [new THREE.ConeGeometry(r, hh, 12, 1, true), c, at(0, y, 0)];
+    const cap = (r, y, sy) => [new THREE.SphereGeometry(r, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xfffaf4, at(0, y, 0, 0, 1, sy, 1)];
     const spruce = merge([
-      cube(0.18, 0.5, 0.25, 0x6b4a2f),
-      cube(1.0, 0.26, 0.6, 0x2f6b3a), cube(0.9, 0.05, 0.75, 0xf4f8ff),
-      cube(0.78, 0.26, 0.88, 0x37784a), cube(0.68, 0.05, 1.03, 0xf4f8ff),
-      cube(0.56, 0.26, 1.16, 0x2f6b3a), cube(0.46, 0.05, 1.31, 0xf4f8ff),
-      cube(0.34, 0.26, 1.44, 0x37784a), cube(0.2, 0.22, 1.68, 0xf4f8ff),
+      [new THREE.CylinderGeometry(0.07, 0.09, 0.4, 6, 1, true), 0x7a5640, at(0, 0.2, 0)],
+      cone(0.54, 0.72, 0.62, 0x3f7a5e), cone(0.45, 0.66, 0.95, 0x46866a), cone(0.35, 0.6, 1.26, 0x4f9273), cone(0.23, 0.5, 1.6, 0x58a07d),
+      cap(0.3, 1.0, 0.35), cap(0.22, 1.31, 0.4), cap(0.14, 1.72, 0.9),
     ]);
     const pine = merge([
-      cube(0.16, 1.0, 0.5, 0x7a5232),
-      cube(0.86, 0.6, 1.2, 0x3a8a44), cube(0.56, 0.36, 1.66, 0x46a052), cube(0.5, 0.06, 1.87, 0xf4f8ff), cube(0.7, 0.05, 1.53, 0xf4f8ff, 0.08, 0.08),
+      [new THREE.CylinderGeometry(0.06, 0.09, 1.0, 6, 1, true), 0x86603f, at(0, 0.5, 0)],
+      [new THREE.IcosahedronGeometry(0.44, 1), 0x4b8a5c, at(0, 1.15, 0, 0, 1, 0.8, 1)],
+      [new THREE.IcosahedronGeometry(0.34, 1), 0x58996a, at(0.1, 1.5, 0.05, 0, 1, 0.8, 1)],
+      [new THREE.IcosahedronGeometry(0.29, 1), 0xfffaf4, at(0.05, 1.64, 0, 0, 1, 0.38, 1)],
     ]);
     const all = ter.trees.length + ter.outer.length;
     slots = new Int32Array(all);
     let a = 0, b = 0;
     for (let i = 0; i < all; i++) slots[i] = isPine(i) ? b++ : a++;
-    trees = new THREE.InstancedMesh(spruce, pixMat({ vertexColors: true }, 16, 0.35), Math.max(1, a));
+    trees = new THREE.InstancedMesh(spruce, new THREE.MeshLambertMaterial({ vertexColors: true }), Math.max(1, a));
     pines = new THREE.InstancedMesh(pine, trees.material, Math.max(1, b));
     for (const m of [trees, pines]) { m.castShadow = treeShadows; m.receiveShadow = false; m.frustumCulled = false; world.add(m); }
     updateTrees();
   }
 
   function placeTree(i, t, s) {
-    tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), (i % 4) * Math.PI / 2); // blocks stay square to the world
+    tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), i * 2.4);
     tmpM.compose(tmpV.set(t.x, t.y - 0.05, t.z), tmpQ, tmpS.set(s, s * (0.85 + (i % 7) * 0.05), s));
     (isPine(i) ? pines : trees).setMatrixAt(slots[i], tmpM);
   }
@@ -307,8 +277,8 @@ export function createScene(canvas, opts) {
   }
 
   // ---------- weather and time of day ----------
-  const cur = { top: new THREE.Color(0x3f86d8), mid: new THREE.Color(0xbfdcf2), fog: new THREE.Color(0xcfe3f3), sun: 2.3, amb: 0.95, far: 520, snow: 0 };
-  const DUSK_TOP = new THREE.Color(0x35508a), DUSK_MID = new THREE.Color(0xffd9b8), DUSK_FOG = new THREE.Color(0xf6e2d2);
+  const cur = { top: new THREE.Color(0x6fa6dd), mid: new THREE.Color(0xffe3cc), fog: new THREE.Color(0xf6e4d6), sun: 2.3, amb: 0.95, far: 520, snow: 0 };
+  const DUSK_TOP = new THREE.Color(0x4a4f8f), DUSK_MID = new THREE.Color(0xffc6a0), DUSK_FOG = new THREE.Color(0xf8d9c6);
   let weather = 'sun';
   function setWeather(w) { weather = w; }
 
@@ -330,7 +300,7 @@ export function createScene(canvas, opts) {
     renderer.setClearColor(cur.fog);
     hemi.intensity = cur.amb;
     sun.intensity = cur.sun;
-    sun.color.setRGB(1, 0.95 - warm * 0.2, 0.86 - warm * 0.42);
+    sun.color.setRGB(1, 0.9 - warm * 0.18, 0.76 - warm * 0.38); // always a little golden
     const c = ter ? ter.N / 2 : 48;
     sun.position.set(c + Math.sin(ang) * 150, 95 - low * 35, c + 70 + Math.cos(ang) * 60);
     snowU.time.value += dt;

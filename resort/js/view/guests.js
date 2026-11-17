@@ -1,5 +1,5 @@
 // Idle Lift: all guests as one instanced mesh, moved smoothly between simulation steps.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { LIFTS, T } from '../tuning.js';
 import { featureAt } from '../network.js';
 
@@ -22,16 +22,18 @@ function bodyParts(board) {
     [box(0.07, 0.24, 0.08), 0xffffff, tilt(0.155, 0.47, 0.02, 0.35, -arm)],
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(-0.155 - Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)], // gloves
     [box(0.075, 0.06, 0.08), 0x2a2a2a, tilt(0.155 + Math.sin(arm) * 0.12, 0.36, 0.06, 0.35)],
-    [box(0.24, 0.22, 0.22), 0xf0c8a0, at(0, 0.71, 0)],                    // a big square head
-    [box(0.26, 0.09, 0.24), 0x8c8c8c, at(0, 0.84, -0.01)],                // helmet, a darker shade of the jacket
-    [box(0.045, 0.045, 0.02), 0x1e1610, at(-0.055, 0.72, 0.112)], [box(0.045, 0.045, 0.02), 0x1e1610, at(0.055, 0.72, 0.112)], // pixel eyes
+    [new THREE.SphereGeometry(0.1, 10, 8), 0xf0c8a0, at(0, 0.67, 0)],      // a round face
+    [new THREE.SphereGeometry(0.108, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0x8c8c8c, at(0, 0.69, -0.005)], // knitted beanie, a darker shade of the jacket
+    [new THREE.CylinderGeometry(0.11, 0.11, 0.04, 10), 0xb0b0b0, at(0, 0.69, -0.005)], // its folded rim
+    [new THREE.SphereGeometry(0.045, 8, 6), 0xe0e0e0, at(0, 0.81, -0.01)],  // pompom
+    [new THREE.CylinderGeometry(0.085, 0.1, 0.05, 10), 0x6a6a6a, at(0, 0.6, 0)], // scarf
     [box(0.21, 0.29, 0.15), 0x3a3a3a, at(0, 0.17, 0)],                    // trousers
     [box(0.1, 0.06, 0.16), 0x202020, at(-0.055, 0.04, 0.01)], [box(0.1, 0.06, 0.16), 0x202020, at(0.055, 0.04, 0.01)], // boots
   ];
 }
 // The gear, in white so the instance colour paints it.
 function gearParts(board) {
-  const parts = [[box(0.26, 0.05, 0.03), 0xffffff, at(0, 0.8, 0.115)]]; // goggles on the helmet
+  const parts = [[box(0.16, 0.05, 0.03), 0xffffff, at(0, 0.67, 0.095)]]; // goggles
   if (board) {
     parts.push([box(1.0, 0.04, 0.28), 0xffffff, at(0, 0.01, 0)]);          // the board, across the rider
     parts.push([box(0.12, 0.045, 0.3), 0x202020, at(-0.3, 0.015, 0)], [box(0.12, 0.045, 0.3), 0x202020, at(0.3, 0.015, 0)]); // tips
@@ -49,7 +51,7 @@ function gearParts(board) {
 }
 
 export function createGuestView(scene, cap = 440) {
-  const mat = pixMat({ vertexColors: true }, 44);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const make = (geo, colors) => {
     const mesh = new THREE.InstancedMesh(geo, mat, cap);
     mesh.castShadow = true; mesh.frustumCulled = false; mesh.count = 0;
@@ -91,7 +93,7 @@ export function createGuestView(scene, cap = 440) {
       } else if (g.st === 'ski') {
         // Carving: swing left and right across the piste.
         // Snowboarders stand sideways and draw longer, wider turns.
-        const ph = g.s * (g.board ? 0.55 : 0.8) + g.seed * 6.28, sw = Math.sin(ph) * (g.board ? 0.95 : 0.75);
+        const ph = g.s * (g.board ? 0.55 : 0.8) + g.seed * 6.28, sw = Math.sin(ph) * (g.board ? 1.4 : 1.1);
         x += Math.cos(g.face) * sw; z -= Math.sin(g.face) * sw;
         yaw = g.face + Math.cos(ph) * 0.55; roll = -Math.cos(ph) * 0.3;
         if (g.board) { yaw += 1.25; flip = -Math.cos(ph) * 0.28; roll = 0; }
@@ -101,11 +103,11 @@ export function createGuestView(scene, cap = 440) {
           const u = (g.s - f.s0) / Math.max(1, f.s1 - f.s0), across = (w) => { x = g.x + Math.cos(g.face) * w; z = g.z - Math.sin(g.face) * w; };
           if (f.type === 'bridge' || f.type === 'tunnel') { across(sw * 0.4); y = g.y; }
           else if (f.type === 'moguls') lift = Math.abs(Math.sin(g.s * 3.3)) * 0.2;
-          else if (f.type === 'gates') { const w = Math.sin((g.s - f.s0) / 1.6 * Math.PI + Math.PI / 2) * 0.75; across(w); yaw = g.face - Math.cos((g.s - f.s0) / 1.6 * Math.PI + Math.PI / 2) * 0.7; roll = -w * 0.5; }
+          else if (f.type === 'gates') { const w = Math.sin((g.s - f.s0) / 1.6 * Math.PI + Math.PI / 2) * 1.0; across(w); yaw = g.face - Math.cos((g.s - f.s0) / 1.6 * Math.PI + Math.PI / 2) * 0.7; roll = -w * 0.5; }
           else if (f.type === 'park') {
             const rail = (u > 0.08 && u < 0.2) || (u > 0.58 && u < 0.68), box = u > 0.25 && u < 0.33;
             if ((rail || box) && g.seed < 0.55) { across(rail ? -0.8 : 0.8); lift = rail ? 0.42 : 0.3; yaw = g.face + Math.PI / 2; roll = 0; flip = 0; }
-            else if (u > 0.72) { const w = Math.sin(g.s * 1.1 + g.seed * 6) * 1.45; across(w); lift = (w / 1.45) * (w / 1.45) * 0.95; roll = -w * 0.55; yaw = g.face + Math.cos(g.s * 1.1 + g.seed * 6) * 0.9; }
+            else if (u > 0.72) { const w = Math.sin(g.s * 1.1 + g.seed * 6) * 2.05; across(w); lift = (w / 2.05) * (w / 2.05) * 0.95; roll = -w * 0.55; yaw = g.face + Math.cos(g.s * 1.1 + g.seed * 6) * 0.9; }
           }
         }
         // Off a kicker: up in an arc, with a full spin.

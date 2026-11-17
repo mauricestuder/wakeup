@@ -1,7 +1,7 @@
 // Idle Lift: the small things that make the mountain feel lived in. Benches, marker
 // poles, boulders, snowmen, kickers and floodlights. Everything is baked into one mesh,
 // rebuilt only when the resort changes, so it costs almost nothing to draw.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { rngFrom } from '../terrain.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -20,12 +20,11 @@ function bench(parts, x, y, z, ry) {
 }
 
 function snowman(parts, x, y, z, ry) {
-  // Three snow blocks, like everything else on the mountain.
-  const ball = (r, yy) => parts.push([box(r * 1.7, r * 1.7, r * 1.7), SNOWY, at(x, y + yy, z, ry)]);
+  const ball = (r, yy) => parts.push([new THREE.SphereGeometry(r, 8, 6), SNOWY, at(x, y + yy, z)]);
   ball(0.42, 0.34); ball(0.3, 0.86); ball(0.2, 1.24);
   parts.push([new THREE.ConeGeometry(0.05, 0.22, 5), ORANGE, tipped(x + Math.sin(ry) * 0.24, y + 1.24, z + Math.cos(ry) * 0.24, ry, Math.PI / 2)]);
-  parts.push([box(0.3, 0.2, 0.3), 0x23272e, at(x, y + 1.5, z, ry)]);
-  parts.push([box(0.46, 0.04, 0.46), 0x23272e, at(x, y + 1.41, z, ry)]);
+  parts.push([new THREE.CylinderGeometry(0.16, 0.16, 0.2, 8), 0x23272e, at(x, y + 1.5, z)]);
+  parts.push([new THREE.CylinderGeometry(0.25, 0.25, 0.03, 8), 0x23272e, at(x, y + 1.41, z)]);
 }
 
 // A point on the piste at index i, with the direction across it (nx, nz) and its height.
@@ -45,8 +44,8 @@ function feature(parts, ter, p, f, rnd) {
     for (let i = f.i0; i < f.i1; i++) {
       const a = onPiste(p, i), b = onPiste(p, i + 1), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.05;
       const tip = Math.atan2(a.y - b.y, len);
-      parts.push([box(3.5, 0.22, len), 0x8a5a2b, tipped(mx, my - 0.02, mz, a.yaw, tip)]);
-      for (const side of [1.55, -1.55]) {
+      parts.push([box(5.2, 0.22, len), 0x8a5a2b, tipped(mx, my - 0.02, mz, a.yaw, tip)]);
+      for (const side of [2.3, -2.3]) {
         parts.push([box(0.08, 0.08, len), 0x6b4423, tipped(mx + a.nx * side, my + 0.75, mz + a.nz * side, a.yaw, tip)]);
         parts.push([box(0.1, 0.8, 0.1), 0x6b4423, at(a.x + a.nx * side, a.y + 0.38, a.z + a.nz * side)]);
         const g = H(a.x + a.nx * side, a.z + a.nz * side);
@@ -59,20 +58,20 @@ function feature(parts, ter, p, f, rnd) {
     // Timber portals with rock piled on top, and a dark mouth.
     for (const [i, back] of [[f.i0, 1], [f.i1, -1]]) {
       const q = onPiste(p, i), y = q.y;
-      for (const side of [1.55, -1.55]) parts.push([box(0.3, 2.1, 0.3), 0x5a3a1c, at(q.x + q.nx * side, y + 1.0, q.z + q.nz * side, q.yaw)]);
-      parts.push([box(3.6, 0.35, 0.35), 0x5a3a1c, at(q.x, y + 2.1, q.z, q.yaw)]);
-      parts.push([box(2.9, 1.9, 0.08), 0x16191d, at(q.x + Math.sin(q.yaw) * 0.25 * back, y + 0.95, q.z + Math.cos(q.yaw) * 0.25 * back, q.yaw)]);
+      for (const side of [2.3, -2.3]) parts.push([box(0.3, 2.1, 0.3), 0x5a3a1c, at(q.x + q.nx * side, y + 1.0, q.z + q.nz * side, q.yaw)]);
+      parts.push([box(5.0, 0.35, 0.35), 0x5a3a1c, at(q.x, y + 2.1, q.z, q.yaw)]);
+      parts.push([box(4.3, 1.9, 0.08), 0x16191d, at(q.x + Math.sin(q.yaw) * 0.25 * back, y + 0.95, q.z + Math.cos(q.yaw) * 0.25 * back, q.yaw)]);
       for (let k = 0; k < 5; k++) {
-        const s = (k - 2) * 0.75, r = 0.45 + rnd() * 0.3;
+        const s = (k - 2) * 1.1, r = 0.45 + rnd() * 0.3;
         parts.push([new THREE.DodecahedronGeometry(r, 0), k % 2 ? STONE : 0x6b6e75, at(q.x + q.nx * s, y + 2.35 + r * 0.4, q.z + q.nz * s, rnd() * 6, 1.3, 0.8, 1.1)]);
       }
-      parts.push([box(3.8, 0.12, 0.6), SNOWY, at(q.x, y + 2.35, q.z, q.yaw)]);
+      parts.push([box(5.4, 0.12, 0.6), SNOWY, at(q.x, y + 2.35, q.z, q.yaw)]);
     }
     return;
   }
   if (f.type === 'moguls') {
     for (let i = f.i0; i < f.i1; i++) for (let k = 0; k < 3; k++) {
-      const q = onPiste(p, i, (k - 1) * 0.75 + (i % 2) * 0.35), y = H(q.x, q.z);
+      const q = onPiste(p, i, (k - 1) * 1.1 + (i % 2) * 0.45), y = H(q.x, q.z);
       parts.push([new THREE.SphereGeometry(0.42, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0xeef3fb, at(q.x, y + 0.02, q.z, 0, 1.1, 0.42, 1)]);
     }
     return;
@@ -81,13 +80,13 @@ function feature(parts, ter, p, f, rnd) {
     // Race gates, red and blue in turn, with a start banner.
     let n = 0;
     for (let s = f.s0 + 0.8; s < f.s1; s += 1.6, n++) {
-      const i = p.cum.findIndex((c) => c >= s), side = n % 2 ? 0.85 : -0.85, q = onPiste(p, i, side), y = H(q.x, q.z), c = n % 2 ? RED : BLUE;
+      const i = p.cum.findIndex((c) => c >= s), side = n % 2 ? 1.2 : -1.2, q = onPiste(p, i, side), y = H(q.x, q.z), c = n % 2 ? RED : BLUE;
       for (const d of [-0.32, 0.32]) parts.push([new THREE.CylinderGeometry(0.03, 0.03, 1.2, 5), c, at(q.x + q.nx * d, y + 0.6, q.z + q.nz * d)]);
       parts.push([box(0.64, 0.42, 0.02), c, at(q.x, y + 0.95, q.z, q.yaw + Math.PI / 2)]);
     }
     const st = onPiste(p, f.i0);
-    for (const side of [1.5, -1.5]) parts.push([box(0.12, 2.2, 0.12), 0x30343b, at(st.x + st.nx * side, st.y + 1.1, st.z + st.nz * side)]);
-    parts.push([box(3.1, 0.45, 0.06), RED, at(st.x, st.y + 2.0, st.z, st.yaw)]);
+    for (const side of [2.2, -2.2]) parts.push([box(0.12, 2.2, 0.12), 0x30343b, at(st.x + st.nx * side, st.y + 1.1, st.z + st.nz * side)]);
+    parts.push([box(4.5, 0.45, 0.06), RED, at(st.x, st.y + 2.0, st.z, st.yaw)]);
     parts.push([box(2.0, 0.12, 0.07), 0xffffff, at(st.x, st.y + 2.0, st.z, st.yaw)]);
     return;
   }
@@ -95,8 +94,8 @@ function feature(parts, ter, p, f, rnd) {
     const L = f.s1 - f.s0, idx = (u) => p.cum.findIndex((c) => c >= f.s0 + L * u);
     // Entrance arch with a banner.
     const e = onPiste(p, f.i0);
-    for (const side of [1.7, -1.7]) parts.push([box(0.14, 2.4, 0.14), 0x30343b, at(e.x + e.nx * side, e.y + 1.2, e.z + e.nz * side)]);
-    for (let k = 0; k < 4; k++) parts.push([box(0.85, 0.5, 0.06), PARK[k], at(e.x + e.nx * (k - 1.5) * 0.85, e.y + 2.15, e.z + e.nz * (k - 1.5) * 0.85, e.yaw)]);
+    for (const side of [2.5, -2.5]) parts.push([box(0.14, 2.4, 0.14), 0x30343b, at(e.x + e.nx * side, e.y + 1.2, e.z + e.nz * side)]);
+    for (let k = 0; k < 4; k++) parts.push([box(1.25, 0.5, 0.06), PARK[k], at(e.x + e.nx * (k - 1.5) * 1.25, e.y + 2.15, e.z + e.nz * (k - 1.5) * 1.25, e.yaw)]);
     // Rails: a steel bar on two legs, along the piste.
     const rail = (u0, u1, side) => {
       const a = onPiste(p, idx(u0), side), b = onPiste(p, idx(u1), side), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, len = Math.hypot(b.x - a.x, b.z - a.z);
@@ -113,18 +112,18 @@ function feature(parts, ter, p, f, rnd) {
     for (let i = idx(0.72); i < f.i1; i++) {
       const q = onPiste(p, i), r = onPiste(p, i + 1), len = Math.hypot(r.x - q.x, r.z - q.z) + 0.08;
       for (const side of [1, -1]) for (let k = 0; k < 3; k++) {
-        const ang = (k + 0.5) / 3 * 1.2, d = 1.3 + Math.sin(ang) * 0.75, h = (1 - Math.cos(ang)) * 1.1;
+        const ang = (k + 0.5) / 3 * 1.2, d = 1.9 + Math.sin(ang) * 0.75, h = (1 - Math.cos(ang)) * 1.1;
         const x = (q.x + r.x) / 2 + q.nx * d * side, z = (q.z + r.z) / 2 + q.nz * d * side, y = H((q.x + r.x) / 2, (q.z + r.z) / 2) + h;
         const m = new THREE.Matrix4().makeRotationY(q.yaw).multiply(new THREE.Matrix4().makeRotationZ(-ang * side)).setPosition(x, y, z);
         parts.push([box(0.62, 0.2, len), k === 2 ? 0xdbe6f5 : 0xeef3fb, m]);
       }
-      for (const side of [1, -1]) parts.push([box(0.12, 0.12, len), PARK[i % 4], at(q.x + q.nx * 2.15 * side, H(q.x, q.z) + 1.0, q.z + q.nz * 2.15 * side, q.yaw)]);
+      for (const side of [1, -1]) parts.push([box(0.12, 0.12, len), PARK[i % 4], at(q.x + q.nx * 2.75 * side, H(q.x, q.z) + 1.0, q.z + q.nz * 2.75 * side, q.yaw)]);
     }
   }
 }
 
 export function createExtraView(scene) {
-  const mat = pixMat({ vertexColors: true }, 12);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glow = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
   let mesh = null, lamps = null, key = '';
 
@@ -205,8 +204,8 @@ export function createExtraView(scene) {
     for (let n = 0, tries = 0; n < 16 && tries < 300; tries++) {
       const x = 6 + rnd() * (ter.N - 12), z = 8 + rnd() * (ter.N - 22), s = 0.35 + rnd() * 0.7;
       if (!clearOf(x, z)) continue;
-      parts.push([box(1.1, 1.0, 1.0), STONE, at(x, H(x, z) + s * 0.25, z, 0, s * 1.2, s * 0.8, s)]);
-      parts.push([box(0.9, 0.3, 0.8), SNOWY, at(x, H(x, z) + s * 0.7, z, 0, s * 1.1, s, s)]);
+      parts.push([new THREE.DodecahedronGeometry(0.7, 0), STONE, at(x, H(x, z) + s * 0.25, z, rnd() * 6, s * 1.2, s * 0.8, s)]);
+      parts.push([new THREE.DodecahedronGeometry(0.55, 0), SNOWY, at(x, H(x, z) + s * 0.55, z, rnd() * 6, s * 1.1, s * 0.35, s * 0.9)]);
       n++;
     }
 

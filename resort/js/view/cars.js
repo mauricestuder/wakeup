@@ -1,10 +1,10 @@
 // Idle Lift: the valley road, the car park, and the cars and coaches that bring the guests.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { T } from '../tuning.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const PAINT = [0xd9372f, 0x2f7fe6, 0xf2f2ee, 0x3a3f47, 0xf2c230, 0x34b05a, 0x9aa1ab, 0xf2793a].map((c) => new THREE.Color(c));
-const TAR = 0x4b4f56, LINE = 0xe9edf2, GLASS = 0x1c2733, TYRE = 0x15171a, SNOW = 0xf4f8ff, POLE = 0x3a3f47;
+const TAR = 0x7d7378, LINE = 0xfff4e4, GLASS = 0x1c2733, TYRE = 0x2a2326, SNOW = 0xfffaf4, POLE = 0x3a3f47;
 const M = new THREE.Matrix4(), D = new THREE.Matrix4(), DM = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
 const LIFT = 0.015; // the tarmac sits a hair above the ground under it
 
@@ -51,7 +51,7 @@ function signTexture() {
 }
 
 export function createCarView(scene, cap = 160) {
-  const mat = pixMat({ vertexColors: true }, 22);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const cars = new THREE.InstancedMesh(carGeo(), mat, cap), buses = new THREE.InstancedMesh(busGeo(), mat, 8), doors = new THREE.InstancedMesh(doorGeo(), mat, cap);
   for (const m of [cars, buses, doors]) { m.castShadow = true; m.frustumCulled = false; m.count = 0; scene.add(m); }
   cars.setColorAt(0, PAINT[0]); doors.setColorAt(0, PAINT[0]);

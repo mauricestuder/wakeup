@@ -1,8 +1,8 @@
 // Idle Lift: pistes drawn as groomed ribbons lying on the snow, edged in their difficulty colour.
-import { THREE, merge, at, pixMat } from './scene.js';
+import { THREE, merge, at } from './scene.js';
 import { T, DIFF } from '../tuning.js';
 
-const WHITE = new THREE.Color(0.9, 0.95, 1.0);
+const WHITE = new THREE.Color(1.0, 0.98, 0.96); // fresh, warm corduroy
 
 // A strip draped over the terrain along a list of points one tile apart.
 export function ribbon(ter, pts, width, lift, edge, inner = WHITE, edgeW = 0.28) {
@@ -45,13 +45,13 @@ export function createPisteView(scene) {
   const group = new THREE.Group();
   scene.add(group);
   const views = new Map();
-  const mat = pixMat({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, 3, 0.12);
-  const signMat = pixMat({ vertexColors: true }, 14);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const signMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 
   function make(ter, p) {
     const g = new THREE.Group();
     const c = new THREE.Color(DIFF[p.diff].color);
-    const m = new THREE.Mesh(ribbon(ter, p.pts, T.PISTE_WIDTH, 0.09, c), mat);
+    const m = new THREE.Mesh(ribbon(ter, p.pts, T.PISTE_WIDTH, 0.09, c, WHITE, 0.4), mat);
     m.receiveShadow = true;
     g.add(m);
     // A sign at the start, in the piste's colour.
