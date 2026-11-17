@@ -158,7 +158,7 @@ something. You spend the money on wooden upgrade boards.
   boxes bigger (its last level has no limit), and a **Station manager**
   collects a station by itself and sells 10% more. Money earned while the game
   was closed waits in the boxes.
-- Cartoon look: toon shading, black outlines, bright colours, big-headed
+- Cartoon look: toon shading, hand-drawn ink lines, bright colours, big-headed
   guests, and lifts and huts that pop up with a wobble.
 - The **P** button sets the parking price, from Free to Rip-off: cheap parking
   brings more guests, dear parking pays more per guest. The sheet shows what

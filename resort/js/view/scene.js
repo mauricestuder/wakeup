@@ -33,68 +33,98 @@ export function toon(o = {}) {
   return new THREE.MeshToonMaterial({ gradientMap: GRAD, ...o });
 }
 
-// Black outlines: a copy of each mesh drawn from behind, pushed out along smoothed normals on
-// screen, so every shape gets a comic-style edge. Thicker close up, thinner far away.
-const OL = 0.0058;
-const olMats = new Map();
-function olMat(w) {
-  if (!olMats.has(w)) {
-    const m = new THREE.MeshBasicMaterial({ color: 0x1e1610, side: THREE.BackSide });
-    m.onBeforeCompile = (sh) => {
-      sh.vertexShader = 'attribute vec3 onormal;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
-        vec3 on = onormal;
-        #ifdef USE_INSTANCING
-          on = mat3(instanceMatrix) * on;
-        #endif
-        vec4 cn = projectionMatrix * vec4(normalize(mat3(modelViewMatrix) * on), 0.0);
-        float px = ${(OL * w).toFixed(5)} * clamp(42.0 / gl_Position.w, 0.2, 2.0);
-        gl_Position.xy += normalize(cn.xy + vec2(1e-5)) * px * gl_Position.w;`);
-    };
-    m.customProgramCacheKey = () => 'outline' + w;
-    olMats.set(w, m);
-  }
-  return olMats.get(w);
+// ---------- hand-drawn ink lines ----------
+// After the picture is drawn, a second, cheap picture of every surface's direction and depth is
+// made, and a full-screen pass inks the lines where depth jumps (outlines) or surfaces fold
+// (creases). The pen wobbles a little and its width and darkness vary, so it looks drawn by hand.
+// The snow and the pistes give outlines but no creases, so the slopes stay clean.
+let inkOn = true;
+export function setOutlines(on) { inkOn = on; }
+export function outlineAll() {} // kept for callers; ink needs no set-up per mesh
+export function outline() {}
+
+const INK_FRAG = `
+  uniform sampler2D tN; uniform sampler2D tD; uniform vec2 res; uniform float near, far, px, fogNear, fogFar; uniform vec3 ink;
+  float lin(float d) { return near * far / (far - d * (far - near)); }
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+    return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
+  float inv(vec2 uv) { return 1. / lin(texture2D(tD, uv).r); }
+  float crease(vec3 n0, vec4 s) { return (1. - dot(n0, s.rgb * 2. - 1.)) * s.a; }
+  void main() {
+    vec2 fc = gl_FragCoord.xy;
+    // The pen: wobbles along the line, and its width changes slowly.
+    vec2 wob = vec2(noise(fc * .045), noise(fc * .045 + 17.3)) - .5;
+    vec2 uv = (fc + wob * 2.4 * px) / res;
+    float dc = lin(texture2D(tD, uv).r);
+    float w = px * (.7 + .65 * noise(fc * .018 + 5.)) * clamp(45. / dc, .6, 1.5);
+    vec2 dx = vec2(w / res.x, 0.), dy = vec2(0., w / res.y);
+    // Outlines: where the depth does not follow a flat surface (1/depth is flat on a plane).
+    float ic = 1. / dc;
+    float lap = max(abs(inv(uv - dx) + inv(uv + dx) - 2. * ic), abs(inv(uv - dy) + inv(uv + dy) - 2. * ic)) / ic;
+    float e = smoothstep(.035, .09, lap);
+    // Creases: where the surface turns sharply, on things that want them.
+    vec4 nc = texture2D(tN, uv);
+    vec3 n0 = nc.rgb * 2. - 1.;
+    float cr = max(max(crease(n0, texture2D(tN, uv + dx)), crease(n0, texture2D(tN, uv - dx))), max(crease(n0, texture2D(tN, uv + dy)), crease(n0, texture2D(tN, uv - dy)))) * nc.a;
+    e = max(e, smoothstep(.3, .6, cr) * .85);
+    e *= 1. - smoothstep(fogNear, fogFar, dc);
+    e *= .72 + .28 * noise(fc * .09 + 31.); // the ink is not even
+    if (e < .02) discard;
+    gl_FragColor = vec4(ink, min(1., e) * .9);
+  }`;
+
+function createInk(renderer) {
+  const size = new THREE.Vector2();
+  const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+  rt.depthTexture = new THREE.DepthTexture(1, 1);
+  const mk = (flag, side) => new THREE.MeshNormalMaterial({ opacity: flag, side });
+  const mats = { 1: mk(1, THREE.FrontSide), 3: mk(1, THREE.DoubleSide), 0: mk(0, THREE.FrontSide), 2: mk(0, THREE.DoubleSide) };
+  const U = { tN: { value: rt.texture }, tD: { value: rt.depthTexture }, res: { value: new THREE.Vector2() }, near: { value: 0.5 }, far: { value: 900 },
+    px: { value: 1 }, fogNear: { value: 100 }, fogFar: { value: 500 }, ink: { value: new THREE.Color(0x2a1b10) } };
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthTest: false, depthWrite: false,
+    vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }', fragmentShader: INK_FRAG,
+  }));
+  quad.frustumCulled = false;
+  const qScene = new THREE.Scene(), qCam = new THREE.Camera();
+  qScene.add(quad);
+  const swapped = [], hidden = [], keepC = new THREE.Color();
+
+  return function draw(scene, camera) {
+    renderer.getDrawingBufferSize(size);
+    if (rt.width !== size.x || rt.height !== size.y) rt.setSize(size.x, size.y);
+    // The direction-and-depth picture: every solid mesh in a normal material, the rest hidden.
+    scene.traverseVisible((o) => {
+      if (o.isMesh && o.material && !o.material.transparent && !o.material.isShaderMaterial) {
+        swapped.push(o, o.material);
+        o.material = mats[(o.userData.noOutline ? 0 : 1) + (o.material.side === THREE.DoubleSide ? 2 : 0)];
+      } else if (o.isMesh || o.isLine || o.isPoints || o.isSprite) hidden.push(o);
+    });
+    for (const o of hidden) o.visible = false;
+    renderer.getClearColor(keepC);
+    const keepA = renderer.getClearAlpha(), fog = scene.fog;
+    scene.fog = null;
+    renderer.setClearColor(0x8080ff, 0);
+    renderer.setRenderTarget(rt);
+    renderer.clear();
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(keepC, keepA);
+    scene.fog = fog;
+    for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
+    for (const o of hidden) o.visible = true;
+    swapped.length = 0; hidden.length = 0;
+    // The ink, laid over the finished picture.
+    U.res.value.copy(size); U.near.value = camera.near; U.far.value = camera.far;
+    U.px.value = Math.max(1, renderer.getPixelRatio() * 1.4);
+    if (fog) { U.fogNear.value = fog.near * 0.6; U.fogFar.value = fog.far * 0.75; }
+    const ac = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.render(qScene, qCam);
+    renderer.autoClear = ac;
+  };
 }
-// One normal per corner, the average of the faces that meet there, so boxes get a closed edge.
-function smoothNormals(geo) {
-  if (geo.attributes.onormal) return;
-  if (!geo.attributes.normal) geo.computeVertexNormals();
-  const p = geo.attributes.position, n = geo.attributes.normal, sum = new Map(), out = new Float32Array(p.count * 3);
-  const key = (i) => Math.round(p.getX(i) * 500) + ',' + Math.round(p.getY(i) * 500) + ',' + Math.round(p.getZ(i) * 500);
-  for (let i = 0; i < p.count; i++) { const k = key(i), v = sum.get(k) || [0, 0, 0]; v[0] += n.getX(i); v[1] += n.getY(i); v[2] += n.getZ(i); sum.set(k, v); }
-  for (let i = 0; i < p.count; i++) { const v = sum.get(key(i)), l = Math.hypot(v[0], v[1], v[2]) || 1; out[i * 3] = v[0] / l; out[i * 3 + 1] = v[1] / l; out[i * 3 + 2] = v[2] / l; }
-  geo.setAttribute('onormal', new THREE.BufferAttribute(out, 3));
-}
-let outlinesOn = true;
-const twins = new Set();
-export function outline(mesh) {
-  if (mesh.userData.ol === mesh.geometry) return;
-  if (mesh.userData.twin) { mesh.remove(mesh.userData.twin); twins.delete(mesh.userData.twin); }
-  mesh.userData.ol = mesh.geometry;
-  smoothNormals(mesh.geometry);
-  const mat = olMat(mesh.userData.olw || 1);
-  let twin;
-  if (mesh.isInstancedMesh) {
-    twin = new THREE.InstancedMesh(mesh.geometry, mat, mesh.instanceMatrix.count);
-    twin.instanceMatrix = mesh.instanceMatrix;
-    twin.frustumCulled = false;
-    twin.count = mesh.count;
-    twin.onBeforeRender = () => { twin.count = mesh.count; };
-  } else twin = new THREE.Mesh(mesh.geometry, mat);
-  twin.userData.isOutline = true; twin.castShadow = false; twin.receiveShadow = false;
-  twin.raycast = () => {};
-  twin.visible = outlinesOn;
-  mesh.userData.twin = twin;
-  mesh.add(twin); twins.add(twin);
-}
-// Gives every solid mesh under root an outline, except those marked noOutline.
-export function outlineAll(root) {
-  const list = [];
-  root.traverse((o) => { if (o.isMesh && !o.userData.isOutline && !o.userData.noOutline && o.material && !o.material.transparent && !o.material.isShaderMaterial && o.userData.ol !== o.geometry) list.push(o); });
-  for (const o of list) outline(o);
-  for (const t of twins) if (!t.parent || !t.parent.parent) twins.delete(t);
-}
-export function setOutlines(on) { outlinesOn = on; for (const t of twins) t.visible = on; }
 
 // Cartoon pop-in: grows from nothing, overshoots and wobbles back. u = 0..1. Returns [across, up].
 export function popScale(u) {
@@ -117,7 +147,7 @@ const SKY = {
 export function createScene(canvas, opts) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const baseRatio = Math.min(devicePixelRatio || 1, 1.5);
-  let scale = 1, frameNo = 0;
+  let scale = 1, frameNo = 0, ink = null;
   renderer.setPixelRatio(baseRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -413,6 +443,10 @@ export function createScene(canvas, opts) {
     setTreeShadows: () => {},
     // Render at a share of the screen's resolution.
     setScale: (f) => { if (f !== scale) { scale = f; renderer.setPixelRatio(baseRatio * f); resize(true); } },
-    render: () => { if ((frameNo++ & 1) === 0) renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); },
+    render: () => {
+      if ((frameNo++ & 1) === 0) renderer.shadowMap.needsUpdate = true;
+      renderer.render(scene, camera);
+      if (inkOn) { renderer.shadowMap.needsUpdate = false; (ink ||= createInk(renderer))(scene, camera); }
+    },
   };
 }
