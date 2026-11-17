@@ -37,6 +37,20 @@ export const T = {
   SCHOOL: { base: 3000, growth: 1.6, max: 25 },   // ski school: lessons per guest
   NIGHT: { base: 60000, growth: 2.2, max: 8 },    // night skiing: income multiplier
   RESTO: { base: 900000, growth: 2.4, max: 10 },  // mountain restaurant: income multiplier
+  LODGE: { base: 20000, growth: 4, max: 5 },       // lodge: better offline earnings
+
+  // Offline: a share of the steady income for the time the game was closed, up to a limit.
+  OFFLINE_SHARE: 0.5, OFFLINE_SHARE_STEP: 0.1, OFFLINE_HOURS: 8, OFFLINE_HOURS_STEP: 2,
+
+  // Managers buy their board by themselves. Price = factor x the board's first price;
+  // lift managers cost a multiple of the next lift.
+  MGR_FACTOR: 40, MGR_LIFT: 3, MGR_EVERY: 0.5, MGR_SAVE: 0.3,
+
+  // Events: the first after EVENT_FIRST seconds on a mountain, then every EVENT_GAP seconds.
+  EVENT_FIRST: 240, EVENT_GAP: [180, 300],
+  POWDER_TIME: 60, POWDER_PAY: 2, POWDER_SKI: 1.3,
+  STORM_TIME: 45, STORM_PAY: 30,      // securing the lifts pays this many seconds of income
+  CELEB_TIME: 30, CELEB_PAY: 60,      // finding the celebrity pays this many seconds of income
   CANNON_GAIN: 0.08, SCHOOL_PAY: 0.012, NIGHT_GAIN: 0.15, RESTO_GAIN: 0.25,
   TRICK_CHANCE: 0.08, TRICK_CHANCE_STEP: 0.005, TRICK_CHANCE_MAX: 0.18, TRICK_PAY: 2, TRICK_PAY_STEP: 0.3, AIR_TIME: 0.95,
   UNLOCK_CANNON_RIDES: 2000, UNLOCK_SCHOOL_TIME: 480,

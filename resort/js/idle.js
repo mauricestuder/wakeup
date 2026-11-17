@@ -8,8 +8,8 @@ import { liftGeom, pisteGeom, along } from './network.js';
 import { planLifts } from './layout.js';
 
 const tmp = { x: 0, y: 0, z: 0, i: 0 };
-export const UPGRADES = ['lift', 'upgrade', 'speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto'];
-const LEVELS = ['speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto'];
+export const UPGRADES = ['lift', 'upgrade', 'speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
+const LEVELS = ['speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
 
 export const mapOf = (state) => MAPS[state.level % MAPS.length];
 export const costScale = (state) => Math.pow(T.NEXT_COST, state.level);
@@ -24,7 +24,7 @@ export function newGame(level = 0, life = null, unl = null) {
   for (const k of LEVELS) up[k] = 0;
   return {
     v: 3, level, money: Math.round(T.START_MONEY * T.MONEY * Math.pow(T.NEXT_COST, level)), earned: 0, rides: 0, tricks: 0, time: 0,
-    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0,
+    open: 1, types: null, up, done: {}, rush: 0, rushWait: 0, mgr: {}, mgrT: 0, event: null, evT: T.EVENT_FIRST,
     life: { rides: 0, time: 0, tricks: 0, ...(life || {}) }, unl: { ...(unl || {}) },
   };
 }
@@ -32,6 +32,7 @@ export function newGame(level = 0, life = null, unl = null) {
 export const toSave = (s) => ({
   v: 3, level: s.level, money: s.money, earned: s.earned, rides: s.rides, tricks: s.tricks, time: s.time,
   open: s.open, types: s.types.slice(), up: { ...s.up }, done: { ...s.done }, rushWait: Math.max(0, s.rushWait + s.rush),
+  mgr: { ...s.mgr }, evT: Math.max(30, s.evT), savedAt: Date.now(),
   life: { ...s.life }, unl: { ...s.unl },
 });
 
@@ -45,6 +46,9 @@ export function fromSave(d) {
   for (const k of LEVELS) s.up[k] = Math.max(0, d.up[k] | 0);
   s.done = { ...(d.done || {}) };
   s.rushWait = Math.max(0, +d.rushWait || 0);
+  for (const id of UPGRADES) if (d.mgr && (d.mgr[id] === 1 || d.mgr[id] === 2)) s.mgr[id] = d.mgr[id];
+  if (+d.evT > 0) s.evT = +d.evT;
+  s.savedAt = +d.savedAt || 0;
   // Saves from before the totals existed: start them from this mountain's numbers.
   if (!d.life) { s.life.rides = s.rides; s.life.time = s.time; }
   return s;
@@ -130,7 +134,9 @@ export const speedOf = (state) => (1 + T.SPEED_GAIN * state.up.speed) * (rushing
 const capAt = (lvl) => Math.min(T.GUESTS_MAX, T.GUESTS_START + T.GUESTS_STEP * lvl);
 export const guestCap = (state) => Math.round(capAt(state.up.guests) * (rushing(state) ? T.RUSH_GUESTS : 1));
 const ticketAt = (lvl) => Math.pow(T.TICKET_GAIN, lvl);
-const skiOf = (state) => 1 + T.CANNON_GAIN * state.up.cannon;
+const eventIs = (state, id) => !!state.event && state.event.id === id;
+const skiOf = (state) => (1 + T.CANNON_GAIN * state.up.cannon) * (eventIs(state, 'powder') ? T.POWDER_SKI : 1);
+const closed = (state, l) => eventIs(state, 'storm') && state.event.lifts.includes(l.id);
 // Everything that multiplies what a ride pays.
 const bonusOf = (state) => (1 + T.HUT_GAIN * state.up.hut) * (1 + T.NIGHT_GAIN * state.up.night) * (1 + T.RESTO_GAIN * state.up.resto) * fareScale(state);
 export const fare = (state, i) => T.FARE[i] * T.MONEY * ticketAt(state.up.ticket) * bonusOf(state);
@@ -141,6 +147,16 @@ const trickChance = (lvl) => Math.min(T.TRICK_CHANCE_MAX, T.TRICK_CHANCE + T.TRI
 // stays the same until something is bought. Each lift sells as many rides as it can carry or
 // as its share of the guests can take, whichever is less.
 export function refreshRate(state) {
+  // The steady figure first: no rush hour and no event. Offline earnings and event bonuses use it.
+  const rush = state.rush, ev = state.event;
+  state.rush = 0; state.event = null;
+  sumRate(state);
+  state.steady = state.rate;
+  state.rush = rush; state.event = ev;
+  sumRate(state);
+}
+
+function sumRate(state) {
   const sm = speedOf(state), guests = guestCap(state), ski = T.SKI * skiOf(state);
   let wsum = 0;
   for (const l of state.lifts) wsum += 1 + 0.25 * l.i;
@@ -150,18 +166,18 @@ export function refreshRate(state) {
     const carry = L.seats / L.interval * sm;
     const lap = l.len / (L.speed * sm) + p.len / ski + T.TURNAROUND;
     const want = guests * (1 + 0.25 * l.i) / wsum / lap;
-    l.rides = Math.min(carry, want);
+    l.rides = closed(state, l) ? 0 : Math.min(carry, want);
     l.rate = l.rides * fare(state, l.i);
     total += l.rate; rides += l.rides;
   }
   state.lessons = guests * T.SCHOOL_PAY * T.MONEY * state.up.school * ticketAt(state.up.ticket) * bonusOf(state);
   // A whole number of dollars, so the sign shows exactly what is paid.
-  state.rate = Math.max(1, Math.round(total + state.lessons));
+  state.rate = Math.max(1, Math.round((total + state.lessons) * (eventIs(state, 'powder') ? T.POWDER_PAY : 1)));
   state.rideRate = rides;
 }
 
-const TABLE = { speed: T.SPEED, guests: T.GUESTS, ticket: T.TICKET, hut: T.HUT, jump: T.JUMP, cannon: T.CANNON, school: T.SCHOOL, night: T.NIGHT, resto: T.RESTO };
-const NAMES = { speed: 'Lift speed', guests: 'More guests', ticket: 'Ticket price', hut: 'Ski hut', jump: 'Jump park', cannon: 'Snow guns', school: 'Ski school', night: 'Night skiing', resto: 'Restaurant' };
+const TABLE = { speed: T.SPEED, guests: T.GUESTS, ticket: T.TICKET, hut: T.HUT, jump: T.JUMP, cannon: T.CANNON, school: T.SCHOOL, night: T.NIGHT, resto: T.RESTO, lodge: T.LODGE };
+export const NAMES = { lift: 'New lift', upgrade: 'Upgrade lift', speed: 'Lift speed', guests: 'More guests', ticket: 'Ticket price', hut: 'Ski hut', jump: 'Jump park', cannon: 'Snow guns', school: 'Ski school', night: 'Night skiing', resto: 'Restaurant', lodge: 'Lodge', mgr: 'Managers' };
 const pct = (v) => Math.round(v * 100) + '%';
 
 // What has to happen before an upgrade shows up for good.
@@ -171,6 +187,8 @@ const UNLOCKS = {
   school: { text: 'Play 8 minutes', test: (s) => s.life.time >= T.UNLOCK_SCHOOL_TIME },
   night: { text: 'Open lift 4', test: (s) => s.open >= 4 },
   resto: { text: 'Open lift 5', test: (s) => s.open >= 5 },
+  lodge: { text: 'Open lift 3', test: (s) => s.open >= 3 },
+  mgr: { text: 'Open lift 3', test: (s) => s.open >= 3 },
 };
 export const unlocked = (state, id) => !UNLOCKS[id] || !!state.unl[id];
 export function checkUnlocks(state) {
@@ -224,8 +242,133 @@ export function offer(state, id) {
   if (id === 'cannon') return { ...base, note: base.maxed ? 'Perfect snow' : `Skiing +${pct(T.CANNON_GAIN * (lvl + 1))}` };
   if (id === 'school') return { ...base, note: base.maxed ? 'Everyone can ski' : `Lessons level ${lvl + 1}` };
   if (id === 'night') return { ...base, note: base.maxed ? 'Open all night' : `Income +${pct(T.NIGHT_GAIN * (lvl + 1))}` };
+  if (id === 'lodge') {
+    const [a, h] = awayAt(lvl), [b, k] = awayAt(lvl + 1);
+    return { ...base, note: base.maxed ? `Offline ${pct(a)} for ${h} h` : `Away ${pct(a)} → ${pct(b)}, ${h} → ${k} h` };
+  }
   return { ...base, note: base.maxed ? 'Three stars' : `Income +${pct(T.RESTO_GAIN * (lvl + 1))}` };
 }
+
+// ---------- offline ----------
+
+// [share of the income, hours] while the game is closed.
+const awayAt = (lvl) => [T.OFFLINE_SHARE + T.OFFLINE_SHARE_STEP * lvl, T.OFFLINE_HOURS + T.OFFLINE_HOURS_STEP * lvl];
+export const awayOf = (state) => awayAt(state.up.lodge);
+
+// Pays for the time since the last save. Call after attach(). Returns null when there is nothing to pay.
+export function payAway(state, now = Date.now()) {
+  const away = (now - (state.savedAt || 0)) / 1000;
+  state.savedAt = 0;
+  if (!(away >= 60) || away > 3600 * 24 * 400) return null; // no save time, or a clock that went wrong
+  const [share, hours] = awayOf(state), t = Math.min(away, hours * 3600);
+  const pay = Math.round(state.steady * share * t);
+  state.money += pay; state.earned += pay;
+  return { away, paid: t, share, hours, pay };
+}
+
+// ---------- managers ----------
+
+export function mgrCost(state, id) {
+  const cs = costScale(state) * T.MONEY;
+  if (id === 'lift' || id === 'upgrade') return Math.ceil(T.MGR_LIFT * T.LIFT_COST[Math.min(state.open, T.LIFT_COUNT - 1)] * cs * (id === 'upgrade' ? 0.5 : 1));
+  return Math.ceil(T.MGR_FACTOR * TABLE[id].base * cs);
+}
+// What the manager button of a board shows: 'none' (not available), 'hire', 'on' or 'off'.
+export function mgrState(state, id) {
+  if (state.mgr[id]) return state.mgr[id] === 1 ? 'on' : 'off';
+  return state.unl.mgr && unlocked(state, id) ? 'hire' : 'none';
+}
+export function hire(state, id) {
+  if (mgrState(state, id) !== 'hire') return false;
+  const cost = mgrCost(state, id);
+  if (cost > state.money) return false;
+  state.money -= cost; state.mgr[id] = 1;
+  state.events.push({ type: 'hired', id, name: NAMES[id] });
+  checkGoals(state);
+  return true;
+}
+export function toggleMgr(state, id) {
+  if (!state.mgr[id]) return false;
+  state.mgr[id] = state.mgr[id] === 1 ? 2 : 1;
+  return true;
+}
+// Every half second each working manager buys its board once, if there is money for it.
+function runManagers(state, ter, dt) {
+  state.mgrT += dt;
+  if (state.mgrT < T.MGR_EVERY) return;
+  state.mgrT = 0;
+  // Like a sensible player they leave money for the next lift: a small board is only bought
+  // while it costs a fraction of the next lift or lift upgrade.
+  const goal = Math.min(...['lift', 'upgrade'].map((id) => offer(state, id)).filter((o) => !o.maxed && !o.locked).map((o) => o.cost), Infinity);
+  const ids = UPGRADES.filter((id) => state.mgr[id] === 1).map((id) => ({ id, o: offer(state, id) }))
+    .filter((x) => !x.o.maxed && !x.o.locked && (x.id === 'lift' || x.id === 'upgrade' || x.o.cost <= goal * T.MGR_SAVE)).sort((a, b) => a.o.cost - b.o.cost);
+  for (const { id } of ids) if (buy(state, ter, id)) state.events.push({ type: 'mgrBuy', id });
+}
+
+// ---------- events ----------
+
+export const EVENTS = {
+  powder: { name: 'Powder day', time: T.POWDER_TIME },
+  storm: { name: 'Storm', time: T.STORM_TIME },
+  celeb: { name: 'Celebrity visit', time: T.CELEB_TIME },
+};
+
+function startEvent(state, ter) {
+  const r = state.rnd, can = ['powder', 'celeb'];
+  if (state.open >= 2) can.push('storm');
+  const id = can[(r() * can.length) | 0], e = { id, t: EVENTS[id].time, name: EVENTS[id].name };
+  if (id === 'storm') {
+    // The wind closes the highest lifts.
+    e.lifts = state.lifts.slice().sort((a, b) => b.i - a.i).slice(0, state.open >= 5 ? 2 : 1).map((l) => l.id);
+  }
+  if (id === 'celeb') {
+    // A famous skier starts at the top of the highest open piste.
+    const p = state.pistes[state.pistes.length - 1];
+    const g = spawnGuest(state, ter, p.pts[0].x, p.pts[0].z);
+    Object.assign(g, { st: 'ski', piste: p.id, s: 0, node: p.to, col: 12, celeb: 1, board: 0, runs: 3 });
+    e.guest = g.id;
+  }
+  state.event = e;
+  refreshRate(state);
+  state.events.push({ type: 'event', event: e });
+}
+
+function endEvent(state, how = 'time') {
+  const e = state.event;
+  if (!e) return;
+  if (e.id === 'celeb') for (const g of state.guests) if (g.id === e.guest) g.celeb = 0;
+  state.event = null;
+  state.evT = T.EVENT_GAP[0] + state.rnd() * (T.EVENT_GAP[1] - T.EVENT_GAP[0]);
+  refreshRate(state);
+  state.events.push({ type: 'eventEnd', event: e, how });
+}
+
+function updateEvent(state, ter, dt) {
+  if (state.event) {
+    state.event.t -= dt;
+    // The celebrity may leave the mountain before the time is up.
+    if (state.event.id === 'celeb' && !state.guests.some((g) => g.id === state.event.guest)) state.event.t = 0;
+    if (state.event.t <= 0) endEvent(state);
+    return;
+  }
+  if (state.rush > 0) return;
+  state.evT -= dt;
+  if (state.evT <= 0) startEvent(state, ter);
+}
+
+// The action of the current event: secure the lifts in a storm, or meet the celebrity.
+// Pays a number of seconds of the steady income. Returns what was paid, or 0.
+export function eventAction(state, id) {
+  const e = state.event;
+  if (!e || e.id !== id || (id !== 'storm' && id !== 'celeb')) return 0;
+  const pay = Math.round(state.steady * (id === 'storm' ? T.STORM_PAY : T.CELEB_PAY));
+  state.money += pay; state.earned += pay;
+  state.eventsDone = (state.eventsDone || 0) + 1;
+  endEvent(state, 'done');
+  state.events.push({ type: 'eventPay', id, pay });
+  return pay;
+}
+export const celebGuest = (state) => state.event && state.event.id === 'celeb' ? state.guests.find((g) => g.id === state.event.guest) || null : null;
 
 export function buy(state, ter, id) {
   const o = offer(state, id);
@@ -280,11 +423,13 @@ export const GOALS = [
   { id: 'k10', text: 'See 10 tricks', reward: 1200, test: (s) => [s.tricks, 10] },
   { id: 'sn1', text: 'Buy snow guns', reward: 6000, test: (s) => [s.up.cannon, 1] },
   { id: 'sc3', text: 'Ski school level 3', reward: 12000, test: (s) => [s.up.school, 3] },
+  { id: 'm1', text: 'Hire a manager', reward: 30000, test: (s) => [Object.keys(s.mgr).length, 1] },
   { id: 'k100', text: 'See 100 tricks', reward: 150000, test: (s) => [s.tricks, 100] },
   { id: 'e1m', text: 'Earn $10M in total', reward: 200000, test: (s) => [s.earned, 1e7] },
   { id: 'l4', text: 'Open lift 4', reward: 25000, test: (s) => [s.open, 4] },
   { id: 'n1', text: 'Start night skiing', reward: 80000, test: (s) => [s.up.night, 1] },
   { id: 'p20', text: 'Play for 20 minutes', reward: 40000, test: (s) => [Math.floor(s.time / 60), 20] },
+  { id: 'm5', text: 'Have 5 managers', reward: 3000000, test: (s) => [Object.keys(s.mgr).length, 5] },
   { id: 'j10', text: 'Jump park level 10', reward: 1500000, test: (s) => [s.up.jump, 10] },
   { id: 'r10k', text: 'Sell 10,000 rides', reward: 60000, test: (s) => [s.rides, 10000] },
   { id: 'l5', text: 'Open lift 5, the first gondola', reward: 2000000, test: (s) => [s.open, 5] },
@@ -479,6 +624,7 @@ function decide(state, ter, g) {
 function updateLifts(state, dt) {
   const sm = speedOf(state);
   for (const l of state.lifts) {
+    if (closed(state, l)) continue; // the wind has stopped it
     const L = LIFTS[l.type], every = L.interval / sm;
     l.clock += dt;
     l.travel += L.speed * sm * dt;
@@ -520,7 +666,7 @@ function updateGuests(state, ter, dt) {
       }
       case 'ride': {
         const l = state.liftById[g.lift], L = LIFTS[l.type];
-        g.s += L.speed * sm * dt;
+        if (!closed(state, l)) g.s += L.speed * sm * dt;
         along(l.pts, l.cum, g.s, tmp, L.ground);
         g.x = tmp.x; g.z = tmp.z; g.y = tmp.y; g.face = l.dir;
         if (g.s >= l.len) {
@@ -580,6 +726,8 @@ export function tick(state, ter, dt) {
 
   // New guests keep coming by road until the mountain holds as many as it has room for.
   updateCars(state, ter, dt);
+  updateEvent(state, ter, dt);
+  runManagers(state, ter, dt);
 
   updateLifts(state, dt);
   updateGuests(state, ter, dt);

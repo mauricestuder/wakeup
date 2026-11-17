@@ -139,6 +139,12 @@ something. You spend the money on wooden upgrade boards.
 - 26 quests pay bonuses. Three are open at a time; finishing one unlocks the
   next. Tap the quest marker to see them. When every lift is a gondola you move
   to the next of three mountains and all income doubles.
+- After lift 3 you can hire **managers** (the tie on each board); they buy that
+  board by themselves and leave money for the next lift. Tap the tie to pause.
+- **Events** every few minutes: Powder day (income x2), Storm (a lift stops until
+  you secure it, for a bonus) and Celebrity visit (tap the skier in gold).
+- While the game is closed the resort earns half its income for up to 8 hours.
+  The **Lodge** board raises both.
 - Guests arrive by car and coach on the valley road. Skiers and snowboarders
   share the pistes. All prices are whole dollars.
 - Hold a board to keep buying. Keys 1 to 6 press the first six boards, Space

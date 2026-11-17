@@ -23,10 +23,10 @@ if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'a
 
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
-const cam = createCamera(stage.camera, canvas, { onTap: () => initAudio() });
+const cam = createCamera(stage.camera, canvas, { onTap: (x, y) => { initAudio(); tapCeleb(x, y); } });
 const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene) };
 
-let state = null, ter = null, playing = false, saveT = 0, popT = 0;
+let state = null, ter = null, playing = false, saveT = 0, popT = 0, follow = 0;
 
 const ui = createUI({
   click: () => { initAudio(); sfx.click(); },
@@ -39,6 +39,15 @@ const ui = createUI({
   quit,
   reset: () => { store.set('idle', null); start(true); },
   quests: () => ui.showQuests(),
+  hire: (id) => { initAudio(); if (!idle.hire(state, id)) { sfx.buzz(); return false; } sfx.build(); drain(); ui.update(state, 0, true); save(); return true; },
+  toggleMgr: (id) => { if (idle.toggleMgr(state, id)) { ui.update(state, 0, true); save(); } },
+  eventAction: () => {
+    const e = state && state.event;
+    if (!e) return;
+    if (e.id === 'storm') idle.eventAction(state, 'storm');
+    else if (e.id === 'celeb') follow = e.guest; // the camera follows the celebrity until the event ends or the player moves it
+    drain();
+  },
   next: () => { state = idle.nextGame(state); world(); save(); sfx.goal(); ui.toast(`Welcome to <b>${idle.mapOf(state).name}</b>. All income x${idle.short(idle.fameOf(state))}.`, 'star', 5000); },
 });
 
@@ -107,7 +116,7 @@ function world() {
   syncViews();
   stage.updateTrees(); stage.repaint();
   stage.setWeather(state.weather);
-  ui.clearLabels(); tags.clear();
+  ui.clearLabels(); tags.clear(); star = null; follow = 0;
   frameAll(true);
 }
 
@@ -121,13 +130,16 @@ function start(fresh) {
   ui.update(state, 0, true);
   frameAll(true); // again, now that the buttons are on screen and their size is known
   save();
+  // Money earned while the game was closed.
+  const away = old ? idle.payAway(state) : null;
+  if (away) { ui.update(state, 0, true); ui.welcomeBack(away); sfx.goal(); save(); }
   if (!old) ui.toast('Welcome! Your first lift is running. Spend the money with the <b>big buttons</b>.', 'star', 6000);
 }
 
 function quit() {
   save();
   playing = false;
-  ui.clearLabels(); tags.clear();
+  ui.clearLabels(); tags.clear(); star = null; follow = 0;
   ui.showMenu(store.get('idle', null));
 }
 
@@ -160,6 +172,26 @@ function drain() {
       if (p.front && p.x > 0 && p.y > 40 && p.x < innerWidth * (1 - ui.free.right) && p.y < innerHeight * (1 - ui.free.bottom)) { ui.pop(p.x, p.y, 'Trick! +' + idle.money(e.pay), true); ui.flyCoins(p.x, p.y, 3); sfx.tick(); }
     }
     else if (e.type === 'rushEnd') ui.toast('Rush hour is over.');
+    else if (e.type === 'hired') ui.toast(`<b>Manager hired</b> for ${e.name}.`, 'star');
+    else if (e.type === 'event') {
+      const ev = e.event;
+      sfx.goal();
+      // The event sign under the quest explains it, so no extra message here.
+      if (ev.id === 'powder') stage.setWeather('snow');
+      else if (ev.id === 'storm') stage.setWeather('storm');
+    }
+    else if (e.type === 'eventEnd') {
+      stage.setWeather(state.weather);
+      if (follow === e.event.guest) follow = 0;
+      if (e.how === 'time' && e.event.id === 'storm') ui.toast('The storm is over. The lifts run again.');
+      else if (e.how === 'time' && e.event.id === 'celeb') ui.toast('The celebrity has left.');
+      else if (e.how === 'time') ui.toast('The powder is skied out.');
+    }
+    else if (e.type === 'eventPay') {
+      sfx.goal();
+      ui.toast(e.id === 'storm' ? `<b>Lifts secured!</b> +${idle.money(e.pay)}` : `<b>Autograph!</b> The celebrity loved your resort. +${idle.money(e.pay)}`, 'star', 3600);
+      ui.flyCoins(innerWidth * (1 - ui.free.right) / 2, innerHeight * 0.4, 8);
+    }
   }
   if (sync) syncViews();
   if (trees) { stage.updateTrees(); stage.repaint(); }
@@ -184,6 +216,29 @@ function pops() {
     l.pop -= whole;
   }
 }
+
+// The celebrity: a star tag over their head, and a tap near them pays the bonus.
+let star = null;
+function celebScreen() {
+  const g = idle.celebGuest(state);
+  if (!g || g.vx === undefined) return null;
+  return project(g.vx, g.vy + 1.4, g.vz);
+}
+function updateStar() {
+  const s = playing ? celebScreen() : null;
+  if (!s || !s.front) { if (star) star.hidden = true; return; }
+  if (!star) { star = document.createElement('div'); star.className = 'tag star'; star.textContent = '★ Celebrity'; ui.labels.appendChild(star); }
+  star.hidden = false;
+  star.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px) translate(-50%, -100%)`;
+}
+function tapCeleb(x, y) {
+  if (!playing) return;
+  const s = celebScreen();
+  if (!s || !s.front) return;
+  // Generous: the skier is small and moving, so anywhere near them or their tag counts.
+  if (Math.hypot(s.x - x, s.y + 12 - y) < (isTouch ? 60 : 45)) { idle.eventAction(state, 'celeb'); drain(); }
+}
+canvas.addEventListener('pointerdown', () => { follow = 0; });
 
 const tags = new Map();
 function updateTags() {
@@ -230,6 +285,7 @@ function frame(t) {
     views.lifts.update(state);
     views.guests.update(state, ter, dt, idle.speedOf(state));
     views.cars.update(state, ter);
+    if (follow) { const g = idle.celebGuest(state); if (g) { cam.goal.x = g.x; cam.goal.z = g.z + 6; cam.goal.dist = Math.min(cam.goal.dist, 40); } else follow = 0; }
     ui.update(state, dt);
     popT += dt; if (popT >= 1) { popT = 0; pops(); }
     saveT += dt; if (saveT >= 10) { saveT = 0; save(); }
@@ -240,7 +296,7 @@ function frame(t) {
   }
   cam.update(dt);
   stage.update(dt, playing ? idle.clockOf(state) : 640, cam.target);
-  if (playing) updateTags();
+  if (playing) { updateTags(); updateStar(); }
   stage.render();
   setAmbience(Math.min(1, cam.now.dist / 150), playing && state.weather === 'snow' ? 0.3 : 0, playing ? state.guests.length : 0, !playing);
 }
