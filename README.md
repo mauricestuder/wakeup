@@ -110,7 +110,7 @@ Call `onActivity()` on every user interaction (resets the idle timer) and
 
 ## Games in this repository
 
-Four browser games live next to the alarm, each in its own folder. No build
+Five browser games live next to the alarm, each in its own folder. No build
 step: open the folder's `index.html` through any web server, or on GitHub Pages
 at `https://mauricestuder.github.io/wakeup/<folder>/`.
 
@@ -120,6 +120,7 @@ at `https://mauricestuder.github.io/wakeup/<folder>/`.
 | `ski/` | **Fresh Line**: snowboard and ski tricks down ten mountains |
 | `build/` | **High Ground**: build, edit and aim trainer |
 | `resort/` | **Idle Lift**: idle ski resort tycoon (see below) |
+| `resort2d/` | **Idle Lift 2D**: the same resort as a flat side-view cartoon (see below) |
 
 ### Idle Lift (`resort/`)
 
@@ -181,6 +182,27 @@ resort/
 
 The modules marked "no rendering" import nothing from three.js or the page, so
 the rules can be run in plain Node to test balance changes.
+
+### Idle Lift 2D (`resort2d/`)
+
+The ski resort as a side-view cartoon, drawn on a 2D canvas with bold outlines.
+Eight mountains stand in a row along the valley, each with one lift: drag lifts
+first, then chairlifts, then gondolas. Guests ride up, ski down the piste on the
+far side and walk back along the path to queue again.
+
+- Tap the green **Lv** badge above a lift to upgrade it (×1, ×10 or MAX). At
+  levels 10, 25, 50, 100 and so on, the lift's speed doubles.
+- Tap a lift station for a short ×2 boost, and use **Rush** for ×2 on everything.
+- **Build** the next mountain when you can afford it; each pays 6× more a ride.
+- **Resort** has the car park (+10% income a level) and the ski hut (×1.4 a level).
+- Money keeps coming in while the game is closed, for up to three hours.
+
+```
+resort2d/
+  index.html     page, panels and styles
+  js/econ.js     the rules and every balance number (no drawing; runs in Node)
+  js/game.js     drawing, camera, input and the panels
+```
 
 ## Known limits of the PWA approach
 

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#7fb4e6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Idle Lift 2D</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800&display=swap">
+  <style>
+    :root { --ink: #2b2340; --wood: linear-gradient(180deg, #c9945b, #aa7541 55%, #976530); --edge: #4f3217; --paper: #fbf0d8; --paper2: #efdfbd; --brown: #3a2410;
+      --good: #45b860; --gold: #ffcf4d; --display: 'Fredoka', 'Arial Rounded MT Bold', system-ui, sans-serif; --font: 'Nunito', ui-rounded, system-ui, sans-serif;
+      --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; position: fixed; inset: 0; background: #cfe4f3; font-family: var(--font); color: var(--brown);
+      user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none; }
+    canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+    button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+    .ui { font-size: clamp(12px, min(1.5vw, 2.3vh), 18px); }
+
+    /* Top: the money, and the resort button. */
+    #top { position: fixed; left: calc(.7em + var(--sl)); right: calc(.7em + var(--sr)); top: calc(.6em + var(--st)); display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+    .board { background: var(--wood); border: .14em solid var(--edge); border-radius: 1.1em; color: #fff4dc; text-shadow: 0 .07em 0 rgba(50, 25, 5, .6);
+      box-shadow: inset 0 .12em 0 rgba(255, 236, 200, .4), 0 .22em 0 #4a2e14, 0 .6em 1.2em rgba(80, 40, 10, .25); pointer-events: auto; }
+    #money { display: flex; align-items: center; gap: .6em; padding: .45em 1.1em .45em .55em; }
+    .coin { width: 2.2em; height: 2.2em; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1a8, #ffcf4d 45%, #d99a16); border: .14em solid var(--edge); display: grid; place-items: center; font: 600 1.1em var(--display); color: #8a5a0c; text-shadow: none; }
+    #cash { font: 600 1.7em/1 var(--display); display: block; } #rate { font-weight: 800; font-size: .85em; color: #d8f7c0; }
+    #resortBtn { padding: .55em 1em; font: 600 1.1em var(--display); display: flex; align-items: center; gap: .45em; }
+    #resortBtn span { font-size: 1.3em; }
+
+    /* Bottom: rush hour. */
+    #rush { position: fixed; left: calc(.9em + var(--sl)); bottom: calc(.9em + var(--sb)); width: 5.6em; height: 5.6em; border-radius: 50%; display: grid; place-content: center; text-align: center; line-height: 1.05;
+      background: radial-gradient(circle at 35% 28%, #ffb35c, #e8552f 62%, #b3331c); color: #fff; border: .2em solid #fff; box-shadow: 0 0 0 .12em var(--edge), 0 .3em 0 .1em #5e1d0e, 0 .7em 1em rgba(0, 0, 0, .3);
+      font: 600 1em var(--display); text-shadow: 0 .07em 0 rgba(90, 20, 5, .7); }
+    #rush b { font-size: 1.5em; font-weight: 600; } #rush.on { animation: pulse .6s ease-in-out infinite alternate; } #rush.wait { filter: grayscale(.8) brightness(.9); }
+    @keyframes pulse { to { transform: scale(1.07); } }
+    #hint { position: fixed; right: calc(.9em + var(--sr)); bottom: calc(1em + var(--sb)); padding: .5em .9em; font-weight: 700; font-size: .9em; border-radius: 1em; background: rgba(255, 248, 236, .85); border: .12em solid var(--edge); pointer-events: none; }
+
+    /* The upgrade sheet. */
+    #sheet { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: rgba(40, 25, 15, .25); padding: 0 .6em calc(.6em + var(--sb)); }
+    #sheet[hidden], #away[hidden] { display: none; }
+    #box { width: min(26em, 100%); padding: .7em; position: relative; animation: up .22s ease-out; }
+    @keyframes up { from { transform: translateY(30%); opacity: 0; } }
+    #sheetBody { background: linear-gradient(180deg, var(--paper), var(--paper2)); border-radius: .9em; padding: 1em 1.1em; color: var(--brown); text-shadow: none; box-shadow: inset 0 .1em .4em rgba(60, 30, 5, .3); }
+    #sheetBody h2 { font: 600 1.7em/1.1 var(--display); margin: 0 2em 0 0; }
+    .sub { margin: .2em 0 .8em; font-weight: 700; color: #7a5a35; display: flex; align-items: center; gap: .45em; } .sub i { width: .85em; height: .85em; border-radius: 50%; display: inline-block; border: .12em solid var(--ink); }
+    .rows > div { display: flex; justify-content: space-between; gap: 1em; padding: .45em 0; border-bottom: .08em dashed rgba(90, 55, 20, .3); font-weight: 700; }
+    .rows b { font-family: var(--display); font-weight: 600; } .rows em { font-style: normal; color: var(--good); }
+    .mile { margin: .8em 0 .2em; font-weight: 700; font-size: .9em; color: #7a5a35; } .bar { height: .55em; border-radius: .3em; background: rgba(90, 55, 20, .2); margin-top: .3em; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--good); border-radius: .3em; }
+    .seg { display: flex; margin: .9em 0 .7em; border-radius: .9em; overflow: hidden; border: .12em solid var(--edge); }
+    .seg button { flex: 1; padding: .5em; font: 600 1em var(--display); background: rgba(255, 255, 255, .45); } .seg button.on { background: #b3541a; color: #fff; }
+    .big, .mid { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 1em; background: linear-gradient(180deg, #7ad48a, #3fa856); color: #fff; border: .14em solid #1f5f2c;
+      box-shadow: inset 0 .1em 0 rgba(255, 255, 255, .5), 0 .22em 0 #1f5f2c; font: 600 1.3em var(--display); text-shadow: 0 .06em 0 rgba(0, 60, 10, .5); transition: transform .08s; }
+    .big { width: 100%; height: 3.4em; } .big small, .mid small { font-size: .78em; opacity: .95; }
+    .big:active, .mid:active { transform: translateY(.12em); } .big.no, .mid.no { filter: grayscale(1) brightness(1.05); opacity: .7; }
+    .tip { margin: .7em 0 0; font-size: .85em; color: #7a5a35; text-align: center; }
+    .card { display: flex; align-items: center; justify-content: space-between; gap: .8em; padding: .6em 0; border-bottom: .08em dashed rgba(90, 55, 20, .3); }
+    .card b { font: 600 1.2em var(--display); display: block; } .card small { font-weight: 700; color: #7a5a35; }
+    .mid { min-width: 6.5em; height: 3em; font-size: 1.05em; }
+    .small { margin-top: .9em; font-weight: 800; font-size: .85em; color: #a4473a; text-decoration: underline; }
+    #close { position: absolute; right: .6em; top: .5em; width: 2.1em; height: 2.1em; border-radius: 50%; background: #e04848; color: #fff; border: .14em solid #fff; box-shadow: 0 0 0 .1em var(--edge); font: 600 1.1em var(--display); }
+
+    #toast { position: fixed; left: 50%; top: calc(5.5em + var(--st)); transform: translate(-50%, -1em); opacity: 0; transition: .25s; max-width: min(24em, 90vw); text-align: center; padding: .6em 1em; border-radius: 1em;
+      background: linear-gradient(180deg, var(--paper), var(--paper2)); border: .12em solid var(--edge); font-weight: 700; pointer-events: none; box-shadow: 0 .22em 0 #4a2e14; }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    #away { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(40, 25, 15, .35); }
+    #away .board { padding: .8em; width: min(20em, 90vw); text-align: center; }
+    #away .in { background: linear-gradient(180deg, var(--paper), var(--paper2)); border-radius: .9em; padding: 1.1em; color: var(--brown); text-shadow: none; }
+    #away h2 { font: 600 1.5em var(--display); margin: 0 0 .3em; } #awayPay { font: 600 2.2em var(--display); color: #2f9e57; margin: .2em 0 .5em; display: block; }
+    @media (max-width: 600px) { .ui { font-size: clamp(11px, 3.3vw, 15px); } #hint { display: none; } }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="ui">
+    <div id="top">
+      <div id="money" class="board"><span class="coin">$</span><div><b id="cash">$0</b><span id="rate">+$0/s</span></div></div>
+      <button id="resortBtn" class="board"><span>🏔</span>Resort</button>
+    </div>
+    <button id="rush"><b>⚡</b>Rush<span id="rushT">×2</span></button>
+    <div id="hint">Drag to look around · tap a lift to boost it</div>
+    <div id="toast"></div>
+    <div id="sheet" hidden><div id="box" class="board"><button id="close" aria-label="Close">✕</button><div id="sheetBody"></div></div></div>
+    <div id="away" hidden><div class="board"><div class="in"><h2>Welcome back!</h2><div id="awayText"></div><b id="awayPay"></b><button id="awayOk" class="big">Collect</button></div></div></div>
+  </div>
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
