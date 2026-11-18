@@ -2,16 +2,16 @@
 // ski and pay. The player spends the money on upgrades. Nothing in here touches
 // three.js or the page, so the rules can be run in plain Node.
 import { T, LIFTS, NEXT_TYPE } from './tuning.js';
-import { MAPS } from './maps.js';
+import { mapAt } from './maps.js';
 import { makeTerrain, rngFrom, clamp } from './terrain.js';
 import { liftGeom, pisteGeom, pisteFeatures, along } from './network.js';
-import { planLifts } from './layout.js';
+import { planLifts, placeSpecial } from './layout.js';
 
 const tmp = { x: 0, y: 0, z: 0, i: 0 };
 export const UPGRADES = ['lift', 'upgrade', 'speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
 const LEVELS = ['speed', 'guests', 'ticket', 'hut', 'jump', 'cannon', 'school', 'night', 'resto', 'lodge'];
 
-export const mapOf = (state) => MAPS[state.level % MAPS.length];
+export const mapOf = (state) => mapAt(state.level);
 export const costScale = (state) => Math.pow(T.NEXT_COST, state.level);
 export const fameOf = (state) => Math.pow(T.FAME, state.level);
 const fareScale = (state) => Math.pow(T.NEXT_FARE * T.FAME, state.level);
@@ -60,6 +60,9 @@ export function fromSave(d) {
 export function attach(state) {
   const map = mapOf(state), ter = makeTerrain(map);
   state.plan = planLifts(ter, map);
+  // The mountain's own landmark, with room cleared for it.
+  state.special = placeSpecial(ter, state.plan, map.special);
+  if (state.special) for (const [x, z, r] of state.special.clear) clearTrees(ter, x, z, r);
   if (!state.types || state.types.length !== state.plan.length) state.types = state.plan.map((p) => p.type);
   state.lifts = []; state.pistes = []; state.buildings = []; state.guests = []; state.events = [];
   state.cars = []; state.nextCar = 1; state.left = 0; state.through = 3;
@@ -93,7 +96,7 @@ function addLift(state, ter, i) {
     dir: Math.atan2(p.b.x - p.a.x, p.b.z - p.a.z), queue: [], clock: 0, travel: 0, riders: 0, pop: 0, rate: 0 };
   shapeLift(l, ter);
   const g = pisteGeom(ter, p.wps);
-  pisteFeatures(ter, g, i);
+  pisteFeatures(ter, g, i, p.cuts);
   const piste = { id: i + 1, i, pts: g.pts, cum: g.cum, sl: g.sl, len: g.len, diff: g.diff, to: p.from + 1, kick: 0, features: g.features };
   state.lifts.push(l); state.liftById[l.id] = l;
   state.pistes.push(piste); state.pisteById[piste.id] = piste;

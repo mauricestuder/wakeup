@@ -97,6 +97,13 @@ export function makeTerrain(map) {
   }
   let top = 0;
   for (let k = 0; k < h.length; k++) top = Math.max(top, h[k]);
+  // Every mountain is higher than the one before: stretch the ground so the summit is exactly that high.
+  if (map.peak) {
+    const f = map.peak / top;
+    for (let k = 0; k < h.length; k++) h[k] *= f;
+    for (const l of lakes) l.y *= f;
+    top = map.peak;
+  }
 
   // Height on the same two triangles per tile that the 3D mesh draws, so nothing floats or sinks.
   const height = (x, z) => {

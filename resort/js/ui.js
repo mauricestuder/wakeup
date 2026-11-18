@@ -2,7 +2,7 @@
 // upgrade boards, the quest marker and list, pop-ups, the start screen and the notices.
 import { T } from './tuning.js';
 import { UPGRADES, offer, guestCap, currentGoal, questList, canMoveOn, fameOf, mapOf, short, money, NAMES, EVENTS, awayOf, parkOf } from './idle.js';
-import { MAPS } from './maps.js';
+import { mapAt, SPECIALS, summitM } from './maps.js';
 
 const $ = (id) => document.getElementById(id);
 const svg = (d) => `<svg class="ic" viewBox="0 0 24 24">${d}</svg>`;
@@ -313,9 +313,12 @@ export function createUI(api) {
   }
 
   function showNext() {
-    const to = MAPS[(last.level + 1) % MAPS.length];
-    showSheet('Move to ' + to.name + '?', `<p>${mapOf(last).name} is finished: every lift is a gondola.</p>
+    const to = mapAt(last.level + 1);
+    const here = mapOf(last), sp = SPECIALS[to.special];
+    showSheet('Move to ' + to.name + '?', `<p>${here.name} is finished: every lift is a gondola.</p>
       <ul><li>You start again with one drag lift, on a new mountain: <b>${to.name}</b> (${to.tag.toLowerCase()}).</li>
+      <li>It is higher: the summit is at <b>${summitM(to).toLocaleString('en-US')} m</b>, ${(summitM(to) - summitM(here)).toLocaleString('en-US')} m above ${here.name}.</li>
+      ${sp ? `<li>Something new up there: <b>${sp.name}</b>, ${sp.note}.</li>` : ''}
       <li>Your money and upgrade levels stay behind. Unlocked boards stay unlocked.</li>
       <li>Your fame doubles: all income <b>x${short(fameOf(last) * T.FAME)}</b> from now on.</li></ul>
       <button class="btn board gold" id="goNext">Move on</button><button class="btn board" id="stayHere">Stay a little longer</button>`);
@@ -334,7 +337,7 @@ export function createUI(api) {
     showMenu(save) {
       $('menu').hidden = false; $('hud').hidden = true;
       $('playBtn').textContent = save ? 'Continue' : 'Play';
-      $('menuNote').textContent = save ? `${MAPS[save.level % MAPS.length].name} · ${save.open} of ${T.LIFT_COUNT} lifts · ${money(save.v === 2 ? save.money * T.MONEY : save.money)} in the bank` : 'Your progress saves in this browser.';
+      $('menuNote').textContent = save ? `${mapAt(save.level | 0).name} · ${save.open} of ${T.LIFT_COUNT} lifts · ${money(save.v === 2 ? save.money * T.MONEY : save.money)} in the bank` : 'Your progress saves in this browser.';
     },
     hideMenu() { $('menu').hidden = true; $('hud').hidden = false; },
   };

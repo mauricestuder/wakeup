@@ -8,8 +8,9 @@ import { createGuestView } from './view/guests.js';
 import { createExtraView } from './view/extras.js';
 import { createCarView } from './view/cars.js';
 import { createDecoView } from './view/deco.js';
+import { createSpecialView } from './view/special.js';
 import { T, LIFTS } from './tuning.js';
-import { MAPS } from './maps.js';
+import { MAPS, SPECIALS, summitM } from './maps.js';
 import * as idle from './idle.js';
 import { createUI } from './ui.js';
 import { initAudio, setVolume, setAmbience, sfx } from './audio.js';
@@ -25,7 +26,7 @@ if (!['auto', 'high', 'low'].includes(settings.graphics)) settings.graphics = 'a
 const canvas = document.getElementById('game');
 const stage = createScene(canvas, { touch: isTouch, treeShadows: !isTouch });
 const cam = createCamera(stage.camera, canvas, { onTap: (x, y) => { initAudio(); tapCeleb(x, y); } });
-const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene), deco: createDecoView(stage.scene) };
+const views = { lifts: createLiftView(stage.scene), pistes: createPisteView(stage.scene), buildings: createBuildingView(stage.scene), guests: createGuestView(stage.scene), extras: createExtraView(stage.scene), cars: createCarView(stage.scene), deco: createDecoView(stage.scene), special: createSpecialView(stage.scene) };
 
 let state = null, ter = null, playing = false, saveT = 0, popT = 0, follow = 0;
 
@@ -49,7 +50,8 @@ const ui = createUI({
     else if (e.id === 'celeb') follow = e.guest; // the camera follows the celebrity until the event ends or the player moves it
     drain();
   },
-  next: () => { state = idle.nextGame(state); world(); save(); sfx.goal(); ui.toast(`Welcome to <b>${idle.mapOf(state).name}</b>. All income x${idle.short(idle.fameOf(state))}.`, 'star', 5000); },
+  next: () => { state = idle.nextGame(state); world(); save(); sfx.goal(); const m = idle.mapOf(state), sp = SPECIALS[m.special];
+    ui.toast(`Welcome to <b>${m.name}</b>, ${summitM(m).toLocaleString('en-US')} m high${sp ? `, with its own ${sp.name.toLowerCase()}` : ''}. All income x${idle.short(idle.fameOf(state))}.`, 'star', 6000); },
 });
 
 // ---------- graphics quality ----------
@@ -105,7 +107,7 @@ function frameAll(snap) {
   for (const l of state.lifts) pts.push(...liftPoints(l));
   cam.frame(pts, snap, ui.free);
 }
-function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); views.cars.sync(state, ter); views.deco.sync(state, ter); }
+function syncViews() { views.lifts.sync(state, ter); views.pistes.sync(state, ter); views.buildings.sync(state, ter); views.extras.sync(state, ter); views.cars.sync(state, ter); views.deco.sync(state, ter); views.special.sync(state, ter); }
 
 // Puts the mountain of the current game on screen.
 function world() {

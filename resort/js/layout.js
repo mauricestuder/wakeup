@@ -2,7 +2,7 @@
 // The plan is the same every time for the same mountain. Lifts form a small tree:
 // some start at the car park, the others at the top of an earlier lift. Every
 // piste runs from the top of its lift back down to the bottom of it.
-import { liftGeom, pisteGeom } from './network.js';
+import { liftGeom, pisteGeom, carveFeatures } from './network.js';
 
 // from = the lift whose top this one starts at (-1 = the car park).
 // off = bottom station, as steps away from that place. to = steps from bottom to top station.
@@ -63,12 +63,80 @@ export function planLifts(ter, map) {
       if (score > bs) { bs = score; pick = q; }
     }
     out.push({ i, type: p.type, from: p.from, a, b, wps: pick.wps,
-      hut: { x: a.x - pick.rx * 3.6 - pick.ux * 1.4, z: a.z - pick.rz * 3.6 - pick.uz * 1.4 } });
+      hut: { x: a.x - pick.rx * 3.6 - pick.ux * 1.4, z: a.z - pick.rz * 3.6 - pick.uz * 1.4 }, cuts: [] });
   }
-  return out;
+  // Shape the ground for the tunnels and bridges.
+  return carveFeatures(ter, out);
 }
 
 // The finished shapes, for checking a plan without starting a game.
 export function shapes(ter, plan) {
   return plan.map((p) => ({ lift: liftGeom(ter, p.a, p.b, p.type), piste: pisteGeom(ter, p.wps) }));
+}
+
+// Where the mountain's landmark goes. Summit landmarks stand on the highest free spot; a ski
+// jump, a glacier and an igloo village need a free stretch of slope. Returns
+// { kind, x, z, yaw, len, clear: [[x, z, r], ...] } or null when there is no room.
+const ON_TOP = { cross: 1, weather: 1, panorama: 1, observatory: 1, skywalk: 1 };
+export function placeSpecial(ter, plan, kind) {
+  if (!kind) return null;
+  const keep = [];
+  for (const p of plan) {
+    for (const q of pisteGeom(ter, p.wps).pts) keep.push([q.x, q.z, 3.2]);
+    const d = Math.hypot(p.b.x - p.a.x, p.b.z - p.a.z);
+    for (let s = 0; s <= d; s += 1) keep.push([p.a.x + (p.b.x - p.a.x) * s / d, p.a.z + (p.b.z - p.a.z) * s / d, 2.4]);
+    keep.push([p.a.x, p.a.z, 5], [p.b.x, p.b.z, 5], [p.hut.x, p.hut.z, 4]);
+  }
+  keep.push([ter.base.x, ter.base.z, 16]);
+  for (const l of ter.lakes) keep.push([l.x, l.z, l.r + 3]);
+  const free = (x, z, r) => ter.inside(x, z, 3) && keep.every(([kx, kz, kr]) => Math.hypot(kx - x, kz - z) >= kr + r);
+  // Straight down the fall line from a spot.
+  const down = (x, z) => {
+    const gx = ter.height(x + 1, z) - ter.height(x - 1, z), gz = ter.height(x, z + 1) - ter.height(x, z - 1), l = Math.hypot(gx, gz) || 1;
+    return { dx: -gx / l, dz: -gz / l };
+  };
+  const N = ter.N;
+  const top = () => {
+    let best = null;
+    // Not right at the back edge, where the camera cannot reach and nobody would see it.
+    for (let j = 12; j <= N - 20; j++) for (let i = 8; i <= N - 8; i++) {
+      let y = ter.height(i, j);
+      // A skywalk wants a big drop in front of it, not just the highest spot.
+      if (kind === 'skywalk') { const d = down(i, j); y += (y - ter.height(i + d.dx * 8, j + d.dz * 8)) * 2; }
+      if ((!best || y > best.y) && free(i, j, kind === 'cross' ? 2.5 : 4.5)) best = { x: i, z: j, y };
+    }
+    if (!best) return null;
+    const { dx, dz } = down(best.x, best.z);
+    return { kind, x: best.x, z: best.z, yaw: Math.atan2(dx, dz), len: 0, clear: [[best.x, best.z, kind === 'cross' ? 3 : 5.5]] };
+  };
+  if (ON_TOP[kind]) return top();
+  // Along the slope: the ski jump in the middle of the mountain, the glacier up high, the igloos lower down.
+  const len = kind === 'jump' ? 20 : kind === 'glacier' ? 16 : 0;
+  const band = kind === 'jump' ? [0.25, 0.7] : kind === 'glacier' ? [0.55, 0.95] : [0.15, 0.55];
+  let best = null;
+  for (let j = 11; j <= N - 12; j += 1) for (let i = 8; i <= N - 8; i += 1) {
+    const a = ter.alt(i, j);
+    if (a < band[0] || a > band[1]) continue;
+    const { dx, dz } = down(i, j);
+    let ok = true, drop = 0;
+    if (len) {
+      for (let s = 0; s <= len && ok; s += 1.5) ok = free(i + dx * s, j + dz * s, kind === 'glacier' ? 3 + s * 0.15 : 2.5);
+      if (!ok) continue;
+      drop = ter.height(i, j) - ter.height(i + dx * len, j + dz * len);
+      if (drop < len * 0.25) continue;
+    } else {
+      if (!free(i, j, 6) || ter.slope(i, j) > 0.35) continue;
+      for (let k = 0; k < 8 && ok; k++) ok = ter.slope(i + Math.cos(k) * 3, j + Math.sin(k) * 3) < 0.45;
+      if (!ok) continue;
+    }
+    // Somewhere you can see it: near the middle, and for a jump, a steady steep slope.
+    const score = -Math.abs(i - N / 2) * (len ? 0.05 : 0.15) + (len ? Math.min(drop / len, 0.7) * 4 : -ter.slope(i, j) * 4) + (kind === 'glacier' ? a * 3 : 0);
+    if (!best || score > best.score) best = { x: i, z: j, dx, dz, score };
+  }
+  // No room on the slope: the summit always has some.
+  if (!best) return kind === 'igloo' ? top() : null;
+  const clear = [];
+  if (len) for (let s = 0; s <= len; s += 2) clear.push([best.x + best.dx * s, best.z + best.dz * s, kind === 'glacier' ? 3.5 + s * 0.2 : 3]);
+  else clear.push([best.x, best.z, 7]);
+  return { kind, x: best.x, z: best.z, yaw: Math.atan2(best.dx, best.dz), len, clear };
 }

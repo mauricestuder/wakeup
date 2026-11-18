@@ -42,8 +42,9 @@ function feature(parts, ter, p, f, rnd) {
   if (f.type === 'bridge') {
     // A wooden bridge: deck, railings, and posts down into the gully.
     for (let i = f.i0; i < f.i1; i++) {
-      const a = onPiste(p, i), b = onPiste(p, i + 1), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.05;
-      const tip = Math.atan2(a.y - b.y, len);
+      const a = onPiste(p, i), b = onPiste(p, i + 1), mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, run = Math.hypot(b.x - a.x, b.z - a.z);
+      // The boards follow the slope, so they are as long as the slope, not just its run.
+      const tip = Math.atan2(a.y - b.y, run), len = Math.hypot(run, a.y - b.y) + 0.06;
       parts.push([box(5.2, 0.22, len), 0x8a5a2b, tipped(mx, my - 0.02, mz, a.yaw, tip)]);
       for (const side of [2.3, -2.3]) {
         parts.push([box(0.08, 0.08, len), 0x6b4423, tipped(mx + a.nx * side, my + 0.75, mz + a.nz * side, a.yaw, tip)]);
