@@ -1,4 +1,4 @@
-// Hell's Customs: boot, screens, input and the frame loop.
+// Leg Day of the Dead: boot, screens, input and the frame loop.
 
 import { W, H, MAPS, buildPath } from './maps.js';
 import { Game, DT } from './game.js';
@@ -45,7 +45,7 @@ function buildMenu() {
     const card = document.createElement('button');
     card.className = 'mapc' + (i === mapIdx ? ' on' : '');
     const best = save.best[`${m.id}-${diffKey}`];
-    card.innerHTML = `<canvas width="712" height="500"></canvas><div class="n">${m.name}</div><div class="b">${m.blurb}</div><div class="best">${best ? `Best: ticket #${best}` : '&nbsp;'}</div>`;
+    card.innerHTML = `<canvas width="712" height="500"></canvas><div class="n">${m.name}</div><div class="b">${m.blurb}</div><div class="best">${best ? `Best: wave ${best}` : '&nbsp;'}</div>`;
     const prev = makeBackground(m, buildPath(m), 712 / W);
     card.querySelector('canvas').getContext('2d').drawImage(prev, 0, 0, 712, 500);
     card.onclick = () => { mapIdx = i; sfx('click'); buildMenu(); };
@@ -55,7 +55,7 @@ function buildMenu() {
 }
 
 function buildChain() {
-  const order = ['ceo', 'lawyer', 'infl', 'cart', 'soul'];
+  const order = ['football', 'jogger', 'hardhat', 'walker', 'crawler'];
   const el = $('chain');
   el.innerHTML = '';
   order.forEach((t, i) => {
@@ -63,7 +63,7 @@ function buildChain() {
     c.width = 140; c.height = 140;
     const x = c.getContext('2d');
     x.scale(2, 2);
-    drawSinner(x, { t, x: 35, y: 42, r: ETYPES[t].r * 1.25, dx: 1, seed: i * 1.7, flash: 0, burnT: 0, stunT: 0, slowF: 1, hp: 1, maxHp: 1 }, 0.2);
+    drawSinner(x, { t, x: 35, y: 36, r: ETYPES[t].r * 1.25, dx: 1, fa: -Math.PI / 2, seed: i * 1.7, flash: 0, burnT: 0, stunT: 0, slowF: 1, hp: 1, maxHp: 1 }, 0.2);
     const wrap = document.createElement('div');
     wrap.style.textAlign = 'center';
     wrap.appendChild(c);
@@ -85,7 +85,7 @@ function syncSliders() { for (const [id, k] of [['vol', 'vol'], ['vol2', 'vol'],
 bindSlider('vol', 'vol', setVolume); bindSlider('vol2', 'vol', setVolume);
 bindSlider('mus', 'music', setMusicVolume); bindSlider('mus2', 'music', setMusicVolume);
 setVolume(save.vol); setMusicVolume(save.music);
-// Start the hold music on the first touch anywhere (browsers need a gesture).
+// Start the music on the first touch anywhere (browsers need a gesture).
 window.addEventListener('pointerdown', () => { initAudio(); startMusic(); }, { once: true });
 
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id); }
@@ -101,7 +101,7 @@ function newGame() {
   ui.highlight(null); ui.forcePanel();
   state = 'play';
   show(null);
-  toast('YOUR SHIFT STARTS NOW', 2200);
+  toast('LETS GET THIS BREAD', 2200);
   window.__hc = { game, ui, newGame, setSpeed: s => (speed = s) };
 }
 
@@ -109,12 +109,12 @@ function endScreen(won) {
   state = 'end';
   const t = $('endT'), s = $('endS'), b = $('endB');
   if (won) {
-    t.textContent = 'QUOTA REACHED'; t.className = 'big';
-    s.textContent = 'Employee of the Month. Your prize: more work.';
-    b.innerHTML = '<button class="btn go" data-a="freeplay">KEEP WORKING (FREEPLAY)</button><button class="btn" data-a="menu">CLOCK OUT</button>';
+    t.textContent = 'TOWN SAVED'; t.className = 'big';
+    s.textContent = 'Protein shakes are on the house.';
+    b.innerHTML = '<button class="btn go" data-a="freeplay">ONE MORE SET (FREEPLAY)</button><button class="btn" data-a="menu">HIT THE SHOWERS</button>';
   } else {
-    t.textContent = 'THEY GOT INTO HEAVEN'; t.className = 'big bad';
-    s.textContent = `Management is furious. You lasted until ticket #${game.round + 1}.`;
+    t.textContent = 'THEY GOT INTO THE GYM'; t.className = 'big bad';
+    s.textContent = `They're using the machines wrong. You made it to wave ${game.round + 1}.`;
     b.innerHTML = '<button class="btn go" data-a="restart">TRY AGAIN</button><button class="btn" data-a="menu">QUIT TO MENU</button>';
   }
   show('endScr');
@@ -127,7 +127,7 @@ document.addEventListener('click', ev => {
   if (a === 'resume') { state = 'play'; show(null); }
   else if (a === 'restart') newGame();
   else if (a === 'menu') { state = 'menu'; game = null; buildMenu(); show('menu'); }
-  else if (a === 'freeplay') { state = 'play'; show(null); toast('FREEPLAY: OVERTIME, UNPAID', 2400); }
+  else if (a === 'freeplay') { state = 'play'; show(null); toast('FREEPLAY: NO DAYS OFF', 2400); }
 });
 
 function pause() {
@@ -142,21 +142,21 @@ function select(t) { sel = t; ui.forcePanel(); if (t) cancelPlacing(); }
 function cancelPlacing() { placing = null; ghost = null; ui.highlight(null); }
 
 const TIPS = {
-  lawyer: ['NEW: LAWYERS', 'Fast talkers, fast walkers. Inside every Lawyer is an Influencer.'],
-  ceo: ['NEW: CEOS', 'The fastest sinners in the building. They think they can buy their way out.'],
-  camo: ['NEW: TAX EVADERS', 'Sinners hiding in boxes! Only the Tax Auditor and a Stamp Demon with Reading Glasses can see them. Lava blasts still hit them.'],
-  mime: ['NEW: MIMES', "Mimes can't hear the hold music, so phones don't slow them. Each one hides 2 CEOs."],
-  complainer: ['NEW: THE COMPLAINER', 'Stamps and pitchforks bounce off the complaint form! Use Lava Geysers, Flaming Forks, Bigger Fines or PERMANENTLY DENIED.'],
-  bus: ['NEW: TOUR BUS', 'Takes 16 hits, then the whole tour group gets out. Bring lava.'],
-  replyall: ['BOSS: REPLY-ALL GUY', 'He replies to everyone. Lots of HP. Tax Auditors are great against bosses.'],
-  popup: ['FINAL BOSS: THE INVENTOR OF POP-UP ADS', 'The worst person in history. Throw everything at him.'],
+  jogger: ['NEW: JOGGER ZOMBIES', 'Cardio zombies. Fast. Inside every Jogger is a Hard-Hat Zombie.'],
+  football: ['NEW: FOOTBALL ZOMBIES', 'The fastest zombies on the street. They peaked in high school.'],
+  camo: ['NEW: TRASH-CAN ZOMBIES', 'Zombies hiding in trash cans! Only The Chad and a Dumbbell Bro with the Focus Headband can see them. Shake explosions still hit them.'],
+  headphones: ['NEW: HEADPHONES ZOMBIES', "They can't hear the DJ, so they don't dance or slow down. Each one hides 2 Football Zombies."],
+  riot: ['NEW: RIOT ZOMBIES', 'Dumbbells and plates bounce off the shield! Use Protein Shakes, Spicy Pre-Workout, Heavy Plates or Barbell Toss.'],
+  partybus: ['NEW: ZOMBIE PARTY BUS', 'Takes 16 hits, then the whole party jumps out. Bring shakes.'],
+  couch: ['BOSS: THE COUCH ZOMBIE', "He'll start going to the gym on Monday. Lots of HP. The Chad is great against bosses."],
+  mru: ['FINAL BOSS: ZOMBIE MR. UNIVERSE', 'The only zombie that never skipped leg day. Throw everything at him.'],
 };
 
 function roundTips(n) {
   const types = new Set();
   let camo = false;
   for (const s of roundSpawns(n)) { types.add(s.type); if (s.camo) camo = true; }
-  for (const k of ['popup', 'replyall', 'bus', 'complainer', 'mime', 'ceo', 'lawyer']) {
+  for (const k of ['mru', 'couch', 'partybus', 'riot', 'headphones', 'football', 'jogger']) {
     if (types.has(k) && !seenThisGame.has(k)) { seenThisGame.add(k); tip(...TIPS[k]); return; }
   }
   if (camo && !seenThisGame.has('camo')) { seenThisGame.add('camo'); tip(...TIPS.camo); }
@@ -279,10 +279,10 @@ function handleEvents() {
         sfx(ev.k); break;
       case 'boom': sfx('boom'); break;
       case 'leak': sfx('leak'); hurtFlash(); break;
-      case 'roundStart': sfx('roundStart'); toast(`NOW SERVING TICKET #${ev.n}`); roundTips(ev.n); break;
+      case 'roundStart': sfx('roundStart'); toast(`WAVE ${ev.n}`); roundTips(ev.n); break;
       case 'roundEnd':
         sfx('roundEnd');
-        toast(`TICKET #${ev.n} DONE  +$${ev.bonus + ev.income}`);
+        toast(`WAVE ${ev.n} CLEARED  +$${ev.bonus + ev.income}`);
         recordBest(game.map.id, game.diffKey, ev.n);
         if (save.auto && !(ev.n === LAST_ROUND)) setTimeout(() => { if (state === 'play' && game && !game.active) game.startRound(); }, 400);
         break;
