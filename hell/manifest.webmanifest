@@ -1,0 +1,17 @@
+{
+  "name": "Hell's Customs",
+  "short_name": "Hell's Customs",
+  "description": "A dark-humour tower defense: stop sinners sneaking past Hell's front desk into Heaven.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#140607",
+  "theme_color": "#140607",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

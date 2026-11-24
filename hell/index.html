@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hell's Customs">
+  <meta name="theme-color" content="#140607">
+  <meta name="description" content="Hell's Customs: a dark-humour tower defense. Stop sinners from sneaking past Hell's front desk into Heaven.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>Hell's Customs</title>
+  <style>
+    @font-face { font-family: 'Luckiest Guy'; src: url('vendor/fonts/luckiest-guy.woff2') format('woff2'); font-display: block; }
+    @font-face { font-family: 'Creepster'; src: url('vendor/fonts/creepster.woff2') format('woff2'); font-display: block; }
+    :root {
+      --ink: #1b0b0d; --blood: #8e1622; --fire: #ff6a2a; --gold: #ffd34d; --cream: #f3ead2;
+      --panel: #2a1012; --panel2: #3a171a; --green: #7dff8a; --blue: #6fd3ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0405; color: var(--cream);
+      font-family: 'Luckiest Guy', 'Arial Black', Impact, sans-serif; text-transform: uppercase; user-select: none; -webkit-user-select: none;
+      touch-action: none; overscroll-behavior: none; }
+    button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+
+    #stage { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; transform-origin: 0 0; overflow: hidden;
+      background: #140607; }
+    canvas#game { position: absolute; left: 0; top: 0; width: 1280px; height: 900px; display: block; }
+
+    /* ---------- HUD over the map ---------- */
+    #hud { position: absolute; left: 12px; top: 10px; display: flex; gap: 10px; pointer-events: none; }
+    .pill { background: rgba(27,11,13,.82); border: 3px solid var(--ink); border-radius: 16px; padding: 7px 14px 3px;
+      font-size: 30px; line-height: 1; box-shadow: 0 3px 0 rgba(0,0,0,.4); white-space: nowrap; }
+    .pill b { font-weight: normal; }
+    #hLives { color: #ff7a6a; } #hCash { color: var(--green); } #hRound { color: var(--gold); }
+    .pill.hurt { animation: hurt .4s; }
+    @keyframes hurt { 30% { transform: scale(1.18); background: #a51515; } }
+
+    #toast { position: absolute; left: 640px; top: 90px; transform: translateX(-50%); font-size: 44px; color: var(--gold);
+      text-shadow: 3px 3px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink);
+      pointer-events: none; opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+    #tip { position: absolute; left: 640px; bottom: 18px; transform: translateX(-50%); width: 760px; background: rgba(27,11,13,.94);
+      border: 4px solid var(--gold); border-radius: 18px; padding: 14px 20px 10px; font-size: 22px; line-height: 1.2; display: none;
+      box-shadow: 0 6px 0 rgba(0,0,0,.5); }
+    #tip.show { display: block; animation: pop .3s; }
+    #tip .t { color: var(--gold); font-size: 28px; margin-bottom: 4px; }
+    #tip .x { position: absolute; right: 12px; top: 8px; font-size: 26px; color: #aaa; }
+    @keyframes pop { from { transform: translateX(-50%) scale(.8); opacity: 0; } }
+
+    /* ---------- sidebar ---------- */
+    #side { position: absolute; left: 1280px; top: 0; width: 320px; height: 900px; background:
+      linear-gradient(#2a1012, #1a0809); border-left: 5px solid var(--ink); display: flex; flex-direction: column; padding: 12px; gap: 10px; }
+    #side h2 { margin: 0; text-align: center; font-size: 30px; color: var(--fire); text-shadow: 2px 2px 0 var(--ink); line-height: 1; padding-top: 4px; }
+    #shopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .card { position: relative; background: var(--panel2); border: 3px solid var(--ink); border-radius: 14px; padding: 4px 4px 6px;
+      text-align: center; box-shadow: 0 4px 0 rgba(0,0,0,.45); touch-action: none; }
+    .card canvas { width: 120px; height: 92px; display: block; margin: 0 auto; pointer-events: none; }
+    .card .n { font-size: 15px; line-height: 1; color: var(--cream); height: 30px; display: flex; align-items: center; justify-content: center; }
+    .card .c { font-size: 22px; color: var(--green); line-height: 1; }
+    .card .k { position: absolute; left: 8px; top: 5px; font-size: 14px; color: #a88; }
+    .card.poor { filter: grayscale(.8) brightness(.7); }
+    .card.poor .c { color: #ff7a6a; }
+    .card.on { border-color: var(--gold); background: #4d1f22; }
+    #info { flex: 1; min-height: 0; background: rgba(0,0,0,.25); border-radius: 12px; padding: 10px 12px; font-size: 18px; line-height: 1.2; color: #e8d8c0; overflow: hidden; }
+    #info .t { color: var(--gold); font-size: 22px; }
+
+    #panel { display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+    #side.sel #panel { display: flex; }
+    #side.sel #shopGrid, #side.sel #info, #side.sel h2 { display: none; }
+    .ptop { display: flex; align-items: center; gap: 8px; }
+    .ptop canvas { width: 84px; height: 70px; flex: none; }
+    #pName { font-size: 24px; color: var(--gold); line-height: 1; }
+    #pPops { font-size: 16px; color: #c9b; margin-top: 4px; }
+    #pClose { margin-left: auto; font-size: 30px; color: #c9a; align-self: flex-start; padding: 0 4px; }
+    #pTarget { background: var(--panel2); border: 3px solid var(--ink); border-radius: 12px; padding: 8px 6px 4px; font-size: 20px; }
+    #pTarget b { color: var(--blue); font-weight: normal; }
+    .up { background: var(--panel2); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 10px 6px; text-align: left;
+      box-shadow: 0 4px 0 rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 4px; min-height: 150px; }
+    .up .pips { display: flex; gap: 5px; }
+    .up .pips i { width: 26px; height: 9px; border-radius: 5px; background: rgba(0,0,0,.5); border: 2px solid var(--ink); }
+    .up[data-p="0"] .pips i.f { background: var(--gold); }
+    .up[data-p="1"] .pips i.f { background: var(--blue); }
+    .up .un { font-size: 20px; line-height: 1.05; color: var(--cream); }
+    .up .ud { font-size: 15px; line-height: 1.15; color: #cbb; font-family: system-ui, -apple-system, sans-serif; font-weight: 700; text-transform: none; }
+    .up .uc { font-size: 24px; color: var(--green); margin-top: auto; }
+    .up.poor .uc { color: #ff7a6a; }
+    .up.lock { opacity: .55; }
+    .up.lock .uc { color: #aaa; font-size: 18px; }
+    #pSell { margin-top: auto; background: #5a1414; border: 3px solid var(--ink); border-radius: 12px; padding: 9px 6px 5px; font-size: 22px; color: #ffd0c8; }
+
+    #controls { display: grid; grid-template-columns: 1fr 64px; grid-template-rows: auto auto; gap: 8px; }
+    #play { grid-row: span 2; background: linear-gradient(#3fbf4a, #238a2c); border: 4px solid var(--ink); border-radius: 18px; font-size: 30px;
+      color: #fff; text-shadow: 2px 2px 0 var(--ink); padding: 12px 4px 6px; box-shadow: 0 5px 0 rgba(0,0,0,.5); line-height: 1; }
+    #play.run { background: linear-gradient(#ff9a3a, #d0561a); }
+    #play small { display: block; font-size: 15px; opacity: .85; margin-top: 3px; }
+    .sq { background: var(--panel2); border: 3px solid var(--ink); border-radius: 12px; font-size: 16px; padding: 7px 2px 3px; line-height: 1; }
+    .sq.on { background: #2a5a2e; color: var(--green); }
+
+    /* ---------- full-stage screens ---------- */
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 110%, #ff5a1a 0%, #8e1622 30%, #2a0809 65%, #0d0405 100%); z-index: 10; text-align: center; }
+    .screen.show { display: flex; }
+    .screen.dim { background: rgba(10,3,4,.82); }
+    .title { font-family: 'Creepster', 'Luckiest Guy', cursive; font-size: 118px; line-height: .9; color: var(--fire);
+      text-shadow: 0 0 30px rgba(255,90,20,.6), 6px 6px 0 var(--ink); margin: 0; letter-spacing: 3px; }
+    .sub { font-size: 28px; color: var(--cream); margin: 4px 0 14px; text-shadow: 2px 2px 0 var(--ink); }
+    .row { display: flex; gap: 18px; justify-content: center; align-items: stretch; }
+    .mapc { width: 352px; background: rgba(27,11,13,.85); border: 4px solid var(--ink); border-radius: 18px; padding: 10px; box-shadow: 0 6px 0 rgba(0,0,0,.5); }
+    .mapc canvas { width: 328px; height: 230px; border-radius: 10px; display: block; border: 3px solid var(--ink); }
+    .mapc .n { font-size: 30px; color: var(--gold); margin-top: 8px; line-height: 1; }
+    .mapc .b { font-size: 17px; color: #d9c6b0; font-family: system-ui, -apple-system, sans-serif; font-weight: 700; margin-top: 4px; text-transform: none; }
+    .mapc .best { font-size: 17px; color: var(--green); margin-top: 4px; }
+    .mapc.on { border-color: var(--gold); transform: translateY(-4px); }
+    .diffs { margin: 14px 0 12px; }
+    .btn { background: var(--panel2); border: 4px solid var(--ink); border-radius: 16px; padding: 12px 26px 6px; font-size: 28px;
+      box-shadow: 0 5px 0 rgba(0,0,0,.5); color: var(--cream); }
+    .btn.on { background: #7a2a14; color: var(--gold); border-color: var(--gold); }
+    .btn.go { background: linear-gradient(#3fbf4a, #238a2c); color: #fff; font-size: 40px; padding: 14px 50px 6px; text-shadow: 2px 2px 0 var(--ink); }
+    .chain { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 18px; color: #e8d8c0; }
+    .chain canvas { width: 62px; height: 62px; }
+    .chain .arr { font-size: 26px; color: var(--fire); }
+    .how { font-size: 18px; color: #e8d8c0; max-width: 1200px; margin-top: 6px; line-height: 1.25; font-family: system-ui, -apple-system, sans-serif; font-weight: 700; text-transform: none; }
+    .sliders { display: flex; gap: 26px; justify-content: center; margin-top: 10px; font-size: 20px; align-items: center; }
+    .sliders input { width: 180px; accent-color: var(--fire); }
+    .big { font-size: 86px; line-height: 1; color: var(--gold); text-shadow: 5px 5px 0 var(--ink); margin: 0; }
+    .big.bad { color: #ff5a4a; }
+    .stack { display: flex; flex-direction: column; gap: 14px; margin-top: 26px; min-width: 380px; }
+
+    #rotate { position: fixed; inset: 0; z-index: 50; background: #140607; display: none; align-items: center; justify-content: center;
+      flex-direction: column; font-size: 26px; color: var(--cream); text-align: center; padding: 20px; }
+    #rotate .ph { font-size: 70px; animation: rot 2s infinite; }
+    @keyframes rot { 50% { transform: rotate(90deg); } }
+    @media (orientation: portrait) and (max-width: 820px) { #rotate { display: flex; } }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="hud">
+      <div class="pill" id="hLives">❤ <b>100</b></div>
+      <div class="pill" id="hCash">$ <b>650</b></div>
+      <div class="pill" id="hRound">TICKET <b>1</b>/40</div>
+    </div>
+    <div id="toast"></div>
+    <div id="tip"><button class="x" aria-label="Close">✕</button><div class="t"></div><div class="d"></div></div>
+
+    <aside id="side">
+      <h2>CUSTOMS DEPT.</h2>
+      <div id="shopGrid"></div>
+      <div id="info"><div class="t">Welcome, intern.</div>Drag a tower onto the floor next to the queue. Tap a tower to upgrade it.</div>
+      <div id="panel">
+        <div class="ptop"><canvas id="pIcon" width="168" height="140"></canvas><div><div id="pName"></div><div id="pPops"></div></div><button id="pClose" aria-label="Close">✕</button></div>
+        <button id="pTarget">TARGET: <b>FIRST</b></button>
+        <button class="up" data-p="0"></button>
+        <button class="up" data-p="1"></button>
+        <button id="pSell">SELL $0</button>
+      </div>
+      <div id="controls">
+        <button id="play">▶ NEXT TICKET<small>Space</small></button>
+        <button class="sq" id="auto">AUTO</button>
+        <button class="sq" id="pause">PAUSE</button>
+      </div>
+    </aside>
+
+    <div class="screen show" id="menu">
+      <h1 class="title">HELL'S CUSTOMS</h1>
+      <div class="sub">Please have your sins ready.</div>
+      <div class="row" id="maps"></div>
+      <div class="row diffs" id="diffs">
+        <button class="btn" data-d="easy">EASY</button>
+        <button class="btn on" data-d="normal">NORMAL</button>
+        <button class="btn" data-d="hard">HARD</button>
+      </div>
+      <button class="btn go" id="start">START SHIFT</button>
+      <div class="chain" id="chain"></div>
+      <div class="how">Drag towers from the right onto the floor. Each hit peels off one layer. Don't let anyone reach Heaven. Management is watching.</div>
+      <div class="sliders">
+        <label>SOUND <input type="range" id="vol" min="0" max="1" step="0.05"></label>
+        <label>HOLD MUSIC <input type="range" id="mus" min="0" max="1" step="0.05"></label>
+      </div>
+    </div>
+
+    <div class="screen dim" id="pauseScr">
+      <h2 class="big">ON BREAK</h2>
+      <div class="sub">The sinners will wait. They have eternity.</div>
+      <div class="stack">
+        <button class="btn go" data-a="resume">BACK TO WORK</button>
+        <button class="btn" data-a="restart">RESTART SHIFT</button>
+        <button class="btn" data-a="menu">QUIT TO MENU</button>
+      </div>
+      <div class="sliders">
+        <label>SOUND <input type="range" id="vol2" min="0" max="1" step="0.05"></label>
+        <label>HOLD MUSIC <input type="range" id="mus2" min="0" max="1" step="0.05"></label>
+      </div>
+    </div>
+
+    <div class="screen dim" id="endScr">
+      <h2 class="big" id="endT"></h2>
+      <div class="sub" id="endS"></div>
+      <div class="stack" id="endB"></div>
+    </div>
+  </div>
+  <div id="rotate"><div class="ph">📱</div>Turn your phone sideways.<br>Hell is a landscape-only facility.</div>
+
+  <script type="module" src="js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
