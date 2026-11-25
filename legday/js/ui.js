@@ -50,7 +50,7 @@ export class UI {
     set('lives', game.lives, v => { $('hLives').querySelector('b').textContent = v; });
     const shown = game.round + 1;
     set('round', `${shown}|${game.won}`, () => {
-      $('hRound').innerHTML = game.won && shown > 40 ? `TICKET <b>${shown}</b> ★` : `TICKET <b>${shown}</b>/40`;
+      $('hRound').innerHTML = game.won && shown > 40 ? `WAVE <b>${shown}</b> ★` : `WAVE <b>${shown}</b>/40`;
     });
     for (const key of TOWER_KEYS) {
       const poor = cash < game.towerCost(key);
@@ -60,7 +60,7 @@ export class UI {
     set('play', `${game.active}|${speed}`, () => {
       const b = $('play');
       b.classList.toggle('run', game.active);
-      b.innerHTML = game.active ? `${'▶'.repeat(speed)} ${speed}X<small>Tap for speed</small>` : '▶ NEXT TICKET<small>Space</small>';
+      b.innerHTML = game.active ? `${'▶'.repeat(speed)} ${speed}X<small>Tap for speed</small>` : '▶ NEXT WAVE<small>Space</small>';
     });
     set('auto', auto, v => $('auto').classList.toggle('on', v));
     // selected tower panel
@@ -73,13 +73,13 @@ export class UI {
     if (!t) return;
     const D = TOWERS[t.key];
     $('pName').textContent = D.name;
-    $('pPops').textContent = t.key === 'shop' ? `Pays $${t.s.income}+ per round` : `${t.pops.toLocaleString('en-US')} sinners processed`;
+    $('pPops').textContent = t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} zombies smashed`;
     const c = $('pIcon').getContext('2d');
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 168, 140);
     c.scale(2, 2);
     drawTower(c, t.key, 42, 40, { icon: true, scale: 1.05, lvl: t.lvl, t: 0.3, face: 1 });
     const tgt = $('pTarget');
-    tgt.style.display = ['phone', 'shop', 'fork'].includes(t.key) ? 'none' : '';
+    tgt.style.display = ['dj', 'store', 'spinner'].includes(t.key) ? 'none' : '';
     tgt.innerHTML = `TARGET: <b>${TARGET_MODES[t.mode].toUpperCase()}</b>`;
     for (const b of document.querySelectorAll('.up')) {
       const p = +b.dataset.p, lvl = t.lvl[p], next = D.paths[p][lvl];

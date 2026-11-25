@@ -1,7 +1,7 @@
 {
-  "name": "Hell's Customs",
-  "short_name": "Hell's Customs",
-  "description": "A dark-humour tower defense: stop sinners sneaking past Hell's front desk into Heaven.",
+  "name": "Leg Day of the Dead",
+  "short_name": "Leg Day",
+  "description": "Gym bros vs zombies tower defense. Zombies always skip leg day.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

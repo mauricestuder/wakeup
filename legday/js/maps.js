@@ -1,39 +1,39 @@
-// Maps: the queue path sinners walk along, plus furniture you can't build on.
+// Maps: the road zombies walk along, plus stuff you can't build on.
 // The map area is W x H world units; the shop sidebar lives outside it.
 
 export const W = 1280, H = 900;
-export const LANE = 30;          // half width of the queue lane
+export const LANE = 30;          // half width of the road
 const STEP = 2;                  // path sample spacing
 
 export const MAPS = [
   {
-    id: 'desk', name: 'Front Desk', blurb: 'A long queue. Good for your first shift.',
-    floor: ['#5a1a1f', '#4d161b'],
+    id: 'street', name: 'Main Street', blurb: 'A long road through town. Good for your first workout.',
+    floor: ['#56763d', '#4f6e38'],
     pts: [[-50, 140], [340, 140], [340, 420], [140, 420], [140, 760], [580, 760], [580, 250],
           [820, 250], [820, 640], [1060, 640], [1060, 140], [1310, 140]],
     blockers: [
       { kind: 'sign', x: 530, y: 24, w: 470, h: 84 },
-      { kind: 'desk', x: 365, y: 520, w: 150, h: 78 },
-      { kind: 'cooler', cx: 700, cy: 830, r: 34 },
-      { kind: 'plant', cx: 40, cy: 860, r: 26 },
-      { kind: 'cabinet', x: 870, y: 724, w: 150, h: 56 },
-      { kind: 'ticket', cx: 240, cy: 240, r: 30 },
-      { kind: 'plant', cx: 1230, cy: 860, r: 26 },
-      { kind: 'clock', cx: 700, cy: 470, r: 34 },
+      { kind: 'car', x: 370, y: 515, w: 140, h: 70, col: '#3f7fd0' },
+      { kind: 'tree', cx: 700, cy: 830, r: 34 },
+      { kind: 'tree', cx: 40, cy: 860, r: 30 },
+      { kind: 'dumpster', x: 870, y: 724, w: 150, h: 56 },
+      { kind: 'hydrant', cx: 240, cy: 240, r: 22 },
+      { kind: 'tree', cx: 1230, cy: 860, r: 30 },
+      { kind: 'manhole', cx: 700, cy: 470, r: 30 },
     ],
   },
   {
-    id: 'lounge', name: 'Lava Lounge', blurb: 'Short queue, lava everywhere. Hard.',
-    floor: ['#3b1612', '#33120f'],
+    id: 'gas', name: 'Gas Station', blurb: 'Short road, burning wrecks everywhere. Hard.',
+    floor: ['#7a7a76', '#717170'],
     pts: [[-50, 450], [480, 450], [480, 150], [820, 150], [820, 750], [1100, 750], [1100, 450], [1330, 450]],
     blockers: [
-      { kind: 'lava', cx: 240, cy: 220, r: 110 },
-      { kind: 'lava', cx: 240, cy: 700, r: 125 },
-      { kind: 'lava', cx: 650, cy: 470, r: 92 },
-      { kind: 'lava', cx: 960, cy: 320, r: 100 },
-      { kind: 'lava', cx: 1210, cy: 190, r: 72 },
-      { kind: 'couch', x: 560, y: 790, w: 180, h: 70 },
-      { kind: 'cooler', cx: 1220, cy: 760, r: 34 },
+      { kind: 'wreck', cx: 240, cy: 220, r: 110 },
+      { kind: 'wreck', cx: 240, cy: 700, r: 125 },
+      { kind: 'wreck', cx: 650, cy: 470, r: 92 },
+      { kind: 'wreck', cx: 960, cy: 320, r: 100 },
+      { kind: 'wreck', cx: 1210, cy: 190, r: 72 },
+      { kind: 'pumps', x: 560, y: 790, w: 180, h: 70 },
+      { kind: 'hydrant', cx: 1220, cy: 760, r: 22 },
     ],
   },
 ];
@@ -70,6 +70,7 @@ export function posAt(path, d, out) {
   out.x = x0 + (x1 - x0) * t;
   out.y = y0 + (y1 - y0) * t;
   if (x1 !== x0) out.dx = x1 > x0 ? 1 : -1;
+  if (x1 !== x0 || y1 !== y0) out.ang = Math.atan2(y1 - y0, x1 - x0);
   return out;
 }
 
