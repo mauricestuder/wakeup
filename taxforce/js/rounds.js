@@ -1,4 +1,4 @@
-// Waves. Each group: [type, count, gap seconds, start second, camo?]
+// Waves. Each group: [type, count, gap seconds, start second, camo?, boss HP multiplier?]
 // After round 40 the game makes rounds up (freeplay).
 
 const R = {
@@ -31,7 +31,7 @@ const R = {
   27: [['riot', 10, 1.0, 0], ['football', 40, 0.25, 2], ['headphones', 10, 0.6, 8, 1]],
   28: [['partybus', 2, 3.0, 0], ['football', 30, 0.3, 2]],
   29: [['partybus', 4, 2.2, 0], ['riot', 10, 0.8, 4]],
-  30: [['headphones', 30, 0.35, 0], ['riot', 14, 0.6, 3], ['football', 40, 0.15, 8, 1]],
+  30: [['headphones', 20, 0.4, 0], ['football', 30, 0.2, 3, 1], ['mru', 1, 1, 7, 0, 0.4]],
   31: [['partybus', 6, 1.8, 0], ['headphones', 20, 0.4, 2, 1]],
   32: [['riot', 18, 0.9, 0], ['partybus', 4, 2.2, 3]],
   33: [['football', 60, 0.15, 0], ['football', 20, 0.3, 3, 1], ['headphones', 20, 0.4, 4]],
@@ -41,7 +41,7 @@ const R = {
   37: [['partybus', 9, 1.0, 0, 1], ['riot', 18, 0.45, 3, 1]],
   38: [['couch', 2, 6, 0], ['partybus', 8, 1.2, 3]],
   39: [['partybus', 14, 0.8, 0], ['riot', 26, 0.3, 2], ['headphones', 26, 0.25, 6, 1]],
-  40: [['partybus', 10, 1.0, 0], ['mru', 1, 1, 8]],
+  40: [['partybus', 10, 1.0, 0], ['offshore', 1, 1, 8]],
 };
 
 export const LAST_ROUND = 40;
@@ -53,7 +53,8 @@ function freeplay(n) {
     ['riot', 20 + k * 3, 0.3, 2, 1],
     ['couch', 1 + Math.floor(k / 4), 3, 5],
   ];
-  if (n % 10 === 0) g.push(['mru', Math.floor(k / 10), 6, 10]);
+  if (n % 10 === 0) g.push(['offshore', Math.floor(k / 10), 8, 10]);
+  else if (n % 5 === 0) g.push(['mru', 1, 6, 10]);
   return g;
 }
 
@@ -61,8 +62,8 @@ function freeplay(n) {
 export function roundSpawns(n) {
   const groups = R[n] || freeplay(n);
   const out = [];
-  for (const [type, count, gap, start, camo] of groups)
-    for (let i = 0; i < count; i++) out.push({ t: start + i * gap, type, camo: !!camo });
+  for (const [type, count, gap, start, camo, hp] of groups)
+    for (let i = 0; i < count; i++) out.push({ t: start + i * gap, type, camo: !!camo, hp: hp || 1 });
   out.sort((a, b) => a.t - b.t);
   return out;
 }
