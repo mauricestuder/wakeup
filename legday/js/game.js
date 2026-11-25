@@ -145,7 +145,7 @@ export class Game {
     }
   }
 
-  // ---------- zombies ----------
+  // ---------- rats ----------
   spawn(type, d, camo, hpMul = 1) {
     const T = ETYPES[type];
     const hp = T.boss ? Math.round(T.hp * hpMul) : T.hp;
@@ -414,7 +414,7 @@ export class Game {
         this.reload(t, s.cd);
         t.anim = 0.25;
         t.spin += Math.PI / s.count;
-        // Every plate flies out in its own direction, then curves onto the zombie closest to that direction.
+        // Every plate flies out in its own direction, then curves onto the rat closest to that direction.
         const cands = this.enemies.filter(e => e.alive && (!e.camo || s.detect) && this.inRange(t, e, s.range + 30))
           .map(e => ({ e, a: Math.atan2(e.y - t.y, e.x - t.x) }));
         for (let i = 0; i < s.count; i++) {
@@ -566,7 +566,7 @@ export class Game {
       if (tr.k === 'kb') {
         for (const e of this.enemies) {
           if (!e.alive || tr.hit.has(e.id) || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r) continue;
-          if (tr.blast) {   // minefield: blow up on the first zombie
+          if (tr.blast) {   // minefield: blow up on the first rat
             for (const z of this.enemies) if (z.alive && Math.hypot(z.x - tr.x, z.y - tr.y) < tr.blast + z.r) this.damage(z, tr.dmg, 'blast', tr.src);
             this.events.push({ k: 'boom', x: tr.x, y: tr.y, r: tr.blast });
             tr.life = 0;
@@ -603,7 +603,7 @@ export class Game {
       p.trail.push(p.x, p.y);
       if (p.trail.length > 12) p.trail.splice(0, 2);
       if (p.k === 'shake') {
-        // The shake keeps aiming at its zombie until it lands on it.
+        // The shake keeps aiming at its rat until it lands on it.
         if (p.tgt && p.tgt.alive) { p.tx = p.tgt.x; p.ty = p.tgt.y; }
         p.tt += dt;
         const f = Math.min(1, p.tt / p.T);
@@ -676,7 +676,7 @@ export class Game {
         if (ok) this.events.push({ k: 'decal', x: e.x, y: e.y, big: p.big, p: p.k });
         p.pierce = ok ? p.pierce - 1 : 0;
         if (p.pierce <= 0) { p.dead = true; break; }
-        // keep going: lock onto the next zombie nearby
+        // keep going: lock onto the next rat nearby
         p.tgt = this.nearestUnhit(p, p.retarget);
         if (!p.tgt) p.life = Math.min(p.life, 0.25);
       }

@@ -73,7 +73,7 @@ export class UI {
     if (!t) return;
     const D = TOWERS[t.key];
     $('pName').textContent = D.name;
-    $('pPops').textContent = (t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} zombies smashed`) + (t.buffed ? ' · HYPED' : '');
+    $('pPops').textContent = (t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} rats smashed`) + (t.buffed ? ' · HYPED' : '');
     const c = $('pIcon').getContext('2d');
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 168, 140);
     c.scale(2, 2);

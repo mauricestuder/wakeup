@@ -1,4 +1,4 @@
-// All the cartoon drawing, seen from above: zombies, gym bros, projectiles,
+// All the cartoon drawing, seen from above: mutant rats, gym bros, projectiles,
 // the street and effects. World units are 1280 x 900. Characters face +x
 // in their own space and get rotated to where they are heading.
 
@@ -9,7 +9,6 @@ import { TOWERS } from './towers.js';
 export const INK = '#16120f';
 export const FONT = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
 const TAU = Math.PI * 2;
-const ZSKIN = ['#8fbf6a', '#9fb87a', '#7aa86a', '#a5c48a', '#86a874'];
 const BSKIN = ['#f2c7a0', '#d9a273', '#a86b43', '#6e4127', '#f6d9bd', '#c58c5c'];
 
 // ---------- tiny helpers ----------
@@ -68,135 +67,176 @@ function plateDisc(c, x, y, r, col = '#2e3138') {
   circ(c, x, y, r * 0.22, '#c9ccd2', INK, 1.5);
 }
 
-const zskin = e => ZSKIN[Math.floor(e.seed * 10) % ZSKIN.length];
-
-// ---------- zombies (top-down) ----------
-// A generic zombie: shuffling feet, shoulders, arms reaching forward, head.
-function zombie(c, r, t, e, o) {
-  const skin = o.skin || zskin(e);
-  const ph = t * (o.pace || 7) + e.seed * 5;
-  const step = Math.sin(ph) * r * 0.28;
-  if (!o.noLegs) for (const s of [-1, 1]) ell(c, -r * 0.25 + s * step, s * r * 0.32, r * 0.3, r * 0.17, o.shoes || '#3a3328', INK, 2);
-  const reach = r * (1.05 + Math.sin(ph * 0.5) * 0.08);
-  for (const s of [-1, 1]) arm(c, r * 0.05, s * r * 0.58, reach, s * r * (0.42 + Math.sin(ph + s) * 0.06), r * 0.26, skin);
-  ell(c, 0, 0, r * 0.52, r * 0.82, o.shirt || '#6a7fa0', INK, 2.5);
-  if (o.body) o.body(c, r, t);
-  circ(c, r * 0.12, 0, r * 0.47, skin, INK, 2.5);
-  if (o.head) o.head(c, r, t);
-  else { // messy hair on top
-    c.beginPath(); c.arc(r * 0.05, 0, r * 0.4, Math.PI * 0.55, Math.PI * 1.45); c.closePath();
-    c.fillStyle = o.hair || '#4a3a2a'; c.fill();
+// ---------- mutant gym rats (top-down) ----------
+// A rat: wiggly tail, pattering pink feet, round body, pointy snout with
+// whiskers, round ears and glowing green mutant eyes. Faces +x.
+const PINK = '#f7a8b8', GLOW = 'rgba(150,255,60,0.4)';
+function tail(c, r, t, e, len = 2.1, col = PINK) {
+  const w = Math.sin(t * 9 + e.seed * 7);
+  c.beginPath(); c.moveTo(-r * 0.75, 0);
+  c.bezierCurveTo(-r * 1.3, w * r * 0.5, -r * 1.6, -w * r * 0.6, -r * len, w * r * 0.25);
+  c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = r * 0.2 + 3; c.stroke();
+  c.strokeStyle = col; c.lineWidth = r * 0.2; c.stroke();
+}
+function ratFeet(c, r, ph, col = PINK) {
+  for (const [fx, s, k] of [[0.42, -1, 0], [0.42, 1, 1], [-0.45, -1, 1], [-0.45, 1, 0]]) {
+    const st = Math.sin(ph + k * Math.PI) * r * 0.16;
+    ell(c, r * fx + st, s * r * 0.6, r * 0.19, r * 0.12, col, INK, 1.5);
   }
-  if (!o.noEyes) frontEyes(c, r * 0.12, r * 0.47, '#f4f0c8', '#a01818');
+}
+function ratHead(c, r, fur, o = {}) {
+  const hs = o.hs ?? 1.25, hx = o.hx ?? r * 0.6;
+  // ears first so the head overlaps them
+  for (const s of [-1, 1]) { circ(c, hx - r * 0.22 * hs, s * r * 0.34 * hs, r * 0.21 * hs, fur, INK, 2); circ(c, hx - r * 0.22 * hs, s * r * 0.34 * hs, r * 0.12 * hs, PINK, null); }
+  c.beginPath();
+  c.moveTo(hx + r * 0.52 * hs, 0);
+  c.quadraticCurveTo(hx + r * 0.2 * hs, r * 0.36 * hs, hx - r * 0.2 * hs, r * 0.28 * hs);
+  c.quadraticCurveTo(hx - r * 0.42 * hs, 0, hx - r * 0.2 * hs, -r * 0.28 * hs);
+  c.quadraticCurveTo(hx + r * 0.2 * hs, -r * 0.36 * hs, hx + r * 0.52 * hs, 0);
+  c.closePath(); c.fillStyle = fur; c.fill(); c.lineWidth = 2.5; c.strokeStyle = INK; c.stroke();
+  for (const s of [-1, 1]) {   // whiskers
+    line(c, hx + r * 0.38 * hs, s * r * 0.07, hx + r * 0.62 * hs, s * r * 0.3, 'rgba(22,18,15,0.6)', 1.2);
+    line(c, hx + r * 0.36 * hs, s * r * 0.09, hx + r * 0.5 * hs, s * r * 0.38, 'rgba(22,18,15,0.6)', 1.2);
+  }
+  circ(c, hx + r * 0.52 * hs, 0, r * 0.09 * hs + 1, '#ff5f8a', INK, 1.5);   // nose
+  if (!o.noEyes) for (const s of [-1, 1]) {
+    const ex = hx + r * 0.08 * hs, ey = s * r * 0.15 * hs, er = (o.bigEyes ? 0.13 : 0.09) * r * hs + 1;
+    circ(c, ex, ey, er * 1.5, GLOW, null);
+    circ(c, ex, ey, er, o.bigEyes ? '#fff' : '#b6ff3a', INK, 1.2);
+    circ(c, ex + er * 0.35, ey, er * 0.45, o.bigEyes ? INK : '#1e5a00', null);
+  }
+}
+function rat(c, r, t, e, o) {
+  r *= o.k ?? 1.15;
+  const fur = o.fur || '#9aa0aa';
+  const ph = t * (o.pace || 9) + e.seed * 5;
+  if (o.under) o.under(c, r, t);
+  tail(c, r, t, e, o.tailLen, o.tailCol);
+  if (!o.noFeet) ratFeet(c, r, ph, o.feet);
+  if (o.arms) for (const s of [-1, 1]) arm(c, r * 0.1, s * r * 0.48, r * 0.75, s * r * (0.55 + Math.sin(ph + s) * 0.06), r * 0.24, fur);
+  ell(c, -r * 0.15, 0, r * 0.82, r * 0.6, null, GLOW, 5);        // mutant glow
+  ell(c, -r * 0.15, 0, r * 0.75, r * 0.56, fur, INK, 2.5);
+  ell(c, -r * 0.3, 0, r * 0.35, r * 0.28, 'rgba(255,255,255,0.18)', null);
+  if (o.body) o.body(c, r, t);
+  ratHead(c, r, fur, o);
+  if (o.head) o.head(c, r, t);
 }
 
-const ZOMBIE = {
-  crawler(c, r, t, e) {
-    // no legs, dragging itself along
-    const skin = zskin(e), ph = t * 5 + e.seed * 5;
-    ell(c, -r * 0.5, 0, r * 0.75, r * 0.55, '#6b5a48', INK, 2.5);
-    for (const s of [-1, 1]) arm(c, r * 0.1, s * r * 0.45, r * (0.95 + Math.sin(ph + s * 1.5) * 0.25), s * r * 0.55, r * 0.24, skin);
-    circ(c, r * 0.25, 0, r * 0.45, skin, INK, 2.5);
-    c.beginPath(); c.arc(r * 0.18, 0, r * 0.38, Math.PI * 0.6, Math.PI * 1.4); c.closePath(); c.fillStyle = '#5a4a3a'; c.fill();
-    frontEyes(c, r * 0.25, r * 0.45, '#f4f0c8', '#a01818');
+const RAT = {
+  crawler(c, r, t, e) {    // Baby Rat
+    rat(c, r, t, e, { fur: '#f9c4d2', pace: 14, bigEyes: true, tailLen: 1.7 });
   },
-  walker(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#6a7fa0', pace: 6,
-      body: (c, r) => { c.beginPath(); c.moveTo(-r * 0.3, -r * 0.5); c.lineTo(-r * 0.1, -r * 0.2); c.lineTo(-r * 0.35, -r * 0.1); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke(); } });
+  walker(c, r, t, e) {     // Gym Rat
+    rat(c, r, t, e, { fur: '#a4abb6', pace: 9,
+      head: (c, r) => line(c, r * 0.42, -r * 0.3, r * 0.42, r * 0.3, '#ff3a3a', r * 0.13) });
   },
-  hardhat(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#ff8a2a', pace: 7,
-      body: (c, r) => { line(c, -r * 0.1, -r * 0.78, -r * 0.1, r * 0.78, '#fff36a', r * 0.14); },
-      head: (c, r) => { circ(c, r * 0.12, 0, r * 0.56, '#ffd21f', INK, 2.5); line(c, -r * 0.35, 0, r * 0.6, 0, '#e8b800', 3); } });
-  },
-  jogger(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#3ee0b8', shoes: '#ff4d8a', pace: 13,
-      head: (c, r) => {
-        c.beginPath(); c.arc(r * 0.05, 0, r * 0.4, Math.PI * 0.55, Math.PI * 1.45); c.closePath(); c.fillStyle = '#c8a050'; c.fill();
-        circ(c, r * 0.12, 0, r * 0.47, null, '#e83030', 3.5);
+  hardhat(c, r, t, e) {    // Buff Rat
+    rat(c, r, t, e, { fur: '#b58050', pace: 8, arms: true,
+      body: (c, r) => {
+        ell(c, -r * 0.15, 0, r * 0.62, r * 0.46, '#ff8a2a', INK, 2);       // tank top
+        for (const s of [-1, 1]) circ(c, r * 0.05, s * r * 0.52, r * 0.2, '#b58050', INK, 2);   // shoulder muscles
       } });
   },
-  football(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#c82a2a', shoes: '#fff', pace: 12, noEyes: true,
-      body: (c, r) => { ell(c, -r * 0.05, 0, r * 0.55, r * 1.0, '#c82a2a', INK, 2.5); text(c, '66', -r * 0.25, 0, r * 0.5, '#fff', null); },
-      head: (c, r) => {
-        circ(c, r * 0.12, 0, r * 0.56, '#7a1616', INK, 2.5);
-        line(c, -r * 0.4, 0, r * 0.65, 0, '#fff', 3);
-        for (const k of [-0.25, 0, 0.25]) line(c, r * 0.62, r * k * 1.4, r * 0.85, r * k * 1.4, '#ddd', 2);
+  jogger(c, r, t, e) {     // Cardio Rat
+    rat(c, r, t, e, { fur: '#e3be7a', pace: 16, feet: '#ff4d8a',
+      head: (c, r) => line(c, r * 0.4, -r * 0.31, r * 0.4, r * 0.31, '#3ee0b8', r * 0.15),
+      body: (c, r) => text(c, '5K', -r * 0.2, 0, r * 0.45, '#fff', INK) });
+  },
+  football(c, r, t, e) {   // Skater Rat: fastest
+    rat(c, r, t, e, { fur: '#f4f4f4', pace: 3, noFeet: true,
+      under: (c, r) => {
+        for (const sx of [-0.85, 0.8]) for (const s of [-1, 1]) circ(c, r * sx, s * r * 0.66, r * 0.14, '#ffe066', INK, 1.5);
+        rr(c, -r * 1.3, -r * 0.62, r * 2.55, r * 1.24, r * 0.62, '#ff5a3a', INK, 2.5);
+        line(c, -r * 0.7, 0, r * 0.6, 0, '#ffe066', 3);
+      },
+      head: (c, r) => {      // backwards cap
+        c.beginPath(); c.arc(r * 0.45, 0, r * 0.27, Math.PI * 0.5, Math.PI * 1.5); c.closePath(); c.fillStyle = '#2f7ad8'; c.fill(); c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+        rr(c, r * 0.05, -r * 0.16, r * 0.18, r * 0.32, 3, '#2f7ad8', INK, 1.5);
       } });
   },
-  headphones(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#7a4fc0', pace: 7,
-      body: (c, r) => { c.beginPath(); c.arc(-r * 0.15, 0, r * 0.45, Math.PI * 0.5, Math.PI * 1.5); c.strokeStyle = '#5a2f9a'; c.lineWidth = 4; c.stroke(); },
+  headphones(c, r, t, e) { // AirPods Rat: can't hear the DJ
+    rat(c, r, t, e, { fur: '#b9a0e8', pace: 8,
       head: (c, r) => {
-        c.beginPath(); c.arc(r * 0.05, 0, r * 0.4, Math.PI * 0.55, Math.PI * 1.45); c.closePath(); c.fillStyle = '#222'; c.fill();
-        line(c, r * 0.1, -r * 0.55, r * 0.1, r * 0.55, '#222', 4);
-        for (const s of [-1, 1]) rr(c, -r * 0.05, s * r * 0.55 - r * 0.17, r * 0.32, r * 0.34, 4, '#ff3a8a', INK, 2);
+        line(c, r * 0.33, -r * 0.42, r * 0.33, r * 0.42, '#222', 4);
+        for (const s of [-1, 1]) rr(c, r * 0.2, s * r * 0.42 - r * 0.15, r * 0.28, r * 0.3, 5, '#fff', INK, 2);
       } });
     text(c, '♪', -r * 0.6, -r * 0.9 + Math.sin(t * 6 + e.seed) * 3, r * 0.6, '#ff7ab8', INK);
   },
-  riot(c, r, t, e) {
-    zombie(c, r, t, e, { shirt: '#2a3a5a', shoes: '#111', pace: 5, noEyes: true,
-      head: (c, r) => { circ(c, r * 0.12, 0, r * 0.55, '#1e2a40', INK, 2.5); ell(c, r * 0.45, 0, r * 0.18, r * 0.42, 'rgba(160,210,255,0.6)', INK, 1.5); } });
-    // the shield: arrows bounce off this
-    c.beginPath(); c.arc(-r * 0.3, 0, r * 1.45, -0.62, 0.62);
-    c.lineWidth = r * 0.42; c.strokeStyle = INK; c.lineCap = 'butt'; c.stroke();
-    c.lineWidth = r * 0.3; c.strokeStyle = '#9fb4cc'; c.stroke();
-    c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.7)';
-    c.beginPath(); c.arc(-r * 0.3, 0, r * 1.38, -0.5, 0.1); c.stroke(); c.lineCap = 'round';
+  riot(c, r, t, e) {       // Frying-Pan Rat: dumbbells bounce off
+    rat(c, r, t, e, { fur: '#7d8290', pace: 6, arms: true });
+    line(c, r * 0.7, r * 0.55, r * 1.05, r * 0.3, INK, r * 0.2 + 3);
+    line(c, r * 0.7, r * 0.55, r * 1.05, r * 0.3, '#5a3a22', r * 0.2);
+    ell(c, r * 1.45, 0, r * 0.45, r * 0.92, '#33363c', INK, 3);
+    ell(c, r * 1.45, 0, r * 0.32, r * 0.74, '#55595f', null);
+    ell(c, r * 1.4, -r * 0.25, r * 0.1, r * 0.3, 'rgba(255,255,255,0.45)', null);
   },
-  partybus(c, r, t, e) {
-    const L = r * 1.5, Wd = r * 0.78;
-    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { // zombie arms out of the windows
-      const x = -L * 0.6 + i * L * 0.55, wave = Math.sin(t * 8 + i + s) * 4;
-      arm(c, x, s * Wd * 0.8, x + 6 + wave, s * (Wd + 12), 6, ZSKIN[(i + 2) % 5]);
+  partybus(c, r, t, e) {   // Shopping cart full of rats
+    const L = r * 1.45, Wd = r * 0.82;
+    for (const sx of [-1, 1]) for (const s of [-1, 1]) circ(c, sx * L * 0.82, s * Wd * 1.02, 5, '#333', INK, 2);
+    line(c, -L - 10, -Wd * 0.8, -L - 10, Wd * 0.8, INK, 9); line(c, -L - 10, -Wd * 0.8, -L - 10, Wd * 0.8, '#e83030', 5);   // handle
+    rr(c, -L, -Wd, L * 2, Wd * 2, 8, '#dfe3ea', INK, 3);
+    c.save(); c.beginPath(); c.roundRect(-L + 4, -Wd + 4, L * 2 - 8, Wd * 2 - 8, 6); c.clip();
+    for (let x = -L; x < L; x += 9) line(c, x, -Wd, x, Wd, 'rgba(90,100,115,0.5)', 1.5);
+    for (let y = -Wd; y < Wd; y += 9) line(c, -L, y, L, y, 'rgba(90,100,115,0.5)', 1.5);
+    c.restore();
+    const furs = ['#a4abb6', '#b58050', '#f4f4f4', '#e3be7a', '#b9a0e8', '#f9c4d2'];
+    for (let i = 0; i < 6; i++) {
+      const x = -L * 0.6 + (i % 3) * L * 0.6, y = (i < 3 ? -1 : 1) * Wd * 0.45 + Math.sin(t * 9 + i) * 2;
+      c.save(); c.translate(0, y); ratHead(c, r * 0.55, furs[i], { hx: x }); c.restore();
     }
-    rr(c, -L, -Wd, L * 2, Wd * 2, r * 0.3, '#d14fd8');
-    rr(c, L - r * 0.45, -Wd + 4, r * 0.35, Wd * 2 - 8, 5, '#bfe8ff', INK, 2);
-    rr(c, -L * 0.75, -Wd * 0.45, L * 1.2, Wd * 0.9, 6, '#a332b0', INK, 2);
-    circ(c, -L * 0.15, 0, r * 0.28, '#e8e8f0', INK, 2);   // disco ball
-    for (let i = 0; i < 6; i++) { const a = t * 3 + i; circ(c, -L * 0.15 + Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.5, 2.5, ['#ff5', '#5ff', '#f5f'][i % 3], null); }
-    text(c, 'PARTY', L * 0.35, 0, r * 0.36, '#ffe066', INK);
   },
-  couch(c, r, t, e) {
-    rr(c, -r * 0.95, -r * 1.15, r * 1.6, r * 2.3, 12, '#6b4a8a');                       // couch base
-    rr(c, -r * 0.95, -r * 1.15, r * 0.45, r * 2.3, 10, '#5a3a78', INK, 2.5);              // backrest
-    for (const s of [-1, 1]) rr(c, -r * 0.6, s * r * 1.15 - (s > 0 ? r * 0.38 : 0), r * 1.25, r * 0.38, 8, '#5a3a78', INK, 2.5);
-    // the fat zombie lounging on it
-    ell(c, -r * 0.05, 0, r * 0.55, r * 0.7, '#e8e0d0', INK, 2.5);
-    circ(c, -r * 0.05, 0, r * 0.5, null, 'rgba(0,0,0,0.12)', 6);
-    circ(c, r * 0.05, 0, r * 0.32, ZSKIN[1], INK, 2.5);
-    frontEyes(c, r * 0.05, r * 0.32, '#f4f0c8', '#a01818');
-    rr(c, r * 0.35, r * 0.2, r * 0.3, r * 0.4, 4, '#e8301a', INK, 2);   // chips
-    text(c, 'CHIPS', r * 0.5, r * 0.4, 8, '#ffe066', null);
-    rr(c, r * 0.35, -r * 0.6, r * 0.32, r * 0.14, 3, '#222', INK, 1.5); // remote
+  couch(c, r, t, e) {      // Roomba Rat (boss)
+    circ(c, 0, 0, r * 1.15, '#2a2c33', INK, 3.5);
+    circ(c, 0, 0, r * 0.95, null, '#4a4f5a', 4);
+    for (const s of [-1, 1]) {   // spinning side brushes
+      const bx = r * 0.85, by = s * r * 0.75;
+      for (let i = 0; i < 3; i++) { const a = t * 14 * s + i * TAU / 3; line(c, bx, by, bx + Math.cos(a) * r * 0.32, by + Math.sin(a) * r * 0.32, '#ccc', 2); }
+    }
+    circ(c, r * 0.95, 0, 4, Math.sin(t * 5) > 0 ? '#3aff6a' : '#1a8a3a', INK, 1.5);
+    // fat rat sitting on top, eating chips
+    rat(c, r * 0.62, t, e, { fur: '#8c8f99', pace: 0, noFeet: true, tailLen: 1.5, arms: true,
+      body: (c, r) => ell(c, -r * 0.1, 0, r * 0.5, r * 0.62, 'rgba(255,255,255,0.12)', null) });
+    rr(c, r * 0.45, r * 0.35, r * 0.32, r * 0.42, 4, '#e8301a', INK, 2);
+    text(c, 'CHIPS', r * 0.61, r * 0.56, 7, '#ffe066', null);
   },
-  mru(c, r, t, e) {
-    const skin = '#8fbf6a', ph = t * 3 + e.seed;
-    for (const s of [-1, 1]) ell(c, -r * 0.3 + s * Math.sin(ph) * r * 0.2, s * r * 0.35, r * 0.3, r * 0.17, '#222', INK, 2);
-    // huge flexing arms
-    for (const s of [-1, 1]) {
+  mru(c, r, t, e) {        // The Rat King (final boss)
+    const ph = t * 3 + e.seed, fur = '#9a8f86';
+    // royal cape trailing behind
+    c.beginPath(); c.moveTo(r * 0.1, -r * 0.75);
+    c.quadraticCurveTo(-r * 1.2, -r * (1.0 + Math.sin(ph) * 0.08), -r * 1.35, 0);
+    c.quadraticCurveTo(-r * 1.2, r * (1.0 + Math.sin(ph + 1) * 0.08), r * 0.1, r * 0.75);
+    c.closePath(); c.fillStyle = '#c82a4a'; c.fill(); c.lineWidth = 3; c.strokeStyle = INK; c.stroke();
+    tail(c, r, t, e, 1.9);
+    ratFeet(c, r, ph * 2);
+    for (const s of [-1, 1]) {   // huge flexing arms
       const fl = Math.sin(t * 4) * 0.15;
-      arm(c, 0, s * r * 0.8, r * 0.35, s * r * (1.35 + fl), r * 0.42, skin);
-      arm(c, r * 0.35, s * r * (1.35 + fl), r * 0.85, s * r * (1.0 + fl), r * 0.36, skin);
+      arm(c, 0, s * r * 0.55, r * 0.35, s * r * (1.15 + fl), r * 0.36, fur);
+      arm(c, r * 0.35, s * r * (1.15 + fl), r * 0.85, s * r * (0.85 + fl), r * 0.3, fur);
     }
-    ell(c, 0, 0, r * 0.62, r * 1.05, skin, INK, 3);            // massive back and traps
-    ell(c, -r * 0.1, 0, r * 0.32, r * 0.7, 'rgba(0,0,0,0.12)', null);
-    ell(c, r * 0.05, 0, r * 0.45, r * 0.5, '#9fcf7a', INK, 2.5); // traps
-    circ(c, r * 0.18, 0, r * 0.26, skin, INK, 2.5);             // tiny head
-    frontEyes(c, r * 0.18, r * 0.26, '#f4f0c8', '#a01818');
-    rr(c, -r * 0.62, -r * 0.18, r * 0.25, r * 0.36, 3, '#e0b030', INK, 2); // gold belt buckle peeking out
+    ell(c, -r * 0.1, 0, r * 0.82, r * 0.68, null, GLOW, 7);
+    ell(c, -r * 0.1, 0, r * 0.75, r * 0.62, fur, INK, 3);
+    for (const k of [-1, 0, 1]) for (const s of [-1, 1]) rr(c, -r * 0.3 + k * r * 0.22 - r * 0.09, s * r * 0.13 - r * 0.09, r * 0.18, r * 0.18, 4, 'rgba(0,0,0,0.12)', null);   // six-pack
+    ratHead(c, r, fur, { hx: r * 0.6 });
+    // crown
+    const cx = r * 0.45;
+    c.beginPath();
+    c.moveTo(cx - r * 0.12, -r * 0.24);
+    for (let i = 0; i <= 4; i++) { const y = -r * 0.24 + i * r * 0.12; c.lineTo(cx + (i % 2 ? r * 0.06 : -r * 0.28), y); }
+    c.lineTo(cx - r * 0.12, r * 0.24); c.closePath();
+    c.fillStyle = '#ffd21f'; c.fill(); c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+    circ(c, cx - r * 0.05, 0, r * 0.06, '#e83030', INK, 1.2);
   },
 };
 
-function trashCan(c, r, t, e) {
-  // A zombie hiding in a trash can. Only spotters can see it.
+function proteinTub(c, r, t, e) {
+  // A rat hiding in a protein tub. Only spotters can see it.
   const peek = Math.sin(t * 2 + e.seed) * 0.5 + 0.5;
-  for (const s of [-1, 1]) arm(c, r * 0.4, s * r * 0.5, r * (0.9 + peek * 0.25), s * r * 0.75, r * 0.2, zskin(e));
-  circ(c, 0, 0, r * 0.95, '#7d858c', INK, 3);
-  for (let i = 0; i < 3; i++) circ(c, 0, 0, r * (0.3 + i * 0.22), null, 'rgba(0,0,0,0.22)', 1.5);
-  rr(c, -r * 0.2, -r * 0.1, r * 0.4, r * 0.2, 3, '#5d656c', INK, 1.5);
-  for (const s of [-1, 1]) circ(c, r * 0.72, s * r * 0.25, r * 0.13, '#f4f0c8', INK, 1.2);
+  tail(c, r, t, e, 1.8);
+  ratHead(c, r * 0.7, '#a4abb6', { hx: r * (0.55 + peek * 0.2), noEyes: false });
+  circ(c, 0, 0, r * 0.95, '#f4f4f4', INK, 3);
+  circ(c, 0, 0, r * 0.95, null, '#2f7ad8', 5);
+  circ(c, 0, 0, r * 0.72, '#e8e8ee', INK, 1.5);
+  text(c, 'WHEY', 0, 1, r * 0.42, '#2f7ad8', null);
 }
 
 export function drawSinner(c, e, t) {
@@ -207,7 +247,7 @@ export function drawSinner(c, e, t) {
   ell(c, 3, 5, r * (e.t === 'partybus' ? 1.6 : 0.9), r * (e.t === 'partybus' ? 0.9 : 0.8), 'rgba(0,0,0,0.28)', null, 0, a);
   c.rotate(a);
   const tt = e.stunT > 0 ? 0 : t;
-  if (e.camo) trashCan(c, r, tt, e); else ZOMBIE[e.t](c, r, tt, e);
+  if (e.camo) proteinTub(c, r, tt, e); else RAT[e.t](c, r, tt, e);
   c.restore();
   if (e.flash > 0) circ(c, e.x, e.y, r * 0.9, 'rgba(255,255,255,0.55)', null);
   if (e.burnT > 0) for (let i = 0; i < 3; i++) flame(c, e.x - r * 0.5 + i * r * 0.5, e.y - r * 0.2 + Math.sin(t * 20 + i) * 2, r * 0.3, t + i);
@@ -222,7 +262,7 @@ export function drawSinner(c, e, t) {
   }
 }
 
-// Speech bubble for a zombie or a shouting bro.
+// Speech bubble for a rat or a shouting bro.
 export function drawBubble(c, who, shout = false) {
   if (!who.say) return;
   c.font = `15px ${FONT}`;
@@ -496,25 +536,28 @@ function car(c, x, y, w, h, col, burnt) {
 function drawBlocker(c, b) {
   switch (b.kind) {
     case 'sign': {
-      rr(c, b.x, b.y, b.w, b.h, 10, '#16120f', INK, 4);
-      rr(c, b.x + 6, b.y + 6, b.w - 12, b.h - 12, 7, null, '#e0b030', 2);
+      rr(c, b.x + 4, b.y + 6, b.w, b.h, 10, 'rgba(0,40,0,0.18)', null);
+      rr(c, b.x, b.y, b.w, b.h, 10, '#2f86d6', INK, 4);
+      rr(c, b.x + 6, b.y + 6, b.w - 12, b.h - 12, 7, null, '#ffd21f', 3);
       text(c, 'IRON PARADISE GYM', b.x + b.w / 2, b.y + 30, 28, '#ffd21f', INK);
-      text(c, 'Open 24/7. Even in the apocalypse.', b.x + b.w / 2, b.y + 60, 15, '#f3ead2', null);
+      text(c, 'Open 24/7. NO RATS ALLOWED.', b.x + b.w / 2, b.y + 60, 15, '#fff', INK);
       break;
     }
     case 'car': car(c, b.x, b.y, b.w, b.h, b.col); break;
     case 'tree': {
-      circ(c, b.cx + 4, b.cy + 6, b.r, 'rgba(0,0,0,0.25)', null);
-      circ(c, b.cx, b.cy, b.r, '#3f7a2e', INK, 3);
-      for (let i = 0; i < 5; i++) { const a = i * 1.3; circ(c, b.cx + Math.cos(a) * b.r * 0.45, b.cy + Math.sin(a) * b.r * 0.45, b.r * 0.42, '#4f8f36', null); }
-      circ(c, b.cx - b.r * 0.2, b.cy - b.r * 0.25, b.r * 0.3, '#66a845', null);
+      circ(c, b.cx + 6, b.cy + 8, b.r, 'rgba(0,50,0,0.2)', null);
+      circ(c, b.cx, b.cy, b.r, '#3f9e32', INK, 3);
+      for (let i = 0; i < 5; i++) { const a = i * 1.3; circ(c, b.cx + Math.cos(a) * b.r * 0.45, b.cy + Math.sin(a) * b.r * 0.45, b.r * 0.42, '#56b840', null); }
+      circ(c, b.cx - b.r * 0.2, b.cy - b.r * 0.25, b.r * 0.32, '#86dc5c', null);
+      for (let i = 0; i < 3; i++) circ(c, b.cx + Math.cos(i * 2.1) * b.r * 0.55, b.cy + Math.sin(i * 2.1) * b.r * 0.55, 3.5, '#ff5a5a', INK, 1);
       break;
     }
     case 'dumpster': {
-      rr(c, b.x, b.y, b.w, b.h, 6, '#2f6a3a', INK, 3);
+      rr(c, b.x + 4, b.y + 6, b.w, b.h, 6, 'rgba(0,50,0,0.18)', null);
+      rr(c, b.x, b.y, b.w, b.h, 6, '#3aa84a', INK, 3);
       line(c, b.x + b.w / 2, b.y + 4, b.x + b.w / 2, b.y + b.h - 4, INK, 3);
-      for (const k of [0.25, 0.75]) rr(c, b.x + b.w * k - 14, b.y + b.h / 2 - 4, 28, 8, 3, '#255530', INK, 1.5);
-      text(c, 'DUMPSTER', b.x + b.w / 2, b.y - 10, 12, '#f3ead2', INK);
+      for (const k of [0.25, 0.75]) rr(c, b.x + b.w * k - 14, b.y + b.h / 2 - 4, 28, 8, 3, '#2a8a3a', INK, 1.5);
+      text(c, 'RAT HQ', b.x + b.w / 2, b.y - 10, 13, '#fff', INK);
       break;
     }
     case 'hydrant': {
@@ -529,17 +572,26 @@ function drawBlocker(c, b) {
       c.globalAlpha = 0.5; text(c, '!', b.cx, b.cy, 16, '#7dff8a', null); c.globalAlpha = 1;
       break;
     }
-    case 'wreck': {
-      const g = c.createRadialGradient(b.cx, b.cy, b.r * 0.1, b.cx, b.cy, b.r);
-      g.addColorStop(0, '#1a1210'); g.addColorStop(0.7, '#2e2520'); g.addColorStop(1, 'rgba(40,30,25,0)');
-      c.fillStyle = g; c.beginPath(); c.arc(b.cx, b.cy, b.r, 0, TAU); c.fill();
-      car(c, b.cx - b.r * 0.45, b.cy - b.r * 0.22, b.r * 0.9, b.r * 0.44, '#333', true);
+    case 'truck': {
+      // a parking spot with a junk-food truck (the rats love it)
+      circ(c, b.cx, b.cy, b.r * 0.92, '#9aa0aa', INK, 3);
+      c.save(); c.beginPath(); c.arc(b.cx, b.cy, b.r * 0.92, 0, TAU); c.clip();
+      for (let x = -3; x <= 3; x++) line(c, b.cx + x * b.r * 0.32, b.cy - b.r, b.cx + x * b.r * 0.32, b.cy - b.r * 0.55, '#fff', 3);
+      c.restore();
+      const k = Math.floor(b.cx / 7) % 5;
+      const [col, label] = [['#ff5fa8', 'DONUTS'], ['#ffb02e', 'TACOS'], ['#e83a2a', 'PIZZA'], ['#3ec0e8', 'ICE CREAM'], ['#ffd21f', 'BURGERS']][k];
+      const w = b.r * 1.15, h = b.r * 0.52, x = b.cx - w / 2, y = b.cy - h / 2 + b.r * 0.1;
+      rr(c, x + 6, y + 8, w, h, 10, 'rgba(0,0,0,0.2)', null);
+      car(c, x, y, w, h, col);
+      rr(c, x + w * 0.05, y + h * 0.05, w * 0.6, h * 0.9, 6, '#fff', INK, 2.5);
+      for (let i = 0; i < 6; i++) rr(c, x + w * 0.05 + i * w * 0.1, y + h * 0.05, w * 0.05, h * 0.9, 0, col, null);
+      text(c, label, x + w * 0.35, y + h * 0.5, Math.min(18, h * 0.38), '#fff', INK);
       break;
     }
     case 'pumps': {
       rr(c, b.x, b.y, b.w, b.h, 10, '#c9c9c4', INK, 3);
       for (const k of [0.25, 0.75]) { rr(c, b.x + b.w * k - 18, b.y + 14, 36, b.h - 28, 5, '#d22', INK, 2); rr(c, b.x + b.w * k - 10, b.y + 20, 20, 12, 2, '#9fe8a0', INK, 1.5); }
-      text(c, 'GAS', b.x + b.w / 2, b.y - 10, 13, '#f3ead2', INK);
+      text(c, 'GAS', b.x + b.w / 2, b.y - 10, 13, '#fff', INK);
       break;
     }
   }
@@ -558,15 +610,20 @@ export function makeBackground(map, path, scale) {
   let seed = map.id.length * 99;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   if (map.id === 'gas') {     // concrete slabs with oil stains
-    c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 2;
+    c.strokeStyle = 'rgba(120,100,70,0.2)'; c.lineWidth = 2;
     for (let x = 0; x < W; x += 128) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
     for (let y = 0; y < H; y += 128) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
-    for (let i = 0; i < 14; i++) ell(c, rnd() * W, rnd() * H, 10 + rnd() * 26, 6 + rnd() * 14, 'rgba(20,20,30,0.25)', null);
+    for (let i = 0; i < 14; i++) ell(c, rnd() * W, rnd() * H, 10 + rnd() * 26, 6 + rnd() * 14, 'rgba(60,50,40,0.12)', null);
   } else {                    // grass tufts
     for (let i = 0; i < 120; i++) {
       const x = rnd() * W, y = rnd() * H;
-      c.strokeStyle = 'rgba(30,60,20,0.35)'; c.lineWidth = 2; c.beginPath();
+      c.strokeStyle = 'rgba(40,120,30,0.45)'; c.lineWidth = 2; c.beginPath();
       c.moveTo(x, y); c.lineTo(x - 3, y - 7); c.moveTo(x, y); c.lineTo(x + 3, y - 7); c.stroke();
+    }
+    for (let i = 0; i < 70; i++) {   // little flowers
+      const x = rnd() * W, y = rnd() * H, col = ['#fff', '#ffe066', '#ff8ac0', '#b8a0ff'][i % 4];
+      for (let k = 0; k < 4; k++) circ(c, x + Math.cos(k * 1.57) * 3, y + Math.sin(k * 1.57) * 3, 2.6, col, null);
+      circ(c, x, y, 2, '#ffb02e', null);
     }
   }
   // road: sidewalk, curb, asphalt, centre line
@@ -577,33 +634,30 @@ export function makeBackground(map, path, scale) {
     c.lineJoin = 'round'; c.lineCap = dash ? 'butt' : 'round'; c.lineWidth = w; c.strokeStyle = col; c.stroke();
     c.restore();
   };
-  stroke(LANE * 2 + 34, 'rgba(0,0,0,0.25)');
-  stroke(LANE * 2 + 28, '#b8b5ab');
-  stroke(LANE * 2 + 8, '#d8d4c8');
-  stroke(LANE * 2, '#3b3d42');
-  stroke(3, '#e8c440', [22, 18]);
+  stroke(LANE * 2 + 34, 'rgba(0,40,0,0.16)');
+  stroke(LANE * 2 + 28, '#cfc9bb');
+  stroke(LANE * 2 + 8, '#f4f0e6');
+  stroke(LANE * 2, '#666b76');
+  stroke(3, '#ffd21f', [22, 18]);
   // cracks and skid marks on the asphalt
   for (let i = 0; i < 30; i++) {
     const d = rnd() * path.len, k = Math.min(path.n - 1, Math.floor(d / 2));
     const x = path.px[k] + (rnd() - 0.5) * LANE, y = path.py[k] + (rnd() - 0.5) * LANE;
-    line(c, x, y, x + (rnd() - 0.5) * 16, y + (rnd() - 0.5) * 16, 'rgba(0,0,0,0.35)', 1.5);
+    line(c, x, y, x + (rnd() - 0.5) * 16, y + (rnd() - 0.5) * 16, 'rgba(0,0,0,0.2)', 1.5);
   }
   for (const b of map.blockers) drawBlocker(c, b);
-  // graveyard gate on the left edge
+  // the sewer pipe on the left edge: the rats come out of here
   const [, sy] = map.pts[0];
-  for (const s of [-1, 1]) {
-    for (let i = 0; i < 2; i++) {
-      const gx = 14 + i * 26, gy = sy + s * (LANE + 40 + i * 14);
-      rr(c, gx - 10, gy - 8, 20, 16, 6, '#9a9a94', INK, 2.5);
-      text(c, 'RIP', gx, gy, 7, '#555', null);
-    }
-    rr(c, -4, sy + s * (LANE + 10) - 7, 22, 14, 3, '#2a2a2a', INK, 2.5);
-  }
-  text(c, 'GRAVEYARD', 64, sy - LANE - 70, 15, '#c9e8a8', INK);
+  rr(c, -20, sy - LANE - 18, 62, LANE * 2 + 36, 8, '#b4bac4', INK, 4);
+  for (const k of [6, 22]) line(c, k, sy - LANE - 16, k, sy + LANE + 16, '#8a909c', 3);
+  rr(c, 36, sy - LANE - 22, 16, LANE * 2 + 44, 6, '#c8ced8', INK, 3.5);
+  rr(c, 40, sy - LANE - 4, 8, LANE * 2 + 8, 3, '#2a3038', null);
+  for (let i = 0; i < 3; i++) ell(c, 58 + i * 14, sy - LANE * 0.5 + i * LANE * 0.5, 10 - i * 2, 6 - i, 'rgba(140,255,60,0.55)', null);
+  text(c, 'SEWER', 44, sy + LANE + 42, 17, '#b6ff3a', INK);
   // the gym doors on the right edge
   const [, ey] = map.pts[map.pts.length - 1];
-  rr(c, W - 70, ey - LANE - 50, 90, LANE * 2 + 100, 6, '#2a2a30', INK, 4);
-  rr(c, W - 70, ey - LANE - 4, 14, LANE * 2 + 8, 2, '#9fd8ff', INK, 2);
+  rr(c, W - 70, ey - LANE - 50, 90, LANE * 2 + 100, 6, '#ff8a2a', INK, 4);
+  rr(c, W - 70, ey - LANE - 4, 14, LANE * 2 + 8, 2, '#bfe8ff', INK, 2);
   text(c, 'GYM', W - 30, ey - LANE - 30, 20, '#ffd21f', INK);
   text(c, '→', W - 30, ey + LANE + 28, 22, '#ffd21f', INK);
   return cv;
@@ -621,7 +675,7 @@ export class FX {
       case 'pop': {
         for (let i = 0; i < (ev.boss ? 18 : 4); i++) {
           const a = Math.random() * TAU, s = 40 + Math.random() * 80;
-          this.add({ k: 'puff', x: ev.x, y: ev.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: ev.boss ? 14 : 6, col: i % 2 ? '#a8c890' : '#e8e8d8', life: 0.4, max: 0.4 });
+          this.add({ k: 'puff', x: ev.x, y: ev.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: ev.boss ? 14 : 6, col: i % 2 ? '#d8dde6' : '#ffffff', life: 0.4, max: 0.4 });
         }
         if (ev.boss) { this.shake = Math.max(this.shake, 14); this.text(ev.x, ev.y - 30, 'K.O.!', '#ffe066', 46, 1.6, -30); }
         break;
@@ -694,16 +748,10 @@ export class FX {
 // ---------- full frame ----------
 export function drawWorld(c, game, bg, fx, t, ui) {
   c.drawImage(bg, 0, 0, W, H);
-  // burning wrecks
-  for (const b of game.map.blockers) if (b.kind === 'wreck') {
-    for (let i = 0; i < 4; i++) flame(c, b.cx - b.r * 0.35 + i * b.r * 0.22, b.cy - b.r * 0.05 + Math.sin(i * 2.3) * 8, 7 + (i % 2) * 4, t + i * 0.7);
-    const p = (t * 0.35 + b.cx * 0.01) % 1;
-    circ(c, b.cx + Math.sin(p * 5) * 10, b.cy - 20 - p * 60, 10 + p * 18, `rgba(60,60,60,${(1 - p) * 0.45})`, null);
-  }
   if (game.map.id === 'street') text(c, `WAVE  ${game.round + 1}`, 765, 126, 14, '#7dff8a', INK);
   for (const tr of game.traps) drawTrap(c, tr, t);
   if (ui.sel) rangeCircle(c, ui.sel.x, ui.sel.y, (ui.sel.es || ui.sel.s).range, true);
-  // depth sort bros and zombies together
+  // depth sort bros and rats together
   const items = [];
   for (const tw of game.towers) items.push({ y: tw.y, tw });
   for (const e of game.enemies) items.push({ y: e.y, e });

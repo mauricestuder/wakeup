@@ -1,4 +1,4 @@
-// Leg Day of the Dead: boot, screens, input and the frame loop.
+// Gym Rats: boot, screens, input and the frame loop.
 
 import { W, H, MAPS, buildPath } from './maps.js';
 import { Game, DT } from './game.js';
@@ -109,12 +109,12 @@ function endScreen(won) {
   state = 'end';
   const t = $('endT'), s = $('endS'), b = $('endB');
   if (won) {
-    t.textContent = 'TOWN SAVED'; t.className = 'big';
+    t.textContent = 'GYM SAVED'; t.className = 'big';
     s.textContent = 'Protein shakes are on the house.';
     b.innerHTML = '<button class="btn go" data-a="freeplay">ONE MORE SET (FREEPLAY)</button><button class="btn" data-a="menu">HIT THE SHOWERS</button>';
   } else {
-    t.textContent = 'THEY GOT INTO THE GYM'; t.className = 'big bad';
-    s.textContent = `They're using the machines wrong. You made it to wave ${game.round + 1}.`;
+    t.textContent = 'THE RATS GOT IN'; t.className = 'big bad';
+    s.textContent = `They ate all the protein. You made it to wave ${game.round + 1}.`;
     b.innerHTML = '<button class="btn go" data-a="restart">TRY AGAIN</button><button class="btn" data-a="menu">QUIT TO MENU</button>';
   }
   show('endScr');
@@ -142,14 +142,14 @@ function select(t) { sel = t; ui.forcePanel(); if (t) cancelPlacing(); }
 function cancelPlacing() { placing = null; ghost = null; ui.highlight(null); }
 
 const TIPS = {
-  jogger: ['NEW: JOGGER ZOMBIES', 'Cardio zombies. Fast. Inside every Jogger is a Hard-Hat Zombie.'],
-  football: ['NEW: FOOTBALL ZOMBIES', 'The fastest zombies on the street. They peaked in high school.'],
-  camo: ['NEW: TRASH-CAN ZOMBIES', 'Zombies hiding in trash cans! Only The Chad and a Dumbbell Bro with the Focus Headband can see them. Shake explosions still hit them.'],
-  headphones: ['NEW: HEADPHONES ZOMBIES', "They can't hear the DJ, so they don't dance or slow down. Each one hides 2 Football Zombies."],
-  riot: ['NEW: RIOT ZOMBIES', 'Dumbbells and plates bounce off the shield! Use Protein Shakes, Spicy Pre-Workout, Heavy Plates or Barbell Toss.'],
-  partybus: ['NEW: ZOMBIE PARTY BUS', 'Takes 16 hits, then the whole party jumps out. Bring shakes.'],
-  couch: ['BOSS: THE COUCH ZOMBIE', "He'll start going to the gym on Monday. Lots of HP. The Chad is great against bosses."],
-  mru: ['FINAL BOSS: ZOMBIE MR. UNIVERSE', 'The only zombie that never skipped leg day. Throw everything at him.'],
+  jogger: ['NEW: CARDIO RATS', 'Fast little runners. Inside every Cardio Rat is a Buff Rat.'],
+  football: ['NEW: SKATER RATS', 'The fastest rats on the street. No brakes.'],
+  camo: ['NEW: PROTEIN TUB RATS', 'Rats hiding in protein tubs! Only The Chad and a Dumbbell Bro with the Focus Headband can see them. Shake explosions still hit them.'],
+  headphones: ['NEW: AIRPODS RATS', "They can't hear the DJ, so they don't dance or slow down. Each one hides 2 Skater Rats."],
+  riot: ['NEW: FRYING-PAN RATS', 'Dumbbells and plates bounce off the pan! Use Protein Shakes, Spicy Pre-Workout, Heavy Plates or Barbell Toss.'],
+  partybus: ['NEW: SHOPPING CART OF RATS', 'Takes 16 hits, then the whole cart spills out. Bring shakes.'],
+  couch: ['BOSS: THE ROOMBA RAT', "He'll start going to the gym on Monday. Lots of HP. The Chad is great against bosses."],
+  mru: ['FINAL BOSS: THE RAT KING', 'He ate all the protein in town. Throw everything at him.'],
 };
 
 function roundTips(n) {
@@ -318,7 +318,7 @@ function render() {
 
 // ---------- boot ----------
 layout();
-document.fonts.load('30px "Luckiest Guy"').then(() => document.fonts.load('30px Creepster')).catch(() => {}).finally(() => {
+document.fonts.load('30px "Luckiest Guy"').catch(() => {}).finally(() => {
   buildMenu();
   buildChain();
   syncSliders();

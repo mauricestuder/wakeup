@@ -1,4 +1,4 @@
-// Maps: the road zombies walk along, plus stuff you can't build on.
+// Maps: the road the rats run along, plus stuff you can't build on.
 // The map area is W x H world units; the shop sidebar lives outside it.
 
 export const W = 1280, H = 900;
@@ -8,7 +8,7 @@ const STEP = 2;                  // path sample spacing
 export const MAPS = [
   {
     id: 'street', name: 'Main Street', blurb: 'A long road through town. Good for your first workout.',
-    floor: ['#56763d', '#4f6e38'],
+    floor: ['#8ad35e', '#82cb57'],
     pts: [[-50, 140], [340, 140], [340, 420], [140, 420], [140, 760], [580, 760], [580, 250],
           [820, 250], [820, 640], [1060, 640], [1060, 140], [1310, 140]],
     blockers: [
@@ -23,15 +23,15 @@ export const MAPS = [
     ],
   },
   {
-    id: 'gas', name: 'Gas Station', blurb: 'Short road, burning wrecks everywhere. Hard.',
-    floor: ['#7a7a76', '#717170'],
+    id: 'gas', name: 'Gas Station', blurb: 'Short road, food trucks parked everywhere. Hard.',
+    floor: ['#e6dac4', '#ddd0b8'],
     pts: [[-50, 450], [480, 450], [480, 150], [820, 150], [820, 750], [1100, 750], [1100, 450], [1330, 450]],
     blockers: [
-      { kind: 'wreck', cx: 240, cy: 220, r: 110 },
-      { kind: 'wreck', cx: 240, cy: 700, r: 125 },
-      { kind: 'wreck', cx: 650, cy: 470, r: 92 },
-      { kind: 'wreck', cx: 960, cy: 320, r: 100 },
-      { kind: 'wreck', cx: 1210, cy: 190, r: 72 },
+      { kind: 'truck', cx: 240, cy: 220, r: 110 },
+      { kind: 'truck', cx: 240, cy: 700, r: 125 },
+      { kind: 'truck', cx: 650, cy: 470, r: 92 },
+      { kind: 'truck', cx: 960, cy: 320, r: 100 },
+      { kind: 'truck', cx: 1210, cy: 190, r: 72 },
       { kind: 'pumps', x: 560, y: 790, w: 180, h: 70 },
       { kind: 'hydrant', cx: 1220, cy: 760, r: 22 },
     ],
