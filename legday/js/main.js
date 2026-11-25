@@ -167,7 +167,6 @@ const handlers = {
     if (state !== 'play') return;
     initAudio();
     ui.showInfo(key);
-    if (placing && placing.key === key && !placing.drag) { cancelPlacing(); return; }
     select(null);
     placing = { key, drag: true, touch: ev.pointerType !== 'mouse', moved: false };
     ui.highlight(key);
@@ -223,8 +222,7 @@ window.addEventListener('pointerup', ev => {
   pointer = { ...p, over: p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H, type: ev.pointerType };
   updateGhost();
   if (pointer.over && placing.moved) { if (!tryPlace()) cancelPlacing(); }
-  else if (!pointer.over) { placing.drag = false; ghost = null; }   // tapped the card: now tap the map
-  else cancelPlacing();
+  else cancelPlacing();   // a tap on the card only shows its info
 });
 
 canvas.addEventListener('pointerdown', ev => {
@@ -232,12 +230,6 @@ canvas.addEventListener('pointerdown', ev => {
   initAudio();
   const p = toWorld(ev);
   pointer = { ...p, over: true, type: ev.pointerType };
-  if (placing && !placing.drag) {
-    placing.touch = ev.pointerType !== 'mouse';
-    updateGhost();
-    if (!tryPlace() && placing.touch) setTimeout(() => { if (placing && !placing.drag) ghost = null; }, 600);
-    return;
-  }
   let hit = null, best = Infinity;
   for (const t of game.towers) {
     const d = Math.hypot(t.x - p.x, t.y - p.y);
@@ -252,17 +244,13 @@ window.addEventListener('keydown', ev => {
   if (state === 'paused' && ev.key === 'Escape') { state = 'play'; show(null); return; }
   if (state !== 'play') return;
   const k = ev.key;
-  const idx = TOWER_KEYS.findIndex(key => TOWERS[key].key === k);
-  if (idx >= 0) {
-    select(null);
-    placing = { key: TOWER_KEYS[idx], drag: false, touch: false };
-    ui.highlight(placing.key); ui.showInfo(placing.key); updateGhost();
-  } else if (k === ' ') { ev.preventDefault(); play(); }
+  if (k === ' ') { ev.preventDefault(); play(); }
   else if (k === 'f' || k === 'F') { speed = speed % 3 + 1; }
   else if (k === 'Escape') { if (placing) cancelPlacing(); else if (sel) select(null); else pause(); }
   else if ((k === 'Backspace' || k === 'Delete') && sel) handlers.sell();
   else if (k === ',' ) handlers.upgrade(0);
   else if (k === '.') handlers.upgrade(1);
+  else if (k === '/' || k === '-') handlers.upgrade(2);
   else if (k === 'Tab') { ev.preventDefault(); handlers.cycleTarget(); }
   else if (DEBUG && k === 'n') { for (const e of game.enemies) e.alive = false; game.spawnI = game.spawns.length; }
 });
@@ -276,6 +264,7 @@ function handleEvents() {
     switch (ev.k) {
       case 'pop': sfx(ev.boss ? 'bossPop' : 'pop'); break;
       case 'throw': case 'spin': case 'erupt': case 'shot': case 'clang': case 'hold': case 'press1': case 'bossHit': case 'upgrade': case 'sell':
+      case 'flash': case 'stomp': case 'smash': case 'rizz': case 'drop': case 'pull':
         sfx(ev.k); break;
       case 'boom': sfx('boom'); break;
       case 'leak': sfx('leak'); hurtFlash(); break;

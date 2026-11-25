@@ -3,7 +3,7 @@
 
 import { buildPath, posAt, canPlace } from './maps.js';
 import { ETYPES, rbeOf, LINES, SHOUTS } from './enemies.js';
-import { TOWERS, computeStats, canUpgrade } from './towers.js';
+import { TOWERS, computeStats, canUpgrade, PATHS } from './towers.js';
 import { roundSpawns, LAST_ROUND, bossHpMul } from './rounds.js';
 
 export const DIFFS = {
@@ -12,6 +12,7 @@ export const DIFFS = {
   hard:   { name: 'Hard',   lives: 50,  price: 1.15 },
 };
 export const DT = 1 / 60;
+const isBoss = e => !!ETYPES[e.t].boss;
 
 export class Game {
   constructor(map, diffKey) {
@@ -24,7 +25,7 @@ export class Game {
     this.round = 0;           // rounds completed
     this.active = false;      // a round is running
     this.spawns = []; this.spawnI = 0; this.roundT = 0;
-    this.enemies = []; this.towers = []; this.projs = []; this.events = [];
+    this.enemies = []; this.towers = []; this.projs = []; this.traps = []; this.events = [];
     this.time = 0; this.nextId = 1;
     this.over = false; this.won = false;
     this.tipShops = [];
@@ -49,13 +50,14 @@ export class Game {
     const D = TOWERS[key], cost = this.towerCost(key);
     if (this.cash < cost || !this.canPlaceAt(key, x, y)) return null;
     this.cash -= cost;
+    const lvl = new Array(PATHS).fill(0);
     const t = {
-      id: this.nextId++, key, x, y, r: D.r, lvl: [0, 0], s: computeStats(key, [0, 0]),
+      id: this.nextId++, key, x, y, r: D.r, lvl, s: computeStats(key, lvl), es: null,
       cdT: 0.1, mode: key === 'chad' ? 2 : 0, ang: Math.PI / 2, spent: cost, pops: 0, say: null, sayT: 0,
-      hold: 0, push: 0, hurt: 0, anim: 0, spin: 0,
+      hold: 0, push: 0, hurt: 0, anim: 0, spin: 0, rageClock: 0, raging: false, smashT: 2, pullT: 0, rizzT: 0, alt: 0, pathDs: [],
     };
     this.towers.push(t);
-    this.refreshTips();
+    this.refresh();
     this.events.push({ k: 'place', x, y, key });
     return t;
   }
@@ -68,7 +70,7 @@ export class Game {
     t.spent += c;
     t.lvl[p]++;
     t.s = computeStats(t.key, t.lvl);
-    this.refreshTips();
+    this.refresh();
     this.events.push({ k: 'upgrade', x: t.x, y: t.y });
     return true;
   }
@@ -78,11 +80,42 @@ export class Game {
     if (i < 0) return;
     this.cash += this.sellValue(t);
     this.towers.splice(i, 1);
-    this.refreshTips();
+    for (const tr of this.traps) if (tr.src === t) tr.life = Math.min(tr.life, 0.5);
+    this.refresh();
     this.events.push({ k: 'sell', x: t.x, y: t.y, v: this.sellValue(t) });
   }
 
-  refreshTips() { this.tipShops = this.towers.filter(t => t.key === 'store' && t.s.tips); }
+  // Recompute everything that depends on which bros stand where:
+  // tip jars, buff auras (effective stats `es`) and road spots for droppers.
+  refresh() {
+    this.tipShops = this.towers.filter(t => t.s.tips);
+    const sources = this.towers.filter(t => t.s.buff);
+    for (const t of this.towers) {
+      let b = null;
+      for (const src of sources) {
+        if (src === t || Math.hypot(src.x - t.x, src.y - t.y) > src.s.range) continue;
+        const sb = src.s.buff;
+        b = b || { cd: 1, dmg: 0, rng: 0, detect: false };
+        b.cd = Math.min(b.cd, sb.cd); b.dmg = Math.max(b.dmg, sb.dmg); b.rng = Math.max(b.rng, sb.rng); b.detect = b.detect || sb.detect;
+      }
+      t.buffed = !!b;
+      if (!b) { t.es = t.s; }
+      else {
+        const s = t.es = { ...t.s };
+        if (s.cd) s.cd *= b.cd;
+        if (s.ringCd) s.ringCd *= b.cd;
+        if (s.dmg != null && !t.s.buff) s.dmg += b.dmg;
+        if (s.range && s.range < 2000 && !t.s.buff) s.range += b.rng;
+        if (b.detect) s.detect = true;
+      }
+      if (t.key === 'treadmill') {
+        t.pathDs = [];
+        const r = t.es.range;
+        for (let i = 0; i < this.path.n; i += 4)
+          if (Math.hypot(this.path.px[i] - t.x, this.path.py[i] - t.y) < r) t.pathDs.push(i * 2);
+      }
+    }
+  }
 
   // ---------- rounds ----------
   startRound() {
@@ -101,26 +134,25 @@ export class Game {
     const bonus = 100 + this.round;
     let income = 0;
     for (const t of this.towers) {
-      if (t.key !== 'store') continue;
-      income += t.s.income;
+      if (t.s.income) { income += t.s.income; this.events.push({ k: 'income', x: t.x, y: t.y }); }
       if (t.s.interest) income += Math.min(Math.floor(this.cash * t.s.interest), t.s.interestMax);
     }
     this.cash += bonus + income;
     this.events.push({ k: 'roundEnd', n: this.round, bonus, income });
-    for (const t of this.towers) if (t.key === 'store') this.events.push({ k: 'income', x: t.x, y: t.y });
     if (this.round === LAST_ROUND && !this.won) {
       this.won = true;
       this.events.push({ k: 'win' });
     }
   }
 
-  // ---------- sinners ----------
+  // ---------- zombies ----------
   spawn(type, d, camo, hpMul = 1) {
     const T = ETYPES[type];
     const hp = T.boss ? Math.round(T.hp * hpMul) : T.hp;
     const e = {
       id: this.nextId++, t: type, hp, maxHp: hp, d, camo: !!camo && !T.boss, r: T.r,
-      slowF: 1, slowT: 0, stunT: 0, burnT: 0, burnTick: 0, burnSrc: null,
+      slowF: 1, slowT: 0, stunT: 0, burnT: 0, burnTick: 0, burnSrc: null, burnDmg: 1,
+      expT: 0, expAdd: 0, expMul: 1,
       x: 0, y: 0, dx: 1, ang: 0, fa: null, alive: true, flash: 0, say: null, sayT: 0,
       seed: (this.nextId * 7.13) % 6.28, hpMul,
     };
@@ -137,6 +169,7 @@ export class Game {
       this.events.push({ k: 'clang', x: e.x, y: e.y });
       return false;
     }
+    if (e.expT > 0) dmg = (dmg + e.expAdd) * e.expMul;
     this.pop(e, dmg, src);
     return true;
   }
@@ -154,7 +187,7 @@ export class Game {
     let cash = T.boss ? Math.round(e.maxHp / 4) : 1;
     for (const s of this.tipShops) {
       const dx = s.x - e.x, dy = s.y - e.y;
-      if (dx * dx + dy * dy < s.s.range * s.s.range) cash++;
+      if (dx * dx + dy * dy < s.s.range * s.s.range) cash += s.s.tips;
     }
     this.cash += cash;
     this.pops++;
@@ -164,13 +197,25 @@ export class Game {
     for (let i = 0; i < n; i++) {
       const kd = Math.max(0, e.d + (i - (n - 1) / 2) * (T.boss ? 16 : 8));
       const c = this.spawn(T.kids[i], kd, e.camo, e.hpMul);
-      c.burnT = e.burnT; c.burnTick = e.burnTick; c.burnSrc = e.burnSrc;
+      c.burnT = e.burnT; c.burnTick = e.burnTick; c.burnSrc = e.burnSrc; c.burnDmg = e.burnDmg;
       c.slowF = e.slowF; c.slowT = e.slowT;
+      c.expT = e.expT; c.expAdd = e.expAdd; c.expMul = e.expMul;
       if (over > 0) this.pop(c, over, src);
     }
   }
 
-  inRange(t, e, range = t.s.range) {
+  // status helpers
+  slow(e, f, time) {
+    e.slowF = e.slowT > 0 ? Math.min(e.slowF, f) : f;
+    e.slowT = Math.max(e.slowT, time);
+  }
+  stun(e, time) { e.stunT = Math.max(e.stunT, isBoss(e) ? time * 0.25 : time); }
+  burn(e, src, dmg = 1) {
+    e.burnT = 3; e.burnSrc = src; e.burnDmg = Math.max(e.burnDmg, dmg);
+    if (e.burnTick <= 0) e.burnTick = 0.9;
+  }
+
+  inRange(t, e, range = t.es.range) {
     const dx = e.x - t.x, dy = e.y - t.y, r = range + e.r;
     return dx * dx + dy * dy <= r * r;
   }
@@ -187,7 +232,7 @@ export class Game {
   pickTargets(t, n = 1) {
     const list = [];
     for (const e of this.enemies) {
-      if (!e.alive || e.d < 0 || (e.camo && !t.s.detect) || !this.inRange(t, e)) continue;
+      if (!e.alive || e.d < 0 || (e.camo && !t.es.detect) || !this.inRange(t, e)) continue;
       list.push(e);
     }
     if (n === 1) {
@@ -200,7 +245,7 @@ export class Game {
 
   anyInRange(t, needDetect) {
     for (const e of this.enemies)
-      if (e.alive && (!needDetect || !e.camo || t.s.detect) && this.inRange(t, e)) return true;
+      if (e.alive && (!needDetect || !e.camo || t.es.detect) && this.inRange(t, e)) return true;
     return false;
   }
 
@@ -219,10 +264,14 @@ export class Game {
       }
     }
 
-    for (const e of this.enemies) if (e.slowT > 0 && (e.slowT -= dt) <= 0) e.slowF = 1;
+    for (const e of this.enemies) {
+      if (e.slowT > 0 && (e.slowT -= dt) <= 0) e.slowF = 1;
+      if (e.expT > 0) e.expT -= dt;
+    }
 
     for (const t of this.towers) this.updateTower(t, dt);
     this.updateProjs(dt);
+    this.updateTraps(dt);
 
     for (const e of this.enemies) {
       if (!e.alive) continue;
@@ -232,12 +281,12 @@ export class Game {
         e.burnT -= dt;
         if ((e.burnTick -= dt) <= 0) {
           e.burnTick = 0.9;
-          this.damage(e, 1, 'fire', e.burnSrc);
+          this.damage(e, e.burnDmg, 'fire', e.burnSrc);
           if (!e.alive) continue;
         }
       }
       if (e.stunT > 0) e.stunT -= dt;
-      else e.d += ETYPES[e.t].speed * e.slowF * dt;
+      else e.d = Math.max(0, e.d + ETYPES[e.t].speed * e.slowF * dt);
       posAt(this.path, e.d, e);
       if (e.fa == null) e.fa = e.ang;
       else { let da = e.ang - e.fa; da = Math.atan2(Math.sin(da), Math.cos(da)); e.fa += da * Math.min(1, dt * 9); }
@@ -268,7 +317,6 @@ export class Game {
     for (const t of this.towers) if (t.sayT > 0 && (t.sayT -= dt) <= 0) t.say = null;
     if ((this.sayCd -= dt) > 0) return;
     this.sayCd = 2.0 + Math.random() * 2.5;
-    // Sometimes a bro shouts instead of a zombie talking.
     if (this.towers.length && (Math.random() < 0.4 || !this.enemies.length)) {
       if (!this.active) return;
       const t = this.towers[(Math.random() * this.towers.length) | 0];
@@ -288,12 +336,13 @@ export class Game {
 
   // ---------- projectiles: they lock on and steer, so they don't miss ----------
   shoot(t, k, a, tgt, o) {
-    const s = t.s, speed = o.speed;
+    const s = t.es, speed = o.speed;
     this.projs.push({
       k, x: t.x + Math.cos(a) * 14, y: t.y + Math.sin(a) * 14, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, speed,
       tgt, hit: new Set(), src: t, rot: a, age: 0, life: o.life, dmg: o.dmg ?? s.dmg, pierce: o.pierce ?? s.pierce,
       kind: o.kind ?? s.kind, r: o.r ?? 10, detect: !!s.detect, retarget: o.retarget ?? 150, turn: o.turn ?? 10,
-      burn: !!o.burn, big: !!o.big, bossMul: o.bossMul || 1, cashPerHit: o.cashPerHit || 0, trail: [],
+      burn: !!s.burn, burnDmg: s.burnDmg || 1, big: !!o.big, bossMul: s.bossMul || 1, cashPerHit: s.cashPerHit || 0,
+      stunHit: s.stunHit || 0, slowHit: s.slowHit || 0, slowHitT: s.slowHitT || 0, blastHit: s.blastHit || 0, trail: [],
     });
   }
 
@@ -307,27 +356,47 @@ export class Game {
     return best;
   }
 
+  // Cooldown after an attack, including rage mode.
+  reload(t, cd) { t.cdT = cd * (t.raging ? t.es.rage.mul : 1); }
+
   updateTower(t, dt) {
-    const s = t.s;
+    const s = t.es || t.s;
     t.cdT -= dt;
     if (t.anim > 0) t.anim -= dt;
+    if (s.rage) { t.rageClock += dt; t.raging = (t.rageClock % s.rage.every) < s.rage.dur; }
     switch (t.key) {
       case 'dumbbell': {
         if (t.cdT > 0) break;
         const targets = this.pickTargets(t, s.count);
         if (!targets.length) break;
-        t.cdT = s.cd;
+        this.reload(t, s.cd);
         t.anim = 0.18;
         t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
         for (let i = 0; i < s.count; i++) {
           const a = t.ang + (i - (s.count - 1) / 2) * 0.35;
           this.shoot(t, 'dumbbell', a, targets[i % targets.length],
-            { speed: s.speed, life: (s.range + 120) / s.speed, r: s.psize, big: s.kind === 'magic' });
+            { speed: s.speed, life: (s.range + 120) / s.speed, r: s.psize, big: s.kind === 'magic' || s.dmg >= 6 });
         }
         this.events.push({ k: 'throw' });
         break;
       }
       case 'spinner': {
+        if (s.smash && (t.smashT -= dt) <= 0) {
+          const [e] = this.pickTargets({ ...t, mode: 2 });
+          if (e) {
+            t.smashT = s.smash.cd;
+            const hitOne = (z) => this.damage(z, s.smash.dmg * (isBoss(z) ? s.smash.bossMul : 1), 'blast', t);
+            hitOne(e);
+            if (s.smash.blast) for (const z of this.enemies) if (z !== e && z.alive && Math.hypot(z.x - e.x, z.y - e.y) < s.smash.blast + z.r) hitOne(z);
+            this.events.push({ k: 'smash', x: e.x, y: e.y, big: !!s.smash.blast });
+          }
+        }
+        if (s.pull && (t.pullT -= dt) <= 0 && this.anyInRange(t, false)) {
+          t.pullT = s.pull.cd;
+          const list = this.enemies.filter(e => e.alive && !isBoss(e) && this.inRange(t, e)).sort((a, b) => b.d - a.d).slice(0, s.pull.n);
+          for (const e of list) e.d = Math.max(0, e.d - s.pull.d);
+          if (list.length) this.events.push({ k: 'pull', x: t.x, y: t.y, r: s.range });
+        }
         if (s.ring) {
           t.spin += dt * 6;
           if (t.cdT > 0 || !this.anyInRange(t, false)) break;
@@ -336,13 +405,13 @@ export class Game {
           let n = 0;
           for (const e of this.enemies) {
             if (n >= 40) break;
-            if (e.alive && this.inRange(t, e)) { this.damage(e, s.dmg, 'fire', t); n++; }
+            if (e.alive && this.inRange(t, e)) { this.damage(e, s.dmg * (isBoss(e) ? s.bossMul || 1 : 1), 'fire', t); n++; }
           }
           this.events.push({ k: 'ring', x: t.x, y: t.y, r: s.range });
           break;
         }
         if (t.cdT > 0 || !this.anyInRange(t, true)) break;
-        t.cdT = s.cd;
+        this.reload(t, s.cd);
         t.anim = 0.25;
         t.spin += Math.PI / s.count;
         // Every plate flies out in its own direction, then curves onto the zombie closest to that direction.
@@ -356,7 +425,7 @@ export class Game {
             if (da < best) { best = da; tgt = c.e; }
           }
           if (!tgt && cands.length) tgt = cands[i % cands.length].e;   // boomerang back onto someone
-          this.shoot(t, 'plate', a, tgt, { speed: s.speed, life: (s.range + 30) / s.speed, r: s.psize, burn: s.burn, turn: 14, retarget: s.range + 60 });
+          this.shoot(t, 'plate', a, tgt, { speed: s.speed, life: (s.range + 30) / s.speed, r: s.psize, turn: 14, retarget: s.range + 60 });
         }
         this.events.push({ k: 'spin' });
         break;
@@ -365,13 +434,12 @@ export class Game {
         if (t.cdT > 0) break;
         const targets = this.pickTargets(t, s.targets);
         if (!targets.length) break;
-        t.cdT = s.cd;
+        this.reload(t, s.cd);
         t.anim = 0.3;
         t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
         for (const e of targets) {
           this.projs.push({
-            k: 'shake', sx: t.x, sy: t.y, tx: e.x, ty: e.y, x: t.x, y: t.y, h: 0, tt: 0, T: 0.45, tgt: e, trail: [],
-            dmg: s.dmg, pierce: s.pierce, blast: s.blast, stun: s.stun, shake: s.shake, src: t,
+            k: 'shake', sx: t.x, sy: t.y, tx: e.x, ty: e.y, x: t.x, y: t.y, h: 0, tt: 0, T: 0.45, tgt: e, trail: [], src: t,
           });
         }
         this.events.push({ k: 'erupt' });
@@ -379,51 +447,155 @@ export class Game {
       }
       case 'dj': {
         const bossF = s.bossSlow ? s.slow : 1 - (1 - s.slow) * 0.5;
+        const hears = (e) => s.hearAll || !ETYPES[e.t].noSlow;
         let any = false;
         for (const e of this.enemies) {
-          if (!e.alive || ETYPES[e.t].noSlow || !this.inRange(t, e)) continue;
+          if (!e.alive || !hears(e) || !this.inRange(t, e)) continue;
           any = true;
-          const f = ETYPES[e.t].boss ? bossF : s.slow;
-          e.slowF = e.slowT > 0 ? Math.min(e.slowF, f) : f;
-          e.slowT = 0.1;
+          this.slow(e, isBoss(e) ? bossF : s.slow, 0.1);
         }
         t.anim = any ? 0.2 : t.anim;
         if (s.holdCd && (t.hold -= dt) <= 0 && any) {
           t.hold = s.holdCd;
-          for (const e of this.enemies)
-            if (e.alive && !ETYPES[e.t].noSlow && this.inRange(t, e))
-              e.stunT = Math.max(e.stunT, ETYPES[e.t].boss ? 0.25 : s.holdT);
+          for (const e of this.enemies) if (e.alive && hears(e) && this.inRange(t, e)) this.stun(e, s.holdT);
           this.events.push({ k: 'hold', x: t.x, y: t.y, r: s.range });
         }
         if (s.pushCd && (t.push -= dt) <= 0 && any) {
           t.push = s.pushCd;
-          const list = this.enemies.filter(e => e.alive && !ETYPES[e.t].noSlow && !ETYPES[e.t].boss && this.inRange(t, e))
+          const list = this.enemies.filter(e => e.alive && hears(e) && (!isBoss(e) || s.pushBoss) && this.inRange(t, e))
             .sort((a, b) => b.d - a.d).slice(0, s.pushN);
-          for (const e of list) e.d = Math.max(0, e.d - s.push);
+          for (const e of list) e.d = Math.max(0, e.d - (isBoss(e) ? s.pushBoss : s.push));
           if (list.length) this.events.push({ k: 'press1', x: t.x, y: t.y });
         }
         if (s.hurtCd && (t.hurt -= dt) <= 0 && any) {
           t.hurt = s.hurtCd;
-          for (const e of this.enemies)
-            if (e.alive && !ETYPES[e.t].noSlow && this.inRange(t, e)) this.damage(e, 1, 'magic', t);
+          for (const e of this.enemies) if (e.alive && hears(e) && this.inRange(t, e)) this.damage(e, s.hurtDmg || 1, 'magic', t);
         }
         break;
       }
       case 'chad': {
+        if (s.rizz && (t.rizzT -= dt) <= 0 && this.enemies.length) {
+          t.rizzT = s.rizz.cd;
+          for (const e of this.enemies) if (e.alive) e.stunT = Math.max(e.stunT, isBoss(e) ? 0.5 : s.rizz.t);
+          this.events.push({ k: 'rizz', x: t.x, y: t.y });
+        }
         if (t.cdT > 0) break;
         const targets = this.pickTargets(t, s.multi);
         if (!targets.length) break;
-        t.cdT = s.cd;
+        this.reload(t, s.cd);
         t.anim = 0.25;
         t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
         for (const e of targets) {
           const a = Math.atan2(e.y - t.y, e.x - t.x);
-          this.shoot(t, 'frisbee', a, e, { speed: 1150, life: 3, pierce: 1, r: 11, bossMul: s.bossMul, cashPerHit: s.cashPerHit, retarget: 2000, turn: 16 });
+          this.shoot(t, 'frisbee', a, e, { speed: 1150, life: 3, r: 11, retarget: s.pierce > 1 ? 200 : 2000, turn: 16 });
         }
         this.events.push({ k: 'shot' });
         break;
       }
+      case 'influencer': {
+        if (s.reveal) for (const e of this.enemies) if (e.camo && e.alive && this.inRange(t, e)) { e.camo = false; this.events.push({ k: 'reveal', x: e.x, y: e.y }); }
+        if (t.cdT > 0 || !this.anyInRange(t, false)) break;
+        this.reload(t, s.cd);
+        t.anim = 0.35;
+        let n = 0;
+        for (const e of this.enemies) {
+          if (!e.alive || !this.inRange(t, e)) continue;
+          n++;
+          this.stun(e, s.flashT);
+          if (s.expose || s.exposeMul > 1) {
+            if (!isBoss(e) || s.exposeBoss || s.exposeMul > 1) { e.expT = 3; e.expAdd = Math.max(e.expAdd, s.expose); e.expMul = Math.max(e.expMul, s.exposeMul); }
+          }
+          if (s.flashDmg) this.damage(e, s.flashDmg, 'magic', t);
+        }
+        if (s.cashPerStun) this.cash += Math.min(n, 30) * s.cashPerStun;
+        this.events.push({ k: 'flash', x: t.x, y: t.y, r: s.range });
+        break;
+      }
+      case 'legs': {
+        if (t.cdT > 0 || !this.anyInRange(t, false)) break;
+        this.reload(t, s.cd);
+        t.anim = 0.3;
+        let n = 0;
+        for (const e of this.enemies) {
+          if (n >= s.pierce) break;
+          if (!e.alive || !this.inRange(t, e)) continue;
+          n++;
+          if (s.stun) this.stun(e, s.stun);
+          if (s.slowHit) this.slow(e, s.slowHit, s.slowHitT);
+          if (s.knock) e.d = Math.max(0, e.d - (isBoss(e) ? (s.knockBoss || 0) : s.knock));
+          this.damage(e, s.dmg * (isBoss(e) ? s.bossMul || 1 : 1), 'blast', t);
+        }
+        this.events.push({ k: 'stomp', x: t.x, y: t.y, r: s.range, shake: s.shake });
+        break;
+      }
+      case 'treadmill': {
+        if (t.cdT > 0 || !t.pathDs.length || !this.active) break;
+        const mine = this.traps.reduce((n, tr) => n + (tr.src === t), 0);
+        if (mine >= s.maxTraps) break;
+        this.reload(t, s.cd);
+        t.anim = 0.3;
+        let front = -1;
+        if (s.smart) for (const e of this.enemies) if (e.alive && this.inRange(t, e) && e.d > front) front = e.d;
+        for (let i = 0; i < s.perDrop && mine + i < s.maxTraps; i++) {
+          let d;
+          if (front >= 0) d = front + 30 + i * 26;
+          else d = t.pathDs[(Math.random() * t.pathDs.length) | 0];
+          const kb = (t.alt++ % 2) === 1;
+          this.dropTrap(t, kb ? 'kb' : 'tm', Math.min(d, this.path.len - 10));
+        }
+        break;
+      }
     }
+  }
+
+  dropTrap(t, k, d, o = {}) {
+    const s = t.es, pos = posAt(this.path, d, { x: 0, y: 0, dx: 1, ang: 0 });
+    const tr = { k, d, x: pos.x, y: pos.y, ang: pos.ang, src: t, hit: new Set(), tickT: 0, age: 0 };
+    if (k === 'kb') Object.assign(tr, { r: 12, life: s.kbLife * s.lifeMul, pierce: s.kbPierce, dmg: s.kbDmg * s.trapMul, kind: s.kbKind, blast: s.kbBlast });
+    else if (k === 'tm') Object.assign(tr, { r: 24, life: s.tmLife * s.lifeMul, slow: s.tmSlow, dmg: s.tmDmg * s.trapMul, tick: 0.5, boss: s.tmBoss });
+    else Object.assign(tr, o);
+    tr.maxLife = tr.life;
+    this.traps.push(tr);
+    this.events.push({ k: 'drop', x: tr.x, y: tr.y });
+  }
+
+  updateTraps(dt) {
+    for (const tr of this.traps) {
+      tr.life -= dt; tr.age += dt;
+      if (tr.life <= 0) continue;
+      if (tr.k === 'kb') {
+        for (const e of this.enemies) {
+          if (!e.alive || tr.hit.has(e.id) || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r) continue;
+          if (tr.blast) {   // minefield: blow up on the first zombie
+            for (const z of this.enemies) if (z.alive && Math.hypot(z.x - tr.x, z.y - tr.y) < tr.blast + z.r) this.damage(z, tr.dmg, 'blast', tr.src);
+            this.events.push({ k: 'boom', x: tr.x, y: tr.y, r: tr.blast });
+            tr.life = 0;
+            break;
+          }
+          tr.hit.add(e.id);
+          this.kidSink = [];
+          const ok = this.damage(e, tr.dmg, tr.kind, tr.src);
+          for (const id of this.kidSink) tr.hit.add(id);
+          this.kidSink = null;
+          if (ok) this.events.push({ k: 'decal', x: e.x, y: e.y });
+          if (--tr.pierce <= 0) { tr.life = 0; break; }
+        }
+      } else {          // treadmill or puddle: works on everyone standing on it
+        const tick = tr.dmg && (tr.tickT -= dt) <= 0;
+        if (tick) tr.tickT = tr.tick;
+        for (const e of this.enemies) {
+          if (!e.alive || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r * 0.5) continue;
+          if (tr.slow != null && tr.slow < 1) {
+            if (!isBoss(e)) this.slow(e, tr.slow, 0.1);
+            else if (tr.boss) this.slow(e, 0.5, 0.1);
+          }
+          if (tick) this.damage(e, tr.dmg, 'magic', tr.src);
+        }
+      }
+    }
+    let j = 0;
+    for (let i = 0; i < this.traps.length; i++) if (this.traps[i].life > 0) this.traps[j++] = this.traps[i];
+    this.traps.length = j;
   }
 
   updateProjs(dt) {
@@ -440,17 +612,22 @@ export class Game {
         p.h = Math.sin(f * Math.PI);
         if (f < 1) continue;
         p.dead = true;
+        const s = p.src.es || p.src.s;
         let n = 0;
         for (const e of this.enemies) {
-          if (n >= p.pierce) break;
+          if (n >= s.pierce) break;
           if (!e.alive) continue;
-          const dx = e.x - p.tx, dy = e.y - p.ty, r = p.blast + e.r;
+          const dx = e.x - p.tx, dy = e.y - p.ty, r = s.blast + e.r;
           if (dx * dx + dy * dy > r * r) continue;
           n++;
-          if (p.stun) e.stunT = Math.max(e.stunT, ETYPES[e.t].boss ? p.stun * 0.25 : p.stun);
-          this.damage(e, p.dmg, 'blast', p.src);
+          if (s.stun) this.stun(e, s.stun);
+          if (s.slowHit) this.slow(e, s.slowHit, s.slowHitT);
+          if (s.burn) this.burn(e, p.src);
+          this.damage(e, s.dmg * (isBoss(e) ? s.bossMul || 1 : 1), 'blast', p.src);
         }
-        this.events.push({ k: 'boom', x: p.tx, y: p.ty, r: p.blast, shake: p.shake });
+        if (s.puddle) // gross puddle where it landed
+          this.dropTrap(p.src, 'puddle', 0, { x: p.tx, y: p.ty, ang: 0, r: s.puddle.r, life: s.puddle.life, dmg: s.puddle.dmg, tick: s.puddle.tick, slow: s.puddle.slow });
+        this.events.push({ k: 'boom', x: p.tx, y: p.ty, r: s.blast, shake: s.shake });
         continue;
       }
       p.age += dt;
@@ -476,10 +653,23 @@ export class Game {
         if (dx * dx + dy * dy > r * r) continue;
         p.hit.add(e.id);
         const blocked = p.kind === 'sharp' && ETYPES[e.t].noSharp;
-        if (p.burn && !blocked) { e.burnT = 3; e.burnSrc = p.src; if (e.burnTick <= 0) e.burnTick = 0.9; }
+        if (!blocked) {
+          if (p.burn) this.burn(e, p.src, p.burnDmg);
+          if (p.stunHit) this.stun(e, p.stunHit);
+          if (p.slowHit) this.slow(e, p.slowHit, p.slowHitT);
+        }
         this.kidSink = [];
         const dmg = p.dmg * (ETYPES[e.t].boss ? p.bossMul : 1);
         const ok = this.damage(e, dmg, p.kind, p.src);
+        if (ok && p.blastHit) {   // aura farming: the frisbee explodes
+          let n = 0;
+          for (const z of this.enemies) {
+            if (n >= 5) break;
+            if (z === e || !z.alive || p.hit.has(z.id) || Math.hypot(z.x - p.x, z.y - p.y) > p.blastHit + z.r) continue;
+            n++; this.damage(z, dmg, 'blast', p.src);
+          }
+          this.events.push({ k: 'boom', x: p.x, y: p.y, r: p.blastHit });
+        }
         for (const id of this.kidSink) p.hit.add(id);
         this.kidSink = null;
         if (ok && p.cashPerHit) this.cash += p.cashPerHit;

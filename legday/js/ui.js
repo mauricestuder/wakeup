@@ -1,6 +1,6 @@
 // Sidebar: tower shop, selected-tower panel, play/speed controls and HUD.
 
-import { TOWERS, TOWER_KEYS, TARGET_MODES, canUpgrade } from './towers.js';
+import { TOWERS, TOWER_KEYS, TARGET_MODES, upgradeBlock } from './towers.js';
 import { drawTower } from './draw.js';
 
 const $ = id => document.getElementById(id);
@@ -17,11 +17,11 @@ export class UI {
       const el = document.createElement('div');
       el.className = 'card';
       el.dataset.key = key;
-      el.innerHTML = `<span class="k">${D.key}</span><canvas width="240" height="184"></canvas><div class="n">${D.name}</div><div class="c">$${D.cost}</div>`;
+      el.innerHTML = `<canvas width="180" height="140"></canvas><div class="n">${D.name}</div><div class="c">$${D.cost}</div>`;
       grid.appendChild(el);
       const c = el.querySelector('canvas').getContext('2d');
       c.scale(2, 2);
-      drawTower(c, key, 60, 56, { icon: true, scale: 1.25, lvl: [0, 0], t: 0.3 });
+      drawTower(c, key, 45, 37, { icon: true, scale: 0.95, lvl: [0, 0, 0], t: 0.3 });
       el.addEventListener('pointerdown', ev => { ev.preventDefault(); handlers.cardDown(key, ev); });
       el.addEventListener('mouseenter', () => this.showInfo(key));
       this.cards[key] = el;
@@ -37,7 +37,7 @@ export class UI {
 
   showInfo(key) {
     const D = TOWERS[key];
-    $('info').innerHTML = `<div class="t">${D.name}</div>${D.desc}<br><span style="color:#a88">Hotkey ${D.key}</span>`;
+    $('info').innerHTML = `<div class="t">${D.name}</div>${D.desc}<br><span style="color:#ffd34d">Drag him onto the map.</span>`;
   }
 
   highlight(key) { for (const k in this.cards) this.cards[k].classList.toggle('on', k === key); }
@@ -73,20 +73,21 @@ export class UI {
     if (!t) return;
     const D = TOWERS[t.key];
     $('pName').textContent = D.name;
-    $('pPops').textContent = t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} zombies smashed`;
+    $('pPops').textContent = (t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} zombies smashed`) + (t.buffed ? ' · HYPED' : '');
     const c = $('pIcon').getContext('2d');
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 168, 140);
     c.scale(2, 2);
-    drawTower(c, t.key, 42, 40, { icon: true, scale: 1.05, lvl: t.lvl, t: 0.3, face: 1 });
+    drawTower(c, t.key, 42, 36, { icon: true, scale: 0.95, lvl: t.lvl, t: 0.3 });
     const tgt = $('pTarget');
-    tgt.style.display = ['dj', 'store', 'spinner'].includes(t.key) ? 'none' : '';
+    tgt.style.display = ['dj', 'store', 'spinner', 'influencer', 'legs', 'treadmill'].includes(t.key) ? 'none' : '';
     tgt.innerHTML = `TARGET: <b>${TARGET_MODES[t.mode].toUpperCase()}</b>`;
     for (const b of document.querySelectorAll('.up')) {
       const p = +b.dataset.p, lvl = t.lvl[p], next = D.paths[p][lvl];
-      const pips = [0, 1, 2].map(i => `<i class="${lvl > i ? 'f' : ''}"></i>`).join('');
+      const pips = [0, 1, 2, 3, 4].map(i => `<i class="${lvl > i ? 'f' : ''}"></i>`).join('');
+      const block = upgradeBlock(t.lvl, p);
       let cls = 'up', body;
-      if (!next) { body = `<div class="un">${D.paths[p][2].name}</div><div class="ud">Fully upgraded.</div><div class="uc">MAXED</div>`; cls += ' lock'; }
-      else if (!canUpgrade(t.lvl, p)) { body = `<div class="un">${next.name}</div><div class="ud">Only one path can go past tier 1.</div><div class="uc">PATH LOCKED</div>`; cls += ' lock'; }
+      if (!next) { body = `<div class="un">${D.paths[p][4].name}</div><div class="ud">Fully upgraded. Absolute unit.</div><div class="uc">MAXED</div>`; cls += ' lock'; }
+      else if (block) { body = `<div class="un">${next.name}</div><div class="ud">${block === '2 PATHS MAX' ? 'A bro can only train 2 paths.' : 'Only one path can go past tier 2.'}</div><div class="uc">${block}</div>`; cls += ' lock'; }
       else {
         const cost = game.upgradeCost(t, p);
         if (game.cash < cost) cls += ' poor';

@@ -78,23 +78,23 @@
     #side { position: absolute; left: 1280px; top: 0; width: 320px; height: 900px; background:
       radial-gradient(ellipse at 50% 0%, #4a1a1e, #1a0809 70%); border-left: 6px solid var(--ink); display: flex; flex-direction: column; padding: 12px 12px 16px; gap: 12px; }
     #side h2 { margin: 0; text-align: center; font-size: 32px; color: var(--fire); text-shadow: var(--stroke); line-height: 1; padding-top: 4px; }
-    #shopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
-    .card { --hi: #8a2d34; --lo: #44121a; border-radius: 28px; padding: 6px 4px 8px; text-align: center; touch-action: none; }
+    #shopGrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 8px; }
+    .card { --hi: #8a2d34; --lo: #44121a; border-radius: 24px; padding: 4px 2px 7px; text-align: center; touch-action: none; border-width: 3px !important; }
     .card::before { opacity: .55; }
-    .card canvas { position: relative; width: 116px; height: 88px; display: block; margin: 0 auto; pointer-events: none; }
-    .card .n { position: relative; font-size: 15px; line-height: 1; height: 30px; display: flex; align-items: center; justify-content: center; }
-    .card .c { position: relative; display: inline-block; font-size: 21px; color: var(--green); line-height: 1; background: var(--ink);
+    .card canvas { position: relative; width: 82px; height: 64px; display: block; margin: 0 auto; pointer-events: none; }
+    .card .n { position: relative; font-size: 12px; line-height: 1; height: 26px; display: flex; align-items: center; justify-content: center; padding: 0 2px; }
+    .card .c { position: relative; display: inline-block; font-size: 16px; color: var(--green); line-height: 1; background: var(--ink);
       border-radius: 999px; padding: 5px 14px 2px; margin-top: 2px; text-shadow: none; }
     .card .k { position: absolute; left: -6px; top: -6px; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(#ffe27a, #e0a020);
       border: 3px solid var(--ink); font-size: 15px; line-height: 27px; color: var(--ink); text-shadow: none; z-index: 1; }
     .card.poor { filter: grayscale(.85) brightness(.7); }
     .card.poor .c { color: #ff7a6a; }
     .card.on { --hi: #c8503a; --lo: #6e1e14; outline: 4px solid var(--gold); outline-offset: 2px; }
-    #info { --hi: #2e1013; --lo: #1a0809; flex: 1; min-height: 0; border-radius: 24px; padding: 12px 14px; font-size: 18px; line-height: 1.2; color: #f0e2cc; overflow: hidden;
+    #info { --hi: #2e1013; --lo: #1a0809; flex: 1; min-height: 0; border-radius: 24px; padding: 10px 14px; font-size: 16px; line-height: 1.2; color: #f0e2cc; overflow: hidden;
       box-shadow: inset 0 4px 10px rgba(0,0,0,.5); }
     #info .t { color: var(--gold); font-size: 22px; }
 
-    #panel { display: none; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+    #panel { display: none; flex-direction: column; gap: 9px; flex: 1; min-height: 0; }
     #side.sel #panel { display: flex; }
     #side.sel #shopGrid, #side.sel #info, #side.sel h2 { display: none; }
     .ptop { display: flex; align-items: center; gap: 8px; }
@@ -102,24 +102,26 @@
     #pName { font-size: 24px; color: var(--gold); line-height: 1; text-shadow: var(--stroke); }
     #pPops { font-size: 16px; color: #e8c8c0; margin-top: 4px; text-shadow: var(--stroke); }
     #pClose { --hi: #ff6a5a; --lo: #b81f1f; margin-left: auto; width: 50px; height: 50px; flex: none; border-radius: 50%; font-size: 24px; padding-top: 4px; align-self: flex-start; }
-    #pTarget { --hi: #5ab8ff; --lo: #1f5fb0; border-radius: 999px; padding: 11px 6px 6px; font-size: 21px; }
+    #pTarget { --hi: #5ab8ff; --lo: #1f5fb0; border-radius: 999px; padding: 8px 6px 4px; font-size: 18px; }
     #pTarget b { color: #fff6a8; font-weight: normal; }
-    .up { border-radius: 30px; padding: 12px 14px 12px; text-align: left; display: flex; flex-direction: column; gap: 5px; min-height: 160px; }
+    .up { border-radius: 24px; padding: 8px 12px 9px; text-align: left; display: flex; flex-direction: column; gap: 3px; min-height: 138px; }
     .up[data-p="0"] { --hi: #c27a22; --lo: #6a3608; }
     .up[data-p="1"] { --hi: #3a8ad6; --lo: #163e78; }
+    .up[data-p="2"] { --hi: #d24f9a; --lo: #6e1a4a; }
     .up .pips { position: relative; display: flex; gap: 6px; }
-    .up .pips i { width: 30px; height: 12px; border-radius: 999px; background: rgba(0,0,0,.45); border: 2px solid var(--ink); }
+    .up .pips i { width: 24px; height: 11px; border-radius: 999px; background: rgba(0,0,0,.45); border: 2px solid var(--ink); }
     .up[data-p="0"] .pips i.f { background: var(--gold); }
     .up[data-p="1"] .pips i.f { background: #b8ecff; }
-    .up .un { position: relative; font-size: 21px; line-height: 1.05; }
-    .up .ud { position: relative; font-size: 15px; line-height: 1.15; color: #fff; font-family: system-ui, -apple-system, sans-serif; font-weight: 800;
+    .up[data-p="2"] .pips i.f { background: #ffc0e0; }
+    .up .un { position: relative; font-size: 18px; line-height: 1.05; }
+    .up .ud { position: relative; font-size: 13px; line-height: 1.15; color: #fff; font-family: system-ui, -apple-system, sans-serif; font-weight: 800;
       text-transform: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
-    .up .uc { position: relative; align-self: flex-start; font-size: 23px; color: var(--green); margin-top: auto; background: var(--ink);
+    .up .uc { position: relative; align-self: flex-start; font-size: 19px; color: var(--green); margin-top: auto; background: var(--ink);
       border-radius: 999px; padding: 6px 16px 2px; text-shadow: none; }
     .up.poor .uc { color: #ff7a6a; }
     .up.lock { --hi: #6a5a5c !important; --lo: #3a2e30 !important; filter: saturate(.4); }
     .up.lock .uc { color: #bbb; font-size: 17px; }
-    #pSell { --hi: #ff6a5a; --lo: #a81a1a; margin-top: auto; border-radius: 999px; padding: 12px 6px 7px; font-size: 23px; }
+    #pSell { --hi: #ff6a5a; --lo: #a81a1a; margin-top: auto; border-radius: 999px; padding: 9px 6px 5px; font-size: 20px; }
 
     #controls { display: grid; grid-template-columns: 1fr 62px; grid-template-rows: 62px 62px; gap: 10px; align-items: center; }
     #play { --hi: #8be65a; --lo: #2b9a2a; grid-row: span 2; height: 100%; border-radius: 40px; font-size: 30px; padding: 8px 4px 4px; line-height: 1; }
@@ -179,12 +181,13 @@
     <aside id="side">
       <h2>THE BRO SHOP</h2>
       <div id="shopGrid"></div>
-      <div id="info"><div class="t">Welcome to the squad.</div>Drag a bro next to the road. Tap a bro to upgrade him.</div>
+      <div id="info"><div class="t">Welcome to the squad.</div>Drag a bro from here onto the map, next to the road. Tap a bro on the map to upgrade him.</div>
       <div id="panel">
         <div class="ptop"><canvas id="pIcon" width="168" height="140"></canvas><div><div id="pName"></div><div id="pPops"></div></div><button id="pClose" aria-label="Close">✕</button></div>
         <button id="pTarget">TARGET: <b>FIRST</b></button>
         <button class="up" data-p="0"></button>
         <button class="up" data-p="1"></button>
+        <button class="up" data-p="2"></button>
         <button id="pSell">SELL $0</button>
       </div>
       <div id="controls">

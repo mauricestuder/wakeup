@@ -330,6 +330,44 @@ const TOWER = {
       } });
     if (l[1] >= 3) for (let i = 0; i < 3; i++) plateDisc(c, -20, -14 + i * 14, 6);
   },
+  influencer(c, o) {
+    const l = o.lvl, snap = o.anim > 0, ring = l[0] >= 1 ? 15 : 12;
+    circ(c, -20, 0, ring, 'rgba(255,246,208,0.25)', '#fff6d0', 4);   // ring light behind her
+    circ(c, -20, 0, ring + 2.5, null, INK, 1.5);
+    bro(c, { top: '#ff5fa8', hair: '#f2d060', skin: BSKIN[4],
+      arms: (c, skin) => {
+        arm(c, 4, -18, 22, -6, 6, skin); arm(c, 4, 18, 22, 6, 6, skin);
+        line(c, 22, 0, 34, 0, '#666', 3);
+        rr(c, 33, -7, 6, 14, 2, '#222', INK, 1.5);
+      },
+      extra: () => { circ(c, -5, 0, 4, '#f2d060', INK, 1.5); } });   // ponytail
+    if (l[2] >= 2) text(c, '$', -6, 22, 12, '#7dff8a', INK);
+    if (l[1] >= 2) text(c, '#', -6, -22, 13, '#ff7ab8', INK);
+    if (snap) { circ(c, 40, 0, 12 + o.anim * 20, 'rgba(255,255,255,0.85)', null); }
+  },
+  legs(c, o) {
+    const l = o.lvl, sq = o.anim > 0 ? 1 + o.anim * 0.9 : 1;
+    for (const s of [-1, 1]) {   // the thighs. the legendary thighs.
+      ell(c, -10, s * 17 * sq, 17, 12, BSKIN[1], INK, 2.5, s * 0.35);
+      ell(c, -5, s * 13 * sq, 9, 10, '#22222a', INK, 2);
+    }
+    bro(c, { top: '#9aa0aa', cap: '#c8202a', skin: BSKIN[1],
+      arms: (c, skin) => { arm(c, 2, -18, -4, -26, 7, skin); arm(c, 2, 18, -4, 26, 7, skin); } });
+    if (l[0] >= 3) for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.6; line(c, Math.cos(a) * 26, Math.sin(a) * 26, Math.cos(a) * 34, Math.sin(a) * 34 + 3, '#5a4a3a', 2); }
+  },
+  treadmill(c, o) {
+    const l = o.lvl, t = o.t;
+    rr(c, -28, -16, 50, 32, 6, '#2a2a2e');
+    rr(c, -24, -12, 36, 24, 3, '#45454c', null);
+    for (let i = 0; i < 5; i++) { const x = -24 + ((i * 7.2 + t * 50) % 36); line(c, x, -11, x, 11, '#6a6a72', 2); }
+    rr(c, 14, -16, 9, 32, 3, '#3a3d44', INK, 1.5);
+    rr(c, 15.5, -6, 6, 12, 1, l[1] >= 3 ? '#ff6a3a' : '#7dff8a', null);
+    bro(c, { top: '#2fbf8a', hair: '#3a2a1a', skin: BSKIN[3],
+      arms: (c, skin) => {
+        arm(c, 4, -18, 14, -24, 7, skin); arm(c, 4, 18, 14, 24, 7, skin);
+        circ(c, 17, 27, 6, l[0] >= 3 ? '#8a2a2a' : '#2e3138', INK, 2);
+      } });
+  },
   store(c, o) {
     const l = o.lvl;
     rr(c, -28, -26, 56, 52, 6, '#e8e4dc');                       // roof from above
@@ -343,7 +381,11 @@ const TOWER = {
   },
 };
 
+export const PATH_COLS = ['#ffd34d', '#6fd3ff', '#ff7ab8'];
+
 export function drawTower(c, key, x, y, o) {
+  const lvl = o.lvl || [0, 0, 0];
+  const top = Math.max(...lvl), topP = lvl.indexOf(top), t = o.t || 0;
   c.save();
   c.translate(x, y);
   if (o.scale) c.scale(o.scale, o.scale);
@@ -351,14 +393,61 @@ export function drawTower(c, key, x, y, o) {
     rr(c, -24, -24, 48, 48, 8, 'rgba(20,20,24,0.55)', null);    // rubber gym tile under every bro
     ell(c, 3, 5, 22, 22, 'rgba(0,0,0,0.25)', null);
   }
-  const rot = ['dumbbell', 'chad', 'shake'].includes(key) ? (o.ang ?? Math.PI / 2) : key === 'dj' || key === 'store' ? Math.PI / 2 : 0;
-  c.rotate(rot);
-  TOWER[key](c, { lvl: [0, 0], anim: 0, spin: 0, t: 0, range: 100, ...o });
-  c.restore();
-  if (!o.icon && (o.lvl[0] || o.lvl[1])) {
-    for (let p = 0; p < 2; p++) for (let i = 0; i < 3; i++)
-      circ(c, x - 9 + i * 9, y + TOWERS[key].r + 8 + p * 8, 3.2, o.lvl[p] > i ? (p ? '#6fd3ff' : '#ffd34d') : 'rgba(0,0,0,0.45)', INK, 1.2);
+  if (top >= 4) {   // tier 4+: glowing aura in the path's colour
+    const col = PATH_COLS[topP], pulse = 1 + Math.sin(t * 4) * 0.06;
+    c.globalAlpha = 0.35; circ(c, 0, 0, 31 * pulse, col, null); c.globalAlpha = 1;
+    circ(c, 0, 0, 31 * pulse, null, col, 2.5);
   }
+  if (top >= 5) c.scale(1.12, 1.12);
+  const rot = ['dumbbell', 'chad', 'shake'].includes(key) ? (o.ang ?? Math.PI / 2) : key === 'spinner' ? 0 : Math.PI / 2;
+  c.rotate(rot);
+  TOWER[key](c, { anim: 0, spin: 0, range: 100, ...o, lvl, t });
+  if (top >= 5) {   // tier 5: gold chain
+    c.beginPath(); c.arc(4, 0, 11, -1.1, 1.1); c.strokeStyle = INK; c.lineWidth = 5; c.stroke();
+    c.strokeStyle = '#ffd21f'; c.lineWidth = 3; c.stroke();
+    circ(c, 15, 0, 3.5, '#ffd21f', INK, 1.5);
+    if (Math.sin(t * 3) > 0.6) text(c, '✦', 12, -14, 10, '#fff6a0', null);
+  }
+  c.restore();
+  if (!o.icon && top) {   // pips: a row of dots for each trained path
+    let row = 0;
+    for (let p = 0; p < 3; p++) {
+      if (!lvl[p]) continue;
+      for (let i = 0; i < lvl[p]; i++) circ(c, x - (lvl[p] - 1) * 4.5 + i * 9, y + TOWERS[key].r + 8 + row * 8, 3.2, PATH_COLS[p], INK, 1.2);
+      row++;
+    }
+  }
+}
+
+// ---------- road items (treadmills, kettlebells, puddles) ----------
+export function drawTrap(c, tr, t) {
+  c.globalAlpha = Math.min(1, tr.life * 2);
+  if (tr.k === 'kb') {
+    ell(c, tr.x + 2, tr.y + 3, 9, 7, 'rgba(0,0,0,0.3)', null);
+    circ(c, tr.x, tr.y, tr.blast ? 9 : 8, tr.blast ? '#8a2a2a' : '#2e3138', INK, 2);
+    c.beginPath(); c.arc(tr.x, tr.y - 6, 5, Math.PI, Math.PI * 2); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
+    if (tr.blast) circ(c, tr.x, tr.y, 2.5, Math.sin(t * 12) > 0 ? '#ff4d3a' : '#ffd21f', null);
+  } else if (tr.k === 'tm') {
+    c.save(); c.translate(tr.x, tr.y); c.rotate(tr.ang);
+    rr(c, -26, -15, 52, 30, 6, '#2a2a2e');
+    rr(c, -22, -11, 40, 22, 3, '#45454c', null);
+    const dir = tr.slow < 0 ? -1 : 1, sp = tr.slow < 0 ? 90 : 35;
+    for (let i = 0; i < 5; i++) {
+      const x = -22 + (((i * 8 - dir * t * sp) % 40) + 40) % 40;
+      line(c, x, -10, x, 10, tr.slow < 0 ? '#ff6a3a' : '#6a6a72', 2);
+    }
+    rr(c, 18, -14, 7, 28, 3, '#3a3d44', INK, 1.5);
+    rr(c, 19, -6, 5, 12, 1, '#7dff8a', null);
+    c.restore();
+  } else {
+    const f = 1 + Math.sin(t * 3 + tr.x) * 0.04;
+    ell(c, tr.x, tr.y, tr.r * f, tr.r * 0.75 * f, 'rgba(140,220,60,0.55)', 'rgba(60,120,20,0.8)', 2);
+    for (let i = 0; i < 3; i++) {
+      const p = (t * 0.8 + i / 3 + tr.x * 0.01) % 1;
+      circ(c, tr.x + Math.sin(i * 2.3) * tr.r * 0.5, tr.y + Math.cos(i * 1.7) * tr.r * 0.35, 2 + p * 4, `rgba(200,255,120,${1 - p})`, null);
+    }
+  }
+  c.globalAlpha = 1;
 }
 
 // ---------- projectiles ----------
@@ -556,6 +645,27 @@ export class FX {
         if (ev.k === 'upgrade') this.text(ev.x, ev.y - 34, 'GAINS!', '#ffe066', 20, 1);
         break;
       case 'sell': this.text(ev.x, ev.y - 20, `+$${ev.v}`, '#7dff8a', 22, 1.2); break;
+      case 'flash':
+        this.add({ k: 'flashb', x: ev.x, y: ev.y, r: ev.r, life: 0.25, max: 0.25 });
+        if (Math.random() < 0.3) this.text(ev.x, ev.y - 36, 'SNAP!', '#fff', 16, 0.6);
+        break;
+      case 'stomp':
+        this.add({ k: 'ring', x: ev.x, y: ev.y, r: ev.r, col: '#c8a070', life: 0.35, max: 0.35 });
+        for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; this.add({ k: 'puff', x: ev.x + Math.cos(a) * 20, y: ev.y + Math.sin(a) * 20, vx: Math.cos(a) * 80, vy: Math.sin(a) * 80, r: 7, col: '#b8a080', life: 0.35, max: 0.35 }); }
+        if (ev.shake) this.shake = Math.max(this.shake, 5);
+        break;
+      case 'smash':
+        this.add({ k: 'ring', x: ev.x, y: ev.y, r: ev.big ? 70 : 30, col: '#ffd34d', life: 0.4, max: 0.4 });
+        this.text(ev.x, ev.y - 30, ev.big ? 'METEOR!' : 'SLAM!', '#ffd34d', ev.big ? 30 : 22, 0.8);
+        this.shake = Math.max(this.shake, ev.big ? 12 : 6);
+        break;
+      case 'rizz':
+        this.add({ k: 'tint', col: 'rgba(255,90,180,', life: 0.7, max: 0.7 });
+        this.text(ev.x, ev.y - 40, 'UNSPOKEN RIZZ', '#ff7ab8', 26, 1.4, -20);
+        break;
+      case 'reveal': this.text(ev.x, ev.y - 24, 'EXPOSED', '#ff7ab8', 15, 0.8); break;
+      case 'pull': this.add({ k: 'ring', x: ev.x, y: ev.y, r: ev.r, col: '#a04dff', life: 0.5, max: 0.5 }); break;
+      case 'drop': this.add({ k: 'puff', x: ev.x, y: ev.y, vx: 0, vy: -20, r: 8, col: '#d8d4c8', life: 0.3, max: 0.3 }); break;
     }
   }
   update(dt) {
@@ -571,7 +681,9 @@ export class FX {
     for (const p of this.parts) {
       const f = p.life / p.max;
       c.globalAlpha = Math.min(1, f * 1.5);
-      if (p.k === 'puff') circ(c, p.x, p.y, p.r * (1.6 - f * 0.6), p.col, null);
+      if (p.k === 'tint') { c.fillStyle = p.col + (f * 0.3) + ')'; c.fillRect(0, 0, W, H); }
+      else if (p.k === 'flashb') circ(c, p.x, p.y, p.r * (1.15 - f * 0.25), `rgba(255,255,255,${f * 0.55})`, null);
+      else if (p.k === 'puff') circ(c, p.x, p.y, p.r * (1.6 - f * 0.6), p.col, null);
       else if (p.k === 'ring') circ(c, p.x, p.y, p.r * (1.1 - f * 0.3), null, p.col, 5 * f + 1);
       else if (p.k === 'txt') text(c, p.s, p.x, p.y, p.size, p.col, INK);
     }
@@ -589,7 +701,8 @@ export function drawWorld(c, game, bg, fx, t, ui) {
     circ(c, b.cx + Math.sin(p * 5) * 10, b.cy - 20 - p * 60, 10 + p * 18, `rgba(60,60,60,${(1 - p) * 0.45})`, null);
   }
   if (game.map.id === 'street') text(c, `WAVE  ${game.round + 1}`, 765, 126, 14, '#7dff8a', INK);
-  if (ui.sel) rangeCircle(c, ui.sel.x, ui.sel.y, ui.sel.s.range, true);
+  for (const tr of game.traps) drawTrap(c, tr, t);
+  if (ui.sel) rangeCircle(c, ui.sel.x, ui.sel.y, (ui.sel.es || ui.sel.s).range, true);
   // depth sort bros and zombies together
   const items = [];
   for (const tw of game.towers) items.push({ y: tw.y, tw });
