@@ -86,6 +86,12 @@ export function sfx(name) {
     case 'rizz': tone('sine', 110, 45, 1.2, 0.5); tone('sawtooth', 55, 30, 1.0, 0.08); break;               // the deep "boom"
     case 'drop': if (throttle('drop', 120)) return; tone('triangle', 220, 110, 0.08, 0.15); break;
     case 'pull': noise(0.5, 300, 1, 0.2, 'bandpass', 0, 2500); break;
+    case 'kick': if (throttle('kick', 80)) return; noise(0.07, 1200, 1, 0.3); tone('sine', 220, 90, 0.1, 0.25); break;
+    case 'grab': tone('square', 330, 330, 0.06, 0.06); [784, 1047].forEach((f, i) => tone('square', f, f, 0.08, 0.05, 0.06 + i * 0.07)); break;   // ka-ching
+    case 'cannon': if (throttle('cannon', 120)) return; tone('sine', 110, 40, 0.35, 0.4); noise(0.3, 700, 0.7, 0.3, 'lowpass', 0, 120); break;
+    case 'choir':   // heavenly "aaah" from the bank
+      [523, 659, 784, 1047].forEach((f, i) => { tone('sine', f, f * 1.003, 1.4, 0.05, i * 0.05); tone('triangle', f / 2, f / 2, 1.4, 0.03, i * 0.05); });
+      break;
     case 'click': tone('triangle', 900, 700, 0.04, 0.1); break;
     case 'nope': tone('square', 160, 120, 0.15, 0.08); break;
   }

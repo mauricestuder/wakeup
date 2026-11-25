@@ -1,6 +1,6 @@
 // Settings and best rounds, kept in localStorage. Works without it too.
 
-const KEY = 'leg-day-of-the-dead';
+const KEY = 'tax-force';
 const DEFAULTS = { vol: 0.8, music: 0.5, auto: false, best: {}, seenTips: {} };
 
 export const save = load();

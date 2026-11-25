@@ -1,7 +1,7 @@
 // The game simulation. No DOM in here: main.js drives it, draw.js paints it,
 // and both read `events` for sounds and particles.
 
-import { buildPath, posAt, canPlace } from './maps.js';
+import { buildPaths, posAt, canPlace, isUnder } from './maps.js';
 import { ETYPES, rbeOf, LINES, SHOUTS } from './enemies.js';
 import { TOWERS, computeStats, canUpgrade, PATHS } from './towers.js';
 import { roundSpawns, LAST_ROUND, bossHpMul } from './rounds.js';
@@ -17,7 +17,9 @@ const isBoss = e => !!ETYPES[e.t].boss;
 export class Game {
   constructor(map, diffKey) {
     this.map = map;
-    this.path = buildPath(map);
+    this.paths = buildPaths(map);       // one or more roads from manholes to the bank
+    this.path = this.paths[0];
+    this.spawnCount = 0;
     this.diffKey = diffKey;
     this.diff = DIFFS[diffKey];
     this.cash = 650;
@@ -44,7 +46,7 @@ export class Game {
   sellValue(t) { return Math.floor(t.spent * 0.7); }
 
   // ---------- towers ----------
-  canPlaceAt(key, x, y) { return canPlace(this.map, this.path, this.towers, x, y, TOWERS[key].r); }
+  canPlaceAt(key, x, y) { return canPlace(this.map, this.paths, this.towers, x, y, TOWERS[key].r); }
 
   place(key, x, y) {
     const D = TOWERS[key], cost = this.towerCost(key);
@@ -53,8 +55,9 @@ export class Game {
     const lvl = new Array(PATHS).fill(0);
     const t = {
       id: this.nextId++, key, x, y, r: D.r, lvl, s: computeStats(key, lvl), es: null,
-      cdT: 0.1, mode: key === 'chad' ? 2 : 0, ang: Math.PI / 2, spent: cost, pops: 0, say: null, sayT: 0,
+      cdT: 0.1, mode: { chad: 2, collector: 2, kicker: 3 }[key] ?? 0, ang: Math.PI / 2, spent: cost, pops: 0, say: null, sayT: 0,
       hold: 0, push: 0, hurt: 0, anim: 0, spin: 0, rageClock: 0, raging: false, smashT: 2, pullT: 0, rizzT: 0, alt: 0, pathDs: [],
+      droneA: Math.random() * 6.28, dpos: [],
     };
     this.towers.push(t);
     this.refresh();
@@ -111,8 +114,9 @@ export class Game {
       if (t.key === 'treadmill') {
         t.pathDs = [];
         const r = t.es.range;
-        for (let i = 0; i < this.path.n; i += 4)
-          if (Math.hypot(this.path.px[i] - t.x, this.path.py[i] - t.y) < r) t.pathDs.push(i * 2);
+        for (const path of this.paths)
+          for (let i = 0; i < path.n; i += 4)
+            if (!isUnder(path, i * 2) && Math.hypot(path.px[i] - t.x, path.py[i] - t.y) < r) t.pathDs.push({ path, d: i * 2 });
       }
     }
   }
@@ -146,7 +150,7 @@ export class Game {
   }
 
   // ---------- rats ----------
-  spawn(type, d, camo, hpMul = 1) {
+  spawn(type, d, camo, hpMul = 1, path = null) {
     const T = ETYPES[type];
     const hp = T.boss ? Math.round(T.hp * hpMul) : T.hp;
     const e = {
@@ -154,9 +158,11 @@ export class Game {
       slowF: 1, slowT: 0, stunT: 0, burnT: 0, burnTick: 0, burnSrc: null, burnDmg: 1,
       expT: 0, expAdd: 0, expMul: 1,
       x: 0, y: 0, dx: 1, ang: 0, fa: null, alive: true, flash: 0, say: null, sayT: 0,
-      seed: (this.nextId * 7.13) % 6.28, hpMul,
+      seed: (this.nextId * 7.13) % 6.28, hpMul, under: true,
+      p: path || this.paths[this.spawnCount++ % this.paths.length],
     };
-    posAt(this.path, d, e);
+    posAt(e.p, d, e);
+    e.under = isUnder(e.p, d);
     this.enemies.push(e);
     if (this.kidSink) this.kidSink.push(e.id);
     return e;
@@ -164,7 +170,7 @@ export class Game {
 
   // Returns false if the hit bounced off.
   damage(e, dmg, kind, src) {
-    if (!e.alive) return false;
+    if (!e.alive || e.under) return false;
     if (kind === 'sharp' && ETYPES[e.t].noSharp) {
       this.events.push({ k: 'clang', x: e.x, y: e.y });
       return false;
@@ -196,7 +202,7 @@ export class Game {
     const n = T.kids.length;
     for (let i = 0; i < n; i++) {
       const kd = Math.max(0, e.d + (i - (n - 1) / 2) * (T.boss ? 16 : 8));
-      const c = this.spawn(T.kids[i], kd, e.camo, e.hpMul);
+      const c = this.spawn(T.kids[i], kd, e.camo, e.hpMul, e.p);
       c.burnT = e.burnT; c.burnTick = e.burnTick; c.burnSrc = e.burnSrc; c.burnDmg = e.burnDmg;
       c.slowF = e.slowF; c.slowT = e.slowT;
       c.expT = e.expT; c.expAdd = e.expAdd; c.expMul = e.expMul;
@@ -216,16 +222,17 @@ export class Game {
   }
 
   inRange(t, e, range = t.es.range) {
+    if (e.under) return false;          // still in the manhole or in a tunnel
     const dx = e.x - t.x, dy = e.y - t.y, r = range + e.r;
     return dx * dx + dy * dy <= r * r;
   }
 
   score(t, e) {
     switch (t.mode) {
-      case 1: return -e.d;
-      case 2: return rbeOf(e) * 1e5 + e.d;
+      case 1: return e.p.len - e.d;
+      case 2: return rbeOf(e) * 1e5 + e.d - e.p.len;
       case 3: return -((e.x - t.x) ** 2 + (e.y - t.y) ** 2);
-      default: return e.d;
+      default: return e.d - e.p.len;     // first = closest to the bank
     }
   }
 
@@ -245,7 +252,7 @@ export class Game {
 
   anyInRange(t, needDetect) {
     for (const e of this.enemies)
-      if (e.alive && (!needDetect || !e.camo || t.es.detect) && this.inRange(t, e)) return true;
+      if (e.alive && !e.under && (!needDetect || !e.camo || t.es.detect) && this.inRange(t, e)) return true;
     return false;
   }
 
@@ -260,7 +267,7 @@ export class Game {
       const mul = bossHpMul(this.round + 1);
       while (this.spawnI < this.spawns.length && this.spawns[this.spawnI].t <= this.roundT) {
         const s = this.spawns[this.spawnI++];
-        this.spawn(s.type, 0, s.camo, mul);
+        this.spawn(s.type, 0, s.camo, mul * s.hp);
       }
     }
 
@@ -287,10 +294,11 @@ export class Game {
       }
       if (e.stunT > 0) e.stunT -= dt;
       else e.d = Math.max(0, e.d + ETYPES[e.t].speed * e.slowF * dt);
-      posAt(this.path, e.d, e);
+      posAt(e.p, e.d, e);
+      e.under = isUnder(e.p, e.d);
       if (e.fa == null) e.fa = e.ang;
       else { let da = e.ang - e.fa; da = Math.atan2(Math.sin(da), Math.cos(da)); e.fa += da * Math.min(1, dt * 9); }
-      if (e.d >= this.path.len) {
+      if (e.d >= e.p.len) {
         e.alive = false;
         const lost = rbeOf(e);
         this.lives -= lost;
@@ -338,7 +346,7 @@ export class Game {
   shoot(t, k, a, tgt, o) {
     const s = t.es, speed = o.speed;
     this.projs.push({
-      k, x: t.x + Math.cos(a) * 14, y: t.y + Math.sin(a) * 14, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, speed,
+      k, x: (o.ox ?? t.x) + Math.cos(a) * 14, y: (o.oy ?? t.y) + Math.sin(a) * 14, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, speed,
       tgt, hit: new Set(), src: t, rot: a, age: 0, life: o.life, dmg: o.dmg ?? s.dmg, pierce: o.pierce ?? s.pierce,
       kind: o.kind ?? s.kind, r: o.r ?? 10, detect: !!s.detect, retarget: o.retarget ?? 150, turn: o.turn ?? 10,
       burn: !!s.burn, burnDmg: s.burnDmg || 1, big: !!o.big, bossMul: s.bossMul || 1, cashPerHit: s.cashPerHit || 0,
@@ -349,7 +357,7 @@ export class Game {
   nearestUnhit(p, radius) {
     let best = null, bd = radius * radius;
     for (const e of this.enemies) {
-      if (!e.alive || p.hit.has(e.id) || (e.camo && !p.detect)) continue;
+      if (!e.alive || e.under || p.hit.has(e.id) || (e.camo && !p.detect)) continue;
       const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
       if (d2 < bd) { bd = d2; best = e; }
     }
@@ -387,7 +395,7 @@ export class Game {
             t.smashT = s.smash.cd;
             const hitOne = (z) => this.damage(z, s.smash.dmg * (isBoss(z) ? s.smash.bossMul : 1), 'blast', t);
             hitOne(e);
-            if (s.smash.blast) for (const z of this.enemies) if (z !== e && z.alive && Math.hypot(z.x - e.x, z.y - e.y) < s.smash.blast + z.r) hitOne(z);
+            if (s.smash.blast) for (const z of this.enemies) if (z !== e && z.alive && !z.under && Math.hypot(z.x - e.x, z.y - e.y) < s.smash.blast + z.r) hitOne(z);
             this.events.push({ k: 'smash', x: e.x, y: e.y, big: !!s.smash.blast });
           }
         }
@@ -476,7 +484,7 @@ export class Game {
       case 'chad': {
         if (s.rizz && (t.rizzT -= dt) <= 0 && this.enemies.length) {
           t.rizzT = s.rizz.cd;
-          for (const e of this.enemies) if (e.alive) e.stunT = Math.max(e.stunT, isBoss(e) ? 0.5 : s.rizz.t);
+          for (const e of this.enemies) if (e.alive && !e.under) e.stunT = Math.max(e.stunT, isBoss(e) ? 0.5 : s.rizz.t);
           this.events.push({ k: 'rizz', x: t.x, y: t.y });
         }
         if (t.cdT > 0) break;
@@ -528,28 +536,96 @@ export class Game {
         this.events.push({ k: 'stomp', x: t.x, y: t.y, r: s.range, shake: s.shake });
         break;
       }
+      case 'kicker': {
+        if (t.cdT > 0) break;
+        const targets = this.pickTargets(t, s.targets);
+        if (!targets.length) break;
+        this.reload(t, s.cd);
+        t.anim = 0.22;
+        t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
+        for (const e of targets) {
+          // kick first, so the robbers that fall out of him land further back too
+          const kb = isBoss(e) ? s.knockBoss : s.knock;
+          if (kb) { e.d = Math.max(0, e.d - kb); posAt(e.p, e.d, e); }
+          if (s.stun) this.stun(e, s.stun);
+          if (this.damage(e, s.dmg * (isBoss(e) ? s.bossMul : 1), s.kind, t) && s.cashPerHit) this.cash += s.cashPerHit;
+          this.events.push({ k: 'kick', x: e.x, y: e.y });
+        }
+        break;
+      }
+      case 'collector': {
+        if (t.cdT > 0) break;
+        const targets = this.pickTargets({ ...t, mode: 2 }, s.targets);
+        if (!targets.length) break;
+        this.reload(t, s.cd);
+        t.anim = 0.4;
+        t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
+        for (const e of targets) {
+          this.stun(e, s.stun);
+          this.events.push({ k: 'grab', x: e.x, y: e.y, fx: t.x, fy: t.y });
+          if (this.damage(e, s.dmg * (isBoss(e) ? s.bossMul : 1), s.kind, t) && s.cashPerHit) this.cash += s.cashPerHit;
+        }
+        break;
+      }
+      case 'cannon': {
+        if (t.cdT > 0) break;
+        const targets = this.pickTargets(t, s.targets);
+        if (!targets.length) break;
+        this.reload(t, s.cd);
+        t.anim = 0.35;
+        t.ang = Math.atan2(targets[0].y - t.y, targets[0].x - t.x);
+        for (const e of targets)
+          this.projs.push({ k: 'ball', sx: t.x + Math.cos(t.ang) * 26, sy: t.y + Math.sin(t.ang) * 26, tx: e.x, ty: e.y, x: t.x, y: t.y, h: 0, tt: 0, T: s.flight, tgt: e, trail: [], src: t });
+        this.events.push({ k: 'cannon', x: t.x, y: t.y });
+        break;
+      }
+      case 'drone': {
+        // the drones fly a lap around their spot; everything happens from up there
+        const n = s.drones || 1;
+        t.droneA += dt * 220 / s.orbit;
+        t.dpos = [];
+        for (let i = 0; i < n; i++) {
+          const a = t.droneA + i * Math.PI * 2 / n;
+          t.dpos.push({ x: t.x + Math.cos(a) * s.orbit, y: t.y + Math.sin(a) * s.orbit * 0.8, a: a + Math.PI / 2 });
+        }
+        if (s.reveal) for (const e of this.enemies)
+          if (e.camo && e.alive && t.dpos.some(d => this.inRange({ x: d.x, y: d.y, es: s }, e))) { e.camo = false; this.events.push({ k: 'reveal', x: e.x, y: e.y }); }
+        if (t.cdT > 0) break;
+        let fired = false;
+        for (const d of t.dpos) {
+          const eye = { x: d.x, y: d.y, es: s, mode: t.mode };
+          const targets = this.pickTargets(eye, s.count || 1);
+          for (let i = 0; i < targets.length; i++) {
+            const e = targets[i], a = Math.atan2(e.y - d.y, e.x - d.x);
+            this.shoot(t, 'letter', a, e, { speed: 620, life: 1.4, r: 9, ox: d.x, oy: d.y, retarget: 120, turn: 14 });
+            fired = true;
+          }
+        }
+        if (fired) { this.reload(t, s.cd); t.anim = 0.2; this.events.push({ k: 'throw' }); }
+        break;
+      }
       case 'treadmill': {
         if (t.cdT > 0 || !t.pathDs.length || !this.active) break;
         const mine = this.traps.reduce((n, tr) => n + (tr.src === t), 0);
         if (mine >= s.maxTraps) break;
         this.reload(t, s.cd);
         t.anim = 0.3;
-        let front = -1;
-        if (s.smart) for (const e of this.enemies) if (e.alive && this.inRange(t, e) && e.d > front) front = e.d;
+        let front = null;
+        if (s.smart) for (const e of this.enemies) if (e.alive && this.inRange(t, e) && (!front || e.d - e.p.len > front.d - front.p.len)) front = e;
         for (let i = 0; i < s.perDrop && mine + i < s.maxTraps; i++) {
-          let d;
-          if (front >= 0) d = front + 30 + i * 26;
-          else d = t.pathDs[(Math.random() * t.pathDs.length) | 0];
+          let spot;
+          if (front) spot = { path: front.p, d: front.d + 30 + i * 26 };
+          else spot = t.pathDs[(Math.random() * t.pathDs.length) | 0];
           const kb = (t.alt++ % 2) === 1;
-          this.dropTrap(t, kb ? 'kb' : 'tm', Math.min(d, this.path.len - 10));
+          this.dropTrap(t, kb ? 'kb' : 'tm', Math.min(spot.d, spot.path.len - 10), {}, spot.path);
         }
         break;
       }
     }
   }
 
-  dropTrap(t, k, d, o = {}) {
-    const s = t.es, pos = posAt(this.path, d, { x: 0, y: 0, dx: 1, ang: 0 });
+  dropTrap(t, k, d, o = {}, path = this.path) {
+    const s = t.es, pos = posAt(path, d, { x: 0, y: 0, dx: 1, ang: 0 });
     const tr = { k, d, x: pos.x, y: pos.y, ang: pos.ang, src: t, hit: new Set(), tickT: 0, age: 0 };
     if (k === 'kb') Object.assign(tr, { r: 12, life: s.kbLife * s.lifeMul, pierce: s.kbPierce, dmg: s.kbDmg * s.trapMul, kind: s.kbKind, blast: s.kbBlast });
     else if (k === 'tm') Object.assign(tr, { r: 24, life: s.tmLife * s.lifeMul, slow: s.tmSlow, dmg: s.tmDmg * s.trapMul, tick: 0.5, boss: s.tmBoss });
@@ -565,9 +641,9 @@ export class Game {
       if (tr.life <= 0) continue;
       if (tr.k === 'kb') {
         for (const e of this.enemies) {
-          if (!e.alive || tr.hit.has(e.id) || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r) continue;
+          if (!e.alive || e.under || tr.hit.has(e.id) || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r) continue;
           if (tr.blast) {   // minefield: blow up on the first rat
-            for (const z of this.enemies) if (z.alive && Math.hypot(z.x - tr.x, z.y - tr.y) < tr.blast + z.r) this.damage(z, tr.dmg, 'blast', tr.src);
+            for (const z of this.enemies) if (z.alive && !z.under && Math.hypot(z.x - tr.x, z.y - tr.y) < tr.blast + z.r) this.damage(z, tr.dmg, 'blast', tr.src);
             this.events.push({ k: 'boom', x: tr.x, y: tr.y, r: tr.blast });
             tr.life = 0;
             break;
@@ -584,7 +660,7 @@ export class Game {
         const tick = tr.dmg && (tr.tickT -= dt) <= 0;
         if (tick) tr.tickT = tr.tick;
         for (const e of this.enemies) {
-          if (!e.alive || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r * 0.5) continue;
+          if (!e.alive || e.under || Math.hypot(e.x - tr.x, e.y - tr.y) > tr.r + e.r * 0.5) continue;
           if (tr.slow != null && tr.slow < 1) {
             if (!isBoss(e)) this.slow(e, tr.slow, 0.1);
             else if (tr.boss) this.slow(e, 0.5, 0.1);
@@ -602,8 +678,8 @@ export class Game {
     for (const p of this.projs) {
       p.trail.push(p.x, p.y);
       if (p.trail.length > 12) p.trail.splice(0, 2);
-      if (p.k === 'shake') {
-        // The shake keeps aiming at its rat until it lands on it.
+      if (p.k === 'shake' || p.k === 'ball') {
+        // The cup / ball keeps aiming at its rat until it lands on it.
         if (p.tgt && p.tgt.alive) { p.tx = p.tgt.x; p.ty = p.tgt.y; }
         p.tt += dt;
         const f = Math.min(1, p.tt / p.T);
@@ -616,7 +692,7 @@ export class Game {
         let n = 0;
         for (const e of this.enemies) {
           if (n >= s.pierce) break;
-          if (!e.alive) continue;
+          if (!e.alive || e.under) continue;
           const dx = e.x - p.tx, dy = e.y - p.ty, r = s.blast + e.r;
           if (dx * dx + dy * dy > r * r) continue;
           n++;
@@ -626,8 +702,8 @@ export class Game {
           this.damage(e, s.dmg * (isBoss(e) ? s.bossMul || 1 : 1), 'blast', p.src);
         }
         if (s.puddle) // gross puddle where it landed
-          this.dropTrap(p.src, 'puddle', 0, { x: p.tx, y: p.ty, ang: 0, r: s.puddle.r, life: s.puddle.life, dmg: s.puddle.dmg, tick: s.puddle.tick, slow: s.puddle.slow });
-        this.events.push({ k: 'boom', x: p.tx, y: p.ty, r: s.blast, shake: s.shake });
+          this.dropTrap(p.src, 'puddle', 0, { x: p.tx, y: p.ty, ang: 0, r: s.puddle.r, life: s.puddle.life, dmg: s.puddle.dmg, tick: s.puddle.tick, slow: s.puddle.slow, coins: !!s.puddle.coins });
+        this.events.push({ k: 'boom', x: p.tx, y: p.ty, r: s.blast, shake: s.shake, coin: p.k === 'ball' });
         continue;
       }
       p.age += dt;
@@ -648,7 +724,7 @@ export class Game {
       p.life -= dt;
       if (p.life <= 0) { p.dead = true; continue; }
       for (const e of this.enemies) {
-        if (!e.alive || p.hit.has(e.id)) continue;
+        if (!e.alive || e.under || p.hit.has(e.id)) continue;
         const dx = e.x - p.x, dy = e.y - p.y, r = e.r + p.r;
         if (dx * dx + dy * dy > r * r) continue;
         p.hit.add(e.id);
@@ -665,7 +741,7 @@ export class Game {
           let n = 0;
           for (const z of this.enemies) {
             if (n >= 5) break;
-            if (z === e || !z.alive || p.hit.has(z.id) || Math.hypot(z.x - p.x, z.y - p.y) > p.blastHit + z.r) continue;
+            if (z === e || !z.alive || z.under || p.hit.has(z.id) || Math.hypot(z.x - p.x, z.y - p.y) > p.blastHit + z.r) continue;
             n++; this.damage(z, dmg, 'blast', p.src);
           }
           this.events.push({ k: 'boom', x: p.x, y: p.y, r: p.blastHit });

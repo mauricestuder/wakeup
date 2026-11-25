@@ -1,6 +1,6 @@
 // Sidebar: tower shop, selected-tower panel, play/speed controls and HUD.
 
-import { TOWERS, TOWER_KEYS, TARGET_MODES, upgradeBlock } from './towers.js';
+import { TOWERS, TOWER_KEYS, TARGET_MODES, CATEGORIES, upgradeBlock } from './towers.js';
 import { drawTower } from './draw.js';
 
 const $ = id => document.getElementById(id);
@@ -12,6 +12,15 @@ export class UI {
     this.cards = {};
     this.last = {};
     const grid = $('shopGrid');
+    // NEAR / MID / FAR tabs above the shop
+    const tabs = $('tabs');
+    for (const [cat, label] of CATEGORIES) {
+      const b = document.createElement('button');
+      b.className = 'tab'; b.dataset.c = cat;
+      b.innerHTML = `${label}<small>${TOWER_KEYS.filter(k => TOWERS[k].cat === cat).length}</small>`;
+      b.onclick = () => { this.setCat(cat); handlers.click?.(); };
+      tabs.appendChild(b);
+    }
     for (const key of TOWER_KEYS) {
       const D = TOWERS[key];
       const el = document.createElement('div');
@@ -26,6 +35,7 @@ export class UI {
       el.addEventListener('mouseenter', () => this.showInfo(key));
       this.cards[key] = el;
     }
+    this.setCat('mid');
     $('pClose').onclick = () => handlers.deselect();
     $('pTarget').onclick = () => handlers.cycleTarget();
     $('pSell').onclick = () => handlers.sell();
@@ -33,6 +43,14 @@ export class UI {
     $('play').onclick = () => handlers.play();
     $('auto').onclick = () => handlers.toggleAuto();
     $('pause').onclick = () => handlers.pause();
+  }
+
+  setCat(cat) {
+    this.cat = cat;
+    for (const k of TOWER_KEYS) this.cards[k].style.display = TOWERS[k].cat === cat ? '' : 'none';
+    for (const b of document.querySelectorAll('#tabs .tab')) b.classList.toggle('on', b.dataset.c === cat);
+    const blurb = { near: 'Short range, hits hard. Put them right next to the road.', mid: 'The all-rounders. Medium range.', far: 'Long range. They can stand far away from the road.' }[cat];
+    $('info').innerHTML = `<div class="t">${cat.toUpperCase()} RANGE</div>${blurb}<br><span style="color:#ffd34d">Drag an official onto the map. Tap one on the map to upgrade him.</span>`;
   }
 
   showInfo(key) {
@@ -73,21 +91,21 @@ export class UI {
     if (!t) return;
     const D = TOWERS[t.key];
     $('pName').textContent = D.name;
-    $('pPops').textContent = (t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} rats smashed`) + (t.buffed ? ' · HYPED' : '');
+    $('pPops').textContent = (t.key === 'store' ? `Pays $${t.s.income}+ per wave` : `${t.pops.toLocaleString('en-US')} robbers busted`) + (t.buffed ? ' · MOTIVATED' : '');
     const c = $('pIcon').getContext('2d');
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 168, 140);
     c.scale(2, 2);
     drawTower(c, t.key, 42, 36, { icon: true, scale: 0.95, lvl: t.lvl, t: 0.3 });
     const tgt = $('pTarget');
-    tgt.style.display = ['dj', 'store', 'spinner', 'influencer', 'legs', 'treadmill'].includes(t.key) ? 'none' : '';
+    tgt.style.display = ['dj', 'store', 'spinner', 'influencer', 'legs', 'treadmill', 'collector'].includes(t.key) ? 'none' : '';
     tgt.innerHTML = `TARGET: <b>${TARGET_MODES[t.mode].toUpperCase()}</b>`;
     for (const b of document.querySelectorAll('.up')) {
       const p = +b.dataset.p, lvl = t.lvl[p], next = D.paths[p][lvl];
       const pips = [0, 1, 2, 3, 4].map(i => `<i class="${lvl > i ? 'f' : ''}"></i>`).join('');
       const block = upgradeBlock(t.lvl, p);
       let cls = 'up', body;
-      if (!next) { body = `<div class="un">${D.paths[p][4].name}</div><div class="ud">Fully upgraded. Absolute unit.</div><div class="uc">MAXED</div>`; cls += ' lock'; }
-      else if (block) { body = `<div class="un">${next.name}</div><div class="ud">${block === '2 PATHS MAX' ? 'A bro can only train 2 paths.' : 'Only one path can go past tier 2.'}</div><div class="uc">${block}</div>`; cls += ' lock'; }
+      if (!next) { body = `<div class="un">${D.paths[p][4].name}</div><div class="ud">Fully promoted. Corner office unlocked.</div><div class="uc">MAXED</div>`; cls += ' lock'; }
+      else if (block) { body = `<div class="un">${next.name}</div><div class="ud">${block === '2 PATHS MAX' ? 'An official can only train 2 paths.' : 'Only one path can go past tier 2.'}</div><div class="uc">${block}</div>`; cls += ' lock'; }
       else {
         const cost = game.upgradeCost(t, p);
         if (game.cash < cost) cls += ' poor';

@@ -1,6 +1,6 @@
-// Gym Rats: boot, screens, input and the frame loop.
+// Tax Force: boot, screens, input and the frame loop.
 
-import { W, H, MAPS, buildPath } from './maps.js';
+import { W, H, MAPS, buildPaths } from './maps.js';
 import { Game, DT } from './game.js';
 import { ETYPES } from './enemies.js';
 import { TOWERS, TOWER_KEYS, TARGET_MODES } from './towers.js';
@@ -34,7 +34,7 @@ function layout() {
   stage.style.transform = `translate(${(iw - 1600 * scale) / 2}px, ${(ih - 900 * scale) / 2}px) scale(${scale})`;
   canvas.width = Math.round(W * scale * dpr);
   canvas.height = Math.round(H * scale * dpr);
-  if (game) bg = makeBackground(game.map, game.path, scale * dpr);
+  if (game) bg = makeBackground(game.map, game.paths, scale * dpr);
 }
 window.addEventListener('resize', layout);
 
@@ -47,7 +47,7 @@ function buildMenu() {
     card.className = 'mapc' + (i === mapIdx ? ' on' : '');
     const best = save.best[`${m.id}-${diffKey}`];
     card.innerHTML = `<canvas width="712" height="500"></canvas><div class="n">${m.name}</div><div class="b">${m.blurb}</div><div class="best">${best ? `Best: wave ${best}` : '&nbsp;'}</div>`;
-    const prev = makeBackground(m, buildPath(m), 712 / W);
+    const prev = makeBackground(m, buildPaths(m), 712 / W);
     card.querySelector('canvas').getContext('2d').drawImage(prev, 0, 0, 712, 500);
     card.onclick = () => { mapIdx = i; sfx('click'); buildMenu(); };
     maps.appendChild(card);
@@ -105,13 +105,13 @@ function newGame() {
   game = new Game(MAPS[mapIdx], diffKey);
   if (DEBUG) game.cash = 99999;
   fx = new FX();
-  bg = makeBackground(game.map, game.path, scale * dpr);
+  bg = makeBackground(game.map, game.paths, scale * dpr);
   sel = null; placing = null; ghost = null; speed = 1; acc = 0;
   seenThisGame = new Set();
   ui.highlight(null); ui.forcePanel();
   state = 'play';
   show(null);
-  toast('LETS GET THIS BREAD', 2200);
+  toast('PROTECT THE BANK!', 2200);
   window.__hc = { game, ui, newGame, setSpeed: s => (speed = s) };
 }
 
@@ -119,12 +119,12 @@ function endScreen(won) {
   state = 'end';
   const t = $('endT'), s = $('endS'), b = $('endB');
   if (won) {
-    t.textContent = 'GYM SAVED'; t.className = 'big';
-    s.textContent = 'Protein shakes are on the house.';
-    b.innerHTML = '<button class="btn go" data-a="freeplay">ONE MORE SET (FREEPLAY)</button><button class="btn" data-a="menu">HIT THE SHOWERS</button>';
+    t.textContent = 'BANK SAVED'; t.className = 'big';
+    s.textContent = 'Your money is safe... with us.';
+    b.innerHTML = '<button class="btn go" data-a="freeplay">KEEP WORKING (FREEPLAY)</button><button class="btn" data-a="menu">CLOCK OUT</button>';
   } else {
-    t.textContent = 'THE RATS GOT IN'; t.className = 'big bad';
-    s.textContent = `They ate all the protein. You made it to wave ${game.round + 1}.`;
+    t.textContent = 'THEY ROBBED THE BANK'; t.className = 'big bad';
+    s.textContent = `All that tax money... gone. You made it to wave ${game.round + 1}.`;
     b.innerHTML = '<button class="btn go" data-a="restart">TRY AGAIN</button><button class="btn" data-a="menu">QUIT TO MENU</button>';
   }
   show('endScr');
@@ -137,7 +137,7 @@ document.addEventListener('click', ev => {
   if (a === 'resume') { state = 'play'; show(null); }
   else if (a === 'restart') newGame();
   else if (a === 'menu') { state = 'menu'; game = null; buildMenu(); show('menu'); }
-  else if (a === 'freeplay') { state = 'play'; show(null); toast('FREEPLAY: NO DAYS OFF', 2400); }
+  else if (a === 'freeplay') { state = 'play'; show(null); toast('FREEPLAY: OVERTIME!', 2400); }
 });
 
 function pause() {
@@ -152,27 +152,29 @@ function select(t) { sel = t; ui.forcePanel(); if (t) cancelPlacing(); }
 function cancelPlacing() { placing = null; ghost = null; ui.highlight(null); }
 
 const TIPS = {
-  jogger: ['NEW: CARDIO RATS', 'Fast little runners. Inside every Cardio Rat is a Buff Rat.'],
-  football: ['NEW: SKATER RATS', 'The fastest rats on the street. No brakes.'],
-  camo: ['NEW: PROTEIN TUB RATS', 'Rats hiding in protein tubs! Only The Chad and a Dumbbell Bro with the Focus Headband can see them. Shake explosions still hit them.'],
-  headphones: ['NEW: AIRPODS RATS', "They can't hear the DJ, so they don't dance or slow down. Each one hides 2 Skater Rats."],
-  riot: ['NEW: FRYING-PAN RATS', 'Dumbbells and plates bounce off the pan! Use Protein Shakes, Spicy Pre-Workout, Heavy Plates or Barbell Toss.'],
-  partybus: ['NEW: SHOPPING CART OF RATS', 'Takes 16 hits, then the whole cart spills out. Bring shakes.'],
-  couch: ['BOSS: THE ROOMBA RAT', "He'll start going to the gym on Monday. Lots of HP. The Chad is great against bosses."],
-  mru: ['FINAL BOSS: THE RAT KING', 'He ate all the protein in town. Throw everything at him.'],
+  jogger: ['NEW: SPRINTER THIEVES', 'Fast runners. Inside every Sprinter is a Big Bag Robber.'],
+  football: ['NEW: SCOOTER THIEVES', 'The fastest robbers in town. No license, no brakes.'],
+  camo: ['NEW: DISGUISED ROBBERS', 'Fake mustache, trench coat. Only the Tax Auditor, the Tax Drone and a Stamp Clerk with Reading Glasses can see them. Coffee splashes still hit them.'],
+  headphones: ['NEW: HACKERS', "Headphones on: they can't hear the hold music, so they don't slow down. Each one hides 2 Scooter Thieves."],
+  riot: ['NEW: THE LAWYER', 'Stamps and files bounce off his briefcase! Use coffee, cannon balls, the Desk Slammer, the Karate Accountant or Rubber Stamp Wheel.'],
+  partybus: ['NEW: GETAWAY VAN', 'Takes 16 hits, then the whole gang jumps out. Bring coffee.'],
+  couch: ['BOSS: BULLDOZER BOB', "He's not robbing the bank, he's 'renovating' it. Lots of HP. The Debt Collector and the Tax Auditor are great vs bosses."],
+  mru: ['BOSS: THE GODFATHER', 'He makes you an offer you can\'t refuse. Two Bulldozer Bobs work for him.'],
+  offshore: ['FINAL BOSS: MR. OFFSHORE', 'The biggest enemy of the tax office: a billionaire who never paid a single cent. Throw EVERYTHING at him.'],
 };
 
 function roundTips(n) {
   const types = new Set();
   let camo = false;
   for (const s of roundSpawns(n)) { types.add(s.type); if (s.camo) camo = true; }
-  for (const k of ['mru', 'couch', 'partybus', 'riot', 'headphones', 'football', 'jogger']) {
+  for (const k of ['offshore', 'mru', 'couch', 'partybus', 'riot', 'headphones', 'football', 'jogger']) {
     if (types.has(k) && !seenThisGame.has(k)) { seenThisGame.add(k); tip(...TIPS[k]); return; }
   }
   if (camo && !seenThisGame.has('camo')) { seenThisGame.add('camo'); tip(...TIPS.camo); }
 }
 
 const handlers = {
+  click() { sfx('click'); },
   cardDown(key, ev) {
     if (state !== 'play') return;
     initAudio();
@@ -267,20 +269,20 @@ window.addEventListener('keydown', ev => {
 
 // ---------- events from the simulation ----------
 function handleEvents() {
-  const endY = game.map.pts[game.map.pts.length - 1][1];
+  const bank = game.map.blockers.find(b => b.kind === 'bank');
   for (const ev of game.events) {
-    if (ev.k === 'leak') ev.y = endY;
+    if (ev.k === 'leak') { ev.x = bank.x + bank.w / 2; ev.y = bank.y + bank.h * 0.4; }
     fx.event(ev);
     switch (ev.k) {
       case 'pop': sfx(ev.boss ? 'bossPop' : 'pop'); break;
       case 'throw': case 'spin': case 'erupt': case 'shot': case 'clang': case 'hold': case 'press1': case 'bossHit': case 'upgrade': case 'sell':
-      case 'flash': case 'stomp': case 'smash': case 'rizz': case 'drop': case 'pull':
+      case 'flash': case 'stomp': case 'smash': case 'rizz': case 'drop': case 'pull': case 'kick': case 'grab': case 'cannon':
         sfx(ev.k); break;
       case 'boom': sfx('boom'); break;
       case 'leak': sfx('leak'); hurtFlash(); break;
       case 'roundStart': sfx('roundStart'); toast(`WAVE ${ev.n}`); roundTips(ev.n); break;
       case 'roundEnd':
-        sfx('roundEnd');
+        sfx('roundEnd'); sfx('choir');
         toast(`WAVE ${ev.n} CLEARED  +$${ev.bonus + ev.income}`);
         recordBest(game.map.id, game.diffKey, ev.n);
         if (save.auto && !(ev.n === LAST_ROUND)) setTimeout(() => { if (state === 'play' && game && !game.active) game.startRound(); }, 400);

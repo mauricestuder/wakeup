@@ -1,7 +1,7 @@
 {
-  "name": "Gym Rats",
-  "short_name": "Gym Rats",
-  "description": "Gym bros vs mutant rats tower defense. They got into the protein powder.",
+  "name": "Tax Force",
+  "short_name": "Tax Force",
+  "description": "The tax office vs bank robbers. Nobody robs this bank. Except us. Legally.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
