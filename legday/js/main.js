@@ -9,6 +9,7 @@ import { makeBackground, drawWorld, drawSinner, FX } from './draw.js';
 import { UI, toast, tip, hurtFlash } from './ui.js';
 import { initAudio, sfx, setVolume, setMusicVolume, startMusic } from './audio.js';
 import { save, persist, recordBest } from './save.js';
+import { playStory } from './story.js';
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), canvas = $('game'), ctx = canvas.getContext('2d');
@@ -16,7 +17,7 @@ const DEBUG = new URLSearchParams(location.search).has('debug');
 
 let scale = 1, dpr = 1, bg = null;
 let game = null, fx = new FX();
-let state = 'menu';                // menu | play | paused | end
+let state = 'menu';                // menu | story | play | paused | end
 let speed = 1, acc = 0, time = 0;
 let mapIdx = 0, diffKey = 'normal';
 let sel = null;                    // selected tower
@@ -74,7 +75,16 @@ function buildChain() {
 }
 
 for (const b of document.querySelectorAll('#diffs .btn')) b.onclick = () => { diffKey = b.dataset.d; sfx('click'); buildMenu(); };
-$('start').onclick = () => { initAudio(); startMusic(); newGame(); };
+$('start').onclick = () => {
+  initAudio(); startMusic();
+  if (save.seenStory) { newGame(); return; }
+  save.seenStory = true; persist();          // the comic plays once, before the first game
+  state = 'story'; playStory(show, newGame);
+};
+$('storyBtn').onclick = () => {
+  initAudio(); startMusic(); sfx('click');
+  state = 'story'; playStory(show, () => { state = 'menu'; show('menu'); });
+};
 
 function bindSlider(id, key, fn) {
   const el = $(id);

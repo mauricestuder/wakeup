@@ -11,26 +11,26 @@ export const FONT = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
 const TAU = Math.PI * 2;
 const BSKIN = ['#f2c7a0', '#d9a273', '#a86b43', '#6e4127', '#f6d9bd', '#c58c5c'];
 
-// ---------- tiny helpers ----------
-function circ(c, x, y, r, fill, stroke = INK, lw = 3) {
+// ---------- tiny helpers (story.js uses them too) ----------
+export function circ(c, x, y, r, fill, stroke = INK, lw = 3) {
   c.beginPath(); c.arc(x, y, Math.max(0.1, r), 0, TAU);
   if (fill) { c.fillStyle = fill; c.fill(); }
   if (stroke) { c.lineWidth = lw; c.strokeStyle = stroke; c.stroke(); }
 }
-function ell(c, x, y, rx, ry, fill, stroke = INK, lw = 3, rot = 0) {
+export function ell(c, x, y, rx, ry, fill, stroke = INK, lw = 3, rot = 0) {
   c.beginPath(); c.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU);
   if (fill) { c.fillStyle = fill; c.fill(); }
   if (stroke) { c.lineWidth = lw; c.strokeStyle = stroke; c.stroke(); }
 }
-function rr(c, x, y, w, h, r, fill, stroke = INK, lw = 3) {
+export function rr(c, x, y, w, h, r, fill, stroke = INK, lw = 3) {
   c.beginPath(); c.roundRect(x, y, w, h, r);
   if (fill) { c.fillStyle = fill; c.fill(); }
   if (stroke) { c.lineWidth = lw; c.strokeStyle = stroke; c.stroke(); }
 }
-function line(c, x1, y1, x2, y2, col = INK, lw = 3) {
+export function line(c, x1, y1, x2, y2, col = INK, lw = 3) {
   c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.stroke();
 }
-function text(c, s, x, y, size, fill = '#fff', stroke = INK, align = 'center') {
+export function text(c, s, x, y, size, fill = '#fff', stroke = INK, align = 'center') {
   s = String(s).toUpperCase();
   c.font = `${size}px ${FONT}`; c.textAlign = align; c.textBaseline = 'middle';
   if (stroke) { c.lineWidth = Math.max(2, size / 5); c.strokeStyle = stroke; c.lineJoin = 'round'; c.strokeText(s, x, y); }
@@ -255,7 +255,7 @@ export function drawSinner(c, e, t) {
     const s = t * 5 + i * TAU / 3;
     text(c, '★', e.x + Math.cos(s) * r * 0.8, e.y - r * 1.2 + Math.sin(s) * r * 0.25, 12, '#ffe066', INK);
   } else if (e.slowF < 1) text(c, '♪', e.x + r * 0.7, e.y - r * 1.2 - (t * 30 % 10), 14, '#ff7ab8', INK);
-  if (T.boss) {
+  if (T.boss && !e.noBar) {
     const w = r * 2.2, f = Math.max(0, e.hp / e.maxHp);
     rr(c, e.x - w / 2, e.y - r * 1.7, w, 10, 4, '#300', INK, 2);
     rr(c, e.x - w / 2 + 1, e.y - r * 1.7 + 1, (w - 2) * f, 8, 3, '#ff4d3a', null);

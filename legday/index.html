@@ -159,6 +159,17 @@
     .big.bad { color: #ff5a4a; }
     .stack { display: flex; flex-direction: column; gap: 20px; margin-top: 26px; min-width: 420px; }
 
+    .startRow { align-items: center; }
+    #storyBtn { --hi: #4aa8ff; --lo: #1f60bc; }
+    #storyCv { width: 1200px; height: 640px; border: 6px solid var(--ink); border-radius: 18px; background: #fff; cursor: pointer;
+      box-shadow: 0 10px 0 var(--ink), 0 18px 30px rgba(0,40,90,.35); transform: rotate(-.5deg); }
+    #storyCv.pop { animation: panel .35s; }
+    @keyframes panel { 0% { transform: rotate(-.5deg) scale(.9); opacity: .3; } 70% { transform: rotate(-.5deg) scale(1.02); } }
+    .storyBar { display: flex; align-items: center; justify-content: space-between; width: 1200px; margin-top: 36px; }
+    .storyBar .btn { min-width: 260px; }
+    #storyDots { display: flex; gap: 12px; }
+    #storyDots i { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.55); border: 4px solid var(--ink); }
+    #storyDots i.f { background: var(--gold); transform: scale(1.25); }
     #rotate { position: fixed; inset: 0; z-index: 50; background: var(--sea); display: none; align-items: center; justify-content: center;
       flex-direction: column; font-size: 26px; color: var(--cream); text-align: center; padding: 20px; }
     #rotate .ph { font-size: 70px; animation: rot 2s infinite; }
@@ -205,12 +216,21 @@
         <button class="btn on" data-d="normal">NORMAL</button>
         <button class="btn" data-d="hard">HARD</button>
       </div>
-      <button class="btn go" id="start">START WORKOUT</button>
+      <div class="row startRow"><button class="btn go" id="start">START WORKOUT</button><button class="btn" id="storyBtn">STORY</button></div>
       <div class="chain" id="chain"></div>
       <div class="how">Drag gym bros from the right next to the road. Every hit knocks a layer off a mutant rat. Don't let them reach the gym.</div>
       <div class="sliders">
         <label>SOUND <input type="range" id="vol" min="0" max="1" step="0.05"></label>
         <label>MUSIC <input type="range" id="mus" min="0" max="1" step="0.05"></label>
+      </div>
+    </div>
+
+    <div class="screen" id="story">
+      <canvas id="storyCv" width="2400" height="1280"></canvas>
+      <div class="storyBar">
+        <button class="btn" id="storySkip">SKIP</button>
+        <div id="storyDots"></div>
+        <button class="btn" id="storyNext">NEXT ▶</button>
       </div>
     </div>
 
